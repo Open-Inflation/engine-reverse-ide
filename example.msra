@@ -135,5 +135,5 @@ list=false
 values=[{"value_in_url"="true", "value"=true, "default"=true}, {"value_in_url"="false", "value"=false}]
 
 [app.func.A3A417.examples]
-examples=[{"params"={"text"="example"}, "test"=false, "file"="local1.json"}, {"file"="local2.json"}]
+examples=[{"inputs"={"query"="example"}, "test"=false, "file"="local1.json"}, {"file"="local2.json"}]
 test=true # определяет, будут ли сгенерированы тесты отслеживающие неизменность контракта (является значением по умолчанию)
