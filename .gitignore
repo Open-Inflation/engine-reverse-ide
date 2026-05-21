@@ -209,6 +209,12 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Node / VS Code extension
+node_modules/
+vscode-extension/node_modules/
+vscode-extension/.vscode-test/
+*.vsix
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

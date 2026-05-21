@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "msra-lsp"
+version = "0.1.0"
+description = "Language server and CLI for .msra files"
+readme = "regular.md"
+requires-python = ">=3.10"
+authors = [{ name = "Miskler" }]
+dependencies = []
+
+[project.scripts]
+msra-lsp = "msra_lsp.cli:main"
+msra-check = "msra_lsp.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

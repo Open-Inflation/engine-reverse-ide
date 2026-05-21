@@ -1,0 +1,55 @@
+{
+  "name": "MSRA",
+  "scopeName": "source.msra",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#headers" },
+    { "include": "#refs" },
+    { "include": "#strings" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.msra",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "headers": {
+      "patterns": [
+        {
+          "name": "meta.section.msra",
+          "match": "^\\s*\\[[^\\]]+\\]"
+        },
+        {
+          "name": "entity.name.tag.msra",
+          "match": "^[ \\t]*[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*(?=[ \\t]*[:=])"
+        }
+      ]
+    },
+    "refs": {
+      "patterns": [
+        {
+          "name": "constant.other.reference.msra",
+          "match": "<[A-Za-z_][A-Za-z0-9_\\.-]*(?:\\([^<>]*\\))?>"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.msra",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.msra",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

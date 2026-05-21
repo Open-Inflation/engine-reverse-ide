@@ -1,0 +1,60 @@
+{
+  "name": "msra-language-support",
+  "displayName": "MSRA Language Support",
+  "description": "VS Code support for .msra files backed by a Python language server.",
+  "version": "0.1.0",
+  "publisher": "miskler",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:msra"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "msra",
+        "aliases": [
+          "MSRA",
+          "MSRA Config"
+        ],
+        "extensions": [
+          ".msra"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "msra",
+        "scopeName": "source.msra",
+        "path": "./syntaxes/msra.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "MSRA",
+      "properties": {
+        "msra.server.command": {
+          "type": "string",
+          "default": "python",
+          "description": "Command used to start the MSRA language server."
+        },
+        "msra.server.args": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra arguments passed to the MSRA language server command."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}
