@@ -1,5 +1,5 @@
 
-Стандартный язык TOML с объектными вставками вида `<OBJECT>` или `<OBJECT.value>`
+Стандартный язык TOML-подобный с объектными вставками вида `<OBJECT>` или `<OBJECT.value>`
 
 Доступные OBJECTS:
 1. CAPTURED_HEADERS (.RESPONSE или .REQUEST -> {key: value})
