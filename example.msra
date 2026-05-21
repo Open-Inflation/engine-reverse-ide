@@ -1,0 +1,129 @@
+[misklerreverseapi]
+version=1
+
+[app]
+name="OzonAPI"
+timeout_ms=35000
+class_name_pattern="{class_name}Service" # Вообще это стоит по дефолту, вписано для ясности так же разрешено "{class_name.lower}" или "{class_name.upper}"
+
+[app.warmup]
+browser="camoufox" # доступно chromium, firefox, webkit
+url="https://fix-price.com/catalog"
+pipeline=[ # так же доступно wait_url, timeout_ms возможно переопределить по желанию
+    {action="wait_sniffer", what=<UNSTANDART_HEADERS.REQUEST.X-key>}, # или <SNIFF_RESPONSE.X-key>
+    {for_tests=true, action="wait_element", state="visible", what="div.selected-city > div.buttons > button.button.normal", then="click"}, # then опционален
+    {for_tests=true, action="wait_element", state="visible", what="a.link.product-category", then="click"}, # then допускает констукцию [action="click", what="a.link.product-category"], если передано только действие, то селектор выбирается от того что ждали
+    {for_tests=true, action="wait_element", state="visible", what="div.page-content"},
+    {for_tests=true, action="wait_network", state="load"},
+    {action="wait_network", state="idle"}
+]
+unstandart_headers_sniffer=true
+on_error_screenshot_path="screenshot.png" # по умолчанию скриншоты не делаются
+
+[app.variables.city_id]
+types=[{"type"="integer", "revalue"="^[1-9]\\d*$"}, {"type"="null", "value"=nan}]
+description="Идентификатор города"
+from=<UNSTANDART_HEADERS.REQUEST.x-city> # доступно так же "value" или <LOCAL_STORAGE.x-city> или COOKIES так же можно указать COOKIES.key если по факту хранилище это список/словарь (опасно - если нет, runtime ошибка распарса json)
+
+[app.prefixes]
+BASE_API="https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2"
+
+[app.regexes.TEXT_REQUEST]
+regex="^[a-zа-яё+]+$"
+actions=[ # Действие применяется ДО валидации
+    {action="lower"} # lower, upper, capitalize, trim
+    {action="replace", what=" ", with="+"} # что, на что, чем заменить
+]
+raise="Текст запроса должен состоять только из букв и знаков + между ними (вместо пробелов)"
+
+[app.groups.Catalog]
+description="Группа функций, связанных с каталогом товаров"
+
+[app.groups.Catalog.Products]
+description="Группа функций, связанных с товарами каталога"
+
+[app.func.A3A417]
+name="feed"
+render_html=false # если пришел html, то он его отрендерит и вернет результат рендера
+method="GET"
+group="Catalog"
+color="#D9A441"
+description="Основной способ получения карточек каталога.\n\nНе настраивается напрямую, должен получить url запроса"
+
+# ВАРИАНТ ДЛЯ МУЛЬТИ ДАННЫХ С ВЛОЖЕННОСТЬЮ
+[app.func.A3A417.body]
+type="multipart/form-data"
+charset=nan # можно указать, если nan (дефолт) не передается
+boundary="abc" # испльзуется только когда тип multipart
+
+[app.func.A3A417.body.ANYNAME]
+type="application/json"
+return_name=true
+data={"key": <VARIABLES.city_id>, "key2": "value", "key3": <INPUT.query>}
+
+[app.func.A3A417.body.VLOJENNOST]
+type="multipart/form-data"
+charset=nan
+boundary="aaa" # допустимо ли использовать другой чем в родителе?
+
+[app.func.A3A417.body.VLOJENNOST.ANYNAME2]
+type="text/html" # тот же синтаксис для бинарников
+return_name=true
+filename="file.txt" # или <INPUT.filename>
+data="some text "<INPUT.query>" and city_id="<VARIABLES.city_id>
+
+[app.func.A3A417.body.VLOJENNOST.ANYNAME3]
+type="application/x-www-form-urlencoded"
+# data допустим и имеет больший приоритет, если не обьявить data И .url то синтаксическая ошибка
+
+[app.func.A3A417.body.VLOJENNOST.ANYNAME3.url]
+# та же логика и структура
+
+
+[app.func.A3A417.headers]
+referrer=<app.warmup.url>
+cors_mode="cors" # значение по умолчанию, вписано для ясности
+credentials="include" # значение по умолчанию, вписано для ясности
+headers=<UNSTANDART_HEADERS> # так же допустимо {city_id=<VARIABLES.city_id>, X-Key=<UNSTANDART_HEADERS.REQUEST.X-Key>} можно так же {city_id=<VARIABLES.city_id>}+<UNSTANDART_HEADERS.REQUEST>
+
+[app.func.A3A417.url]
+prefix=<DOCUMENT.PREFIXES.BASE_API>
+base="" # суффикс клеящийся к prefix не включая в себя параметры
+
+[app.func.A3A417.url.params.url]
+sub_url=true
+required=true
+list=false # если true допускается несколько значений, в т.ч. дефолтных одновременно (но если false - несколько дефолтов это ошибка синтаксиса)
+
+# Значения представлены как по умолчанию, на практике list_style необязательно объявлять чтобы заработал list
+list_style={
+    # repeat    -> ?tag=a&tag=b
+    # delimited -> ?tag=a,b
+    # bracket   -> ?tag[]=a&tag[]=b или ?tag[0]=a&tag[1]=b
+    # json      -> ?tag=["a","b"]
+    style="repeat",
+    delimiter=",", # Используется только при style = "delimited"
+    indexed = false # Используется только при style = "bracket"
+}
+
+# Важно: допускается отцуцтвие value, тогда из кода выбрать его будет не возможно, если значение еще имеет "default"=true то оно будет выбрано по умолчанию (если нет ни того, ни другого - просто мусор)
+values=[{"value_in_url"="/searchSuggestions/search/"}] # не включая в себя параметры sub-url
+description="Энтрипоинт front'end страницы к которой нужно предоставить json-вид"
+
+[app.func.A3A417.url.params.url.params.text]
+sub_url=false
+required=true
+list=false
+# value= не указываем т.к. допустимо любое
+revalue=<DOCUMENT.REGEX.TEXT_REQUEST>
+description="Текст запроса"
+
+[app.func.A3A417.url.from_global]
+sub_url=false
+required=false
+list=false
+values=[{"value_in_url"="true", "value"=true, "default"=true}, {"value_in_url"="false", "value"=false}]
+
+[app.func.A3A417.examples]
+examples=[{"params"={"text"="example"}, "test"=false, "file"="local1.json"}, {"file"="local2.json"}]
+test=true # определяет, будут ли сгенерированы тесты отслеживающие неизменность контракта (является значением по умолчанию)
