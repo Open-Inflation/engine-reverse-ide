@@ -12,6 +12,7 @@ const SEMANTIC_TOKEN_TYPES = [
   "parameter",
   "property",
   "enumMember",
+  "variable",
 ];
 
 const SEMANTIC_TOKEN_MODIFIERS = [
@@ -68,11 +69,13 @@ function collectSemanticTokens(document) {
 
   const references = [...document.references].sort(compareByStart);
   for (const reference of references) {
-    for (const part of reference.expr.parts || []) {
+    const parts = reference.expr.parts || [];
+    for (let index = 0; index < parts.length; index += 1) {
+      const part = parts[index];
       if (part.kind !== "name") {
         continue;
       }
-      addToken(tokens, part.range, classifySegment(part), part.quoted);
+      addToken(tokens, part.range, classifyReferenceSegment(part, index, parts), part.quoted);
     }
     collectInlineTableTokens(reference.expr, tokens);
   }
@@ -138,12 +141,22 @@ function classifySegment(segment) {
   return SYSTEM_SEGMENT_VALUES.has(String(segment.value)) ? "namespace" : "parameter";
 }
 
+function classifyReferenceSegment(segment, index, parts) {
+  if (!segment) {
+    return null;
+  }
+  if (index >= 2 && parts && parts[0] && parts[1] && parts[0].value === "DOCUMENT" && parts[1].value === "PREFIXES") {
+    return "variable";
+  }
+  return classifySegment(segment);
+}
+
 function classifyAssignmentKey(assignment) {
   if (!assignment) {
     return null;
   }
   if (isCustomPrefixAssignment(assignment.tablePath)) {
-    return "enumMember";
+    return "variable";
   }
   return "property";
 }
@@ -255,6 +268,7 @@ module.exports = {
   collectSemanticTokens,
   collectInlineTableTokens,
   classifySegment,
+  classifyReferenceSegment,
   classifyAssignmentKey,
   compareRanges,
 };

@@ -9,6 +9,8 @@ const {
   RefExpr,
   SequenceExpr,
   StringExpr,
+  Position,
+  Range,
   pathLabel,
 } = require("./model");
 
@@ -36,6 +38,64 @@ function oneOf(...options) {
 
 function arrayOf(item) {
   return { kind: "arrayOf", item };
+}
+
+function integerAtLeast(min) {
+  return {
+    kind: "integer",
+    min,
+  };
+}
+
+function objectShape(required = {}, optional = {}, options = {}) {
+  return {
+    kind: "objectShape",
+    required,
+    optional,
+    allowUnknownKeys: Boolean(options.allowUnknownKeys),
+    rules: Array.isArray(options.rules) ? options.rules : [],
+  };
+}
+
+function recordOf(valueSpec, options = {}) {
+  return {
+    kind: "recordOf",
+    valueSpec,
+    keyDescription: options.keyDescription || "entry",
+  };
+}
+
+function requireKeyUnlessBooleanTrue(requiredKey, triggerKey, options = {}) {
+  return {
+    kind: "requireKeyUnlessBooleanTrue",
+    requiredKey,
+    triggerKey,
+    code: options.code || "missing-conditional-inline-table-key",
+    message: options.message || `Expected key "${requiredKey}" unless "${triggerKey}=true".`,
+  };
+}
+
+function requireKeyWhenValue(requiredKey, triggerKey, triggerValues, options = {}) {
+  return {
+    kind: "requireKeyWhenValue",
+    requiredKey,
+    triggerKey,
+    triggerValues: Array.isArray(triggerValues) ? triggerValues : [triggerValues],
+    valueSpec: options.valueSpec || null,
+    code: options.code || "missing-conditional-inline-table-key",
+    message: options.message || `Expected key "${requiredKey}" when "${triggerKey}" matches the configured action.`,
+  };
+}
+
+function forbidKeyWhenValue(forbiddenKey, triggerKey, triggerValues, options = {}) {
+  return {
+    kind: "forbidKeyWhenValue",
+    forbiddenKey,
+    triggerKey,
+    triggerValues: Array.isArray(triggerValues) ? triggerValues : [triggerValues],
+    code: options.code || "unexpected-conditional-inline-table-key",
+    message: options.message || `Expected no key "${forbiddenKey}" when "${triggerKey}" matches the configured action.`,
+  };
 }
 
 function exactPath(expected) {
@@ -105,6 +165,109 @@ const INPUT_TYPE_SPEC = oneOf(
   arrayOf(enumOf(["string", "integer", "boolean", "null", "array", "object"])),
 );
 
+const EXAMPLE_INPUTS_SPEC = recordOf(ANY, {
+  keyDescription: "input",
+});
+const EXAMPLE_ITEM_SPEC = objectShape(
+  {
+    file: STRINGISH,
+  },
+  {
+    inputs: EXAMPLE_INPUTS_SPEC,
+    test: BOOLEAN,
+  },
+);
+
+const VARIABLE_TYPE_ITEM_SPEC = objectShape(
+  {
+    type: enumOf(["string", "integer", "boolean", "null", "array", "object"]),
+  },
+  {
+    revalue: STRINGISH,
+    value: ANY,
+  },
+);
+
+const LIST_STYLE_SPEC = objectShape(
+  {
+    style: enumOf(["repeat", "delimited", "bracket", "json"]),
+  },
+  {
+    delimiter: STRINGISH,
+    indexed: BOOLEAN,
+  },
+);
+
+const URL_PARAM_VALUE_SPEC = objectShape(
+  {
+    value_in_url: STRINGISH,
+  },
+  {
+    value: ANY,
+    default: BOOLEAN,
+  },
+  {
+    rules: [
+      requireKeyUnlessBooleanTrue("value", "default", {
+        code: "missing-url-param-value",
+        message: 'Expected key "value" unless "default=true" is present.',
+      }),
+    ],
+  },
+);
+
+const REGEX_ACTION_ITEM_SPEC = objectShape(
+  {
+    action: enumOf(["lower", "upper", "capitalize", "trim", "replace"]),
+  },
+  {
+    what: STRINGISH,
+    with: STRINGISH,
+  },
+  {
+    rules: [
+      requireKeyWhenValue("what", "action", ["replace"], {
+        valueSpec: STRINGISH,
+        message: 'Expected key "what" when action="replace".',
+      }),
+      requireKeyWhenValue("with", "action", ["replace"], {
+        valueSpec: STRINGISH,
+        message: 'Expected key "with" when action="replace".',
+      }),
+    ],
+  },
+);
+
+const PIPELINE_WAIT_ELEMENT_STATE_SPEC = enumOf(["visible", "hidden", "attached", "detached"]);
+const PIPELINE_WAIT_NETWORK_STATE_SPEC = enumOf(["load", "idle"]);
+
+const PIPELINE_ITEM_SPEC = objectShape(
+  {
+    action: enumOf(["wait_sniffer", "wait_element", "wait_network"]),
+  },
+  {
+    what: ANY,
+    state: STRINGISH,
+    then: STRINGISH,
+    for_tests: BOOLEAN,
+  },
+  {
+    rules: [
+      forbidKeyWhenValue("state", "action", ["wait_sniffer"], {
+        message: 'Expected no key "state" when action="wait_sniffer".',
+      }),
+      requireKeyWhenValue("state", "action", ["wait_element"], {
+        valueSpec: PIPELINE_WAIT_ELEMENT_STATE_SPEC,
+        message: 'Expected key "state" when action="wait_element".',
+      }),
+      requireKeyWhenValue("state", "action", ["wait_network"], {
+        valueSpec: PIPELINE_WAIT_NETWORK_STATE_SPEC,
+        message: 'Expected key "state" when action="wait_network".',
+      }),
+    ],
+  },
+);
+
 const BROWSER_SPEC = enumOf(["chromium", "firefox", "webkit", "camoufox"]);
 const METHOD_SPEC = enumOf(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
@@ -130,21 +293,21 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["app"]), {
     name: STRINGISH,
     version: STRINGISH,
-    timeout_ms: INTEGER,
+    timeout_ms: integerAtLeast(0),
     class_name_pattern: CLASS_NAME_PATTERN_SPEC,
   }),
   makeFixedSchema(exactPath(["app", "warmup"]), {
     browser: BROWSER_SPEC,
     url: ANY,
-    pipeline: ARRAY,
+    pipeline: arrayOf(PIPELINE_ITEM_SPEC),
     headers_sniffer: BOOLEAN,
     error_selector: STRINGISH,
     on_error_screenshot_path: SCREENSHOT_PATH_SPEC,
     wait_url: ANY,
-    timeout_ms: INTEGER,
+    timeout_ms: integerAtLeast(0),
   }),
   makeFixedSchema(exactPath(["app", "variables", "*"]), {
-    types: ARRAY,
+    types: arrayOf(VARIABLE_TYPE_ITEM_SPEC),
     description: STRINGISH,
     from: ANY,
   }),
@@ -153,7 +316,7 @@ const TABLE_SCHEMAS = [
   }),
   makeFixedSchema(exactPath(["app", "regexes", "*"]), {
     regex: STRINGISH,
-    actions: ARRAY,
+    actions: arrayOf(REGEX_ACTION_ITEM_SPEC),
     raise: STRINGISH,
     description: STRINGISH,
   }),
@@ -203,14 +366,14 @@ const TABLE_SCHEMAS = [
     sub_url: BOOLEAN,
     required: BOOLEAN,
     list: BOOLEAN,
-    list_style: OBJECT,
-    values: ARRAY,
+    list_style: LIST_STYLE_SPEC,
+    values: arrayOf(URL_PARAM_VALUE_SPEC),
     description: STRINGISH,
     data: ANY,
     revalue: ANY,
   }),
   makeFixedSchema(exactPath(["app", "func", "*", "examples"]), {
-    examples: ARRAY,
+    examples: arrayOf(EXAMPLE_ITEM_SPEC),
     test: BOOLEAN,
   }),
 ];
@@ -235,19 +398,11 @@ function validateAssignment(tablePath, assignment) {
   if (!spec) {
     return [];
   }
-  const valueError = validateValueSpec(assignment.value, spec, assignment);
-  if (valueError === null) {
+  const valueDiagnostics = collectValueDiagnostics(assignment.value, spec, assignment.valueRange);
+  if (valueDiagnostics.length === 0) {
     return [];
   }
-  return [
-    new Diagnostic(
-      valueError,
-      assignment.valueRange,
-      "error",
-      "msra",
-      "invalid-assignment-value-type",
-    ),
-  ];
+  return valueDiagnostics;
 }
 
 function findSchema(tablePath) {
@@ -259,92 +414,245 @@ function findSchema(tablePath) {
   return null;
 }
 
-function validateValueSpec(value, spec) {
+function validateValueSpec(value, spec, context = null) {
+  const diagnostics = collectValueDiagnostics(value, spec, context && context.range ? context.range : null);
+  return diagnostics.length ? diagnostics[0].message : null;
+}
+
+function collectValueDiagnostics(value, spec, fallbackRange = null) {
   if (spec.kind === "any") {
-    return null;
+    return [];
   }
   if (spec.kind === "oneOf") {
     for (const option of spec.options) {
-      if (validateValueSpec(value, option) === null) {
-        return null;
+      if (collectValueDiagnostics(value, option, fallbackRange).length === 0) {
+        return [];
       }
     }
-    return `Expected one of: ${spec.options.map(describeSpec).join(", ")}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected one of: ${spec.options.map(describeSpec).join(", ")}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "arrayOf") {
     if (!(value instanceof ArrayExpr)) {
-      return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+      return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
     }
+    const diagnostics = [];
     for (const item of value.items) {
-      if (validateValueSpec(item, spec.item) !== null) {
-        return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
-      }
+      diagnostics.push(...collectValueDiagnostics(item, spec.item, item.range));
     }
-    return null;
+    return diagnostics;
+  }
+  if (spec.kind === "recordOf") {
+    if (!(value instanceof InlineTableExpr)) {
+      return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+    }
+    const diagnostics = [];
+    for (const entry of value.items) {
+      diagnostics.push(...collectValueDiagnostics(entry.value, spec.valueSpec, entry.value.range));
+    }
+    return diagnostics;
+  }
+  if (spec.kind === "objectShape") {
+    if (!(value instanceof InlineTableExpr)) {
+      return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+    }
+    const diagnostics = [];
+    const required = new Map(Object.entries(spec.required || {}));
+    const optional = new Map(Object.entries(spec.optional || {}));
+    const knownKeys = new Set([...required.keys(), ...optional.keys()]);
+    const seenKeys = new Set();
+    const entriesByKey = new Map();
+    for (const entry of value.items) {
+      if (seenKeys.has(entry.key)) {
+        diagnostics.push(typeDiagnostic(entry.keyRange, `Duplicate key "${entry.key}" in ${describeSpec(spec)}.`, "duplicate-inline-table-key"));
+        continue;
+      }
+      seenKeys.add(entry.key);
+      entriesByKey.set(entry.key, entry);
+      const entrySpec = required.get(entry.key) || optional.get(entry.key);
+      if (!entrySpec) {
+        if (!spec.allowUnknownKeys) {
+          diagnostics.push(typeDiagnostic(entry.keyRange, `Unknown key "${entry.key}" in ${describeSpec(spec)}. Expected one of: ${[...knownKeys].join(", ")}.`, "unknown-inline-table-key"));
+        }
+        continue;
+      }
+      required.delete(entry.key);
+      diagnostics.push(...collectValueDiagnostics(entry.value, entrySpec, entry.value.range));
+    }
+    for (const key of required.keys()) {
+      diagnostics.push(typeDiagnostic(fallbackRange || value.range, `Missing required key "${key}" in ${describeSpec(spec)}.`, "missing-inline-table-key"));
+    }
+    for (const rule of spec.rules || []) {
+      diagnostics.push(...evaluateObjectRule(rule, value, entriesByKey, fallbackRange || value.range));
+    }
+    return diagnostics;
   }
   if (spec.kind === "enum") {
     if (value instanceof StringExpr && spec.values.includes(value.value)) {
-      return null;
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "stringish") {
     if (value instanceof StringExpr || value instanceof SequenceExpr || value instanceof MergeExpr || value instanceof RefExpr) {
-      return null;
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "pattern") {
     if (value instanceof StringExpr && spec.pattern.test(value.value)) {
-      return null;
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "string") {
     if (value instanceof StringExpr) {
-      return null;
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "boolean") {
     if (value instanceof BoolExpr) {
-      return null;
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "integer") {
     if (value instanceof NumberExpr && Number.isInteger(value.value) && !/[.eE]/.test(value.raw)) {
-      return null;
+      if ((spec.min != null && value.value < spec.min) || (spec.max != null && value.value > spec.max)) {
+        const actual = typeof value.raw === "string" ? value.raw : describeValue(value);
+        return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${actual}`, "invalid-assignment-value-type")];
+      }
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "array") {
     if (value instanceof ArrayExpr) {
-      return null;
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "object") {
     if (value instanceof InlineTableExpr) {
-      return null;
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "null") {
     if (value instanceof NullExpr) {
-      return null;
+      return [];
     }
-    return `Expected ${describeSpec(spec)} but got ${describeValue(value)}`;
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
-  return null;
+  return [];
+}
+
+function evaluateObjectRule(rule, value, entriesByKey, fallbackRange) {
+  if (rule.kind === "requireKeyUnlessBooleanTrue") {
+    const requiredEntry = entriesByKey.get(rule.requiredKey);
+    if (requiredEntry) {
+      return [];
+    }
+    const triggerEntry = entriesByKey.get(rule.triggerKey);
+    if (triggerEntry && triggerEntry.value instanceof BoolExpr && triggerEntry.value.value === true) {
+      return [];
+    }
+    return [
+      typeDiagnostic(
+        fallbackRange,
+        rule.message,
+        rule.code,
+      ),
+    ];
+  }
+  if (rule.kind === "requireKeyWhenValue") {
+    const triggerEntry = entriesByKey.get(rule.triggerKey);
+    if (!triggerEntry || !(triggerEntry.value instanceof StringExpr)) {
+      return [];
+    }
+    if (!rule.triggerValues.includes(triggerEntry.value.value)) {
+      return [];
+    }
+    const requiredEntry = entriesByKey.get(rule.requiredKey);
+    if (!requiredEntry) {
+      return [
+        typeDiagnostic(
+          fallbackRange,
+          rule.message,
+          rule.code,
+        ),
+      ];
+    }
+    if (!rule.valueSpec) {
+      return [];
+    }
+    return collectValueDiagnostics(requiredEntry.value, rule.valueSpec, requiredEntry.value.range);
+  }
+  if (rule.kind === "forbidKeyWhenValue") {
+    const triggerEntry = entriesByKey.get(rule.triggerKey);
+    if (!triggerEntry || !(triggerEntry.value instanceof StringExpr)) {
+      return [];
+    }
+    if (!rule.triggerValues.includes(triggerEntry.value.value)) {
+      return [];
+    }
+    const forbiddenEntry = entriesByKey.get(rule.forbiddenKey);
+    if (!forbiddenEntry) {
+      return [];
+    }
+    return [
+      typeDiagnostic(
+        forbiddenEntry.keyRange || fallbackRange,
+        rule.message,
+        rule.code,
+      ),
+    ];
+  }
+  return [];
 }
 
 function describeSpec(spec) {
+  if (spec.kind === "integer") {
+    if (spec.min != null && spec.max != null) {
+      if (spec.min === spec.max) {
+        return `integer equal to ${spec.min}`;
+      }
+      return `integer between ${spec.min} and ${spec.max}`;
+    }
+    if (spec.min != null) {
+      if (spec.min === 0) {
+        return "non-negative integer";
+      }
+      return `integer >= ${spec.min}`;
+    }
+    if (spec.max != null) {
+      return `integer <= ${spec.max}`;
+    }
+    return "integer";
+  }
   if (spec.kind === "oneOf") {
     return spec.options.map(describeSpec).join(" or ");
   }
   if (spec.kind === "arrayOf") {
     return `array of ${describeSpec(spec.item)}`;
+  }
+  if (spec.kind === "recordOf") {
+    return `inline table with arbitrary keys and ${describeSpec(spec.valueSpec)} values`;
+  }
+  if (spec.kind === "objectShape") {
+    const required = Object.keys(spec.required || {});
+    const optional = Object.keys(spec.optional || {});
+    const parts = [];
+    if (required.length) {
+      parts.push(`required keys ${required.join(", ")}`);
+    }
+    if (optional.length) {
+      parts.push(`optional keys ${optional.join(", ")}`);
+    }
+    if (!parts.length) {
+      return "inline table";
+    }
+    return `inline table with ${parts.join(" and ")}`;
   }
   if (spec.kind === "enum") {
     return `one of ${spec.values.map((value) => JSON.stringify(value)).join(", ")}`;
@@ -353,6 +661,16 @@ function describeSpec(spec) {
     return spec.description || `string matching ${spec.pattern}`;
   }
   return spec.kind;
+}
+
+function typeDiagnostic(range, message, code = "invalid-assignment-value-type") {
+  return new Diagnostic(
+    message,
+    range || new Range(new Position(0, 0), new Position(0, 0)),
+    "error",
+    "msra",
+    code,
+  );
 }
 
 function describeValue(value) {
@@ -400,6 +718,8 @@ module.exports = {
   enumOf,
   findSchema,
   oneOf,
+  objectShape,
+  recordOf,
   validateAssignment,
   validateValueSpec,
 };

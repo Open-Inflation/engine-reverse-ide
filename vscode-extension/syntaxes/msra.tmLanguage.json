@@ -16,7 +16,14 @@
       "patterns": [
         {
           "name": "comment.line.number-sign.msra",
-          "match": "#.*$"
+          "begin": "#",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.msra"
+            }
+          },
+          "end": "$",
+          "patterns": []
         }
       ]
     },

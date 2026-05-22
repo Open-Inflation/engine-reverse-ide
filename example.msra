@@ -8,7 +8,7 @@ timeout_ms=35000
 class_name_pattern="{class_name}Service" # Вообще это стоит по дефолту, вписано для ясности так же разрешено "{class_name.lower}" или "{class_name.upper}"
 
 [app.warmup]
-browser="camoufox" # доступно chromium, firefox, webkit
+browser="camoufox" # доступно chromium, firefox, webkit, camoufox
 url=<DOCUMENT.PREFIXES.ORIGIN>
 pipeline=[ # так же доступно wait_url, timeout_ms возможно переопределить по желанию
     {action="wait_sniffer", what=<UNSTANDART_HEADERS.REQUEST.X-key>}, # или <SNIFF_RESPONSE.X-key>
@@ -118,7 +118,7 @@ list_style={
 }
 
 # Важно: допускается отцуцтвие value, тогда из кода выбрать его будет не возможно, если значение еще имеет "default"=true то оно будет выбрано по умолчанию (если нет ни того, ни другого - просто мусор)
-values=[{"value_in_url"="/searchSuggestions/search/"}] # не включая в себя параметры sub-url
+values=[{"value_in_url"="/searchSuggestions/search/", "default"=true}] # не включая в себя параметры sub-url
 description="Энтрипоинт front'end страницы к которой нужно предоставить json-вид"
 
 [app.func.A3A417.url.params.from_global.params.text]
@@ -130,7 +130,7 @@ data=<INPUT.query>
 revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>
 description="Текст запроса"
 
-[app.func.A3A417.url.params.from_global] # если data не указан, INPUT все равно объявится с тем же именем что параметр, при условии что оно свободно, иначе ошибка синтаксиса
+[app.func.A3A417.url.params."from_global"] # если data не указан, INPUT все равно объявится с тем же именем что параметр, при условии что оно свободно, иначе ошибка синтаксиса
 sub_url=false
 required=false
 list=false

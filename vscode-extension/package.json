@@ -41,7 +41,10 @@
         ],
         "unbalancedBracketScopes": [
           "comment",
+          "comment.line",
+          "comment.line.number-sign",
           "comment.line.number-sign.msra",
+          "meta.comment.line.number-sign.msra",
           "string",
           "string.quoted.double.msra",
           "meta.path.segment.quoted",
@@ -93,6 +96,9 @@
           },
           "enumMember.msra": {
             "foreground": "#98C379"
+          },
+          "variable.msra": {
+            "foreground": "#C678DD"
           }
         }
       },

@@ -72,7 +72,26 @@ test("assignment schema flags invalid app keys and timeout value types", () => {
   assert.ok(unknownKeyDiagnostic, "expected the misspelled timeout key to be rejected");
   assert.ok(typeDiagnostic, "expected timeout_ms to require an integer value");
   assert.match(unknownKeyDiagnostic.message, /timeout_m/);
-  assert.match(typeDiagnostic.message, /Expected integer/);
+  assert.match(typeDiagnostic.message, /non-negative integer/);
+});
+
+test("timeout_ms must be a non-negative integer", () => {
+  const text = [
+    "[app]",
+    "timeout_ms=-35000",
+    "[app.warmup]",
+    "timeout_ms=-1",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///negative-timeout.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
+
+  assert.strictEqual(diagnostics.length, 2);
+  assert.match(diagnostics[0].message, /non-negative integer/);
+  assert.match(diagnostics[0].message, /-35000/);
+  assert.match(diagnostics[1].message, /non-negative integer/);
+  assert.match(diagnostics[1].message, /-1/);
 });
 
 test("enum and pattern schema rules validate app function settings", () => {
@@ -99,6 +118,119 @@ test("enum and pattern schema rules validate app function settings", () => {
   assert.match(diagnostics[2].message, /GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS/);
   assert.match(diagnostics[3].message, /cors|no-cors|same-origin/);
   assert.match(diagnostics[4].message, /omit|same-origin|include/);
+});
+
+test("regex actions validate action enums and replace arguments", () => {
+  const text = [
+    "[app]",
+    "[app.regexes.TEXT_REQUEST]",
+    'regex="^[a-zа-яё+]+$"',
+    'actions=[{action="lower"}, {action="replace", what=" ", with="+"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///valid-regex-actions.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("regex actions reject unknown action names and missing replace arguments", () => {
+  const text = [
+    "[app]",
+    "[app.regexes.TEXT_REQUEST]",
+    'regex="^[a-zа-яё+]+$"',
+    'actions=[{action="lowerr"}, {action="replace", what=" "}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-regex-actions.msra");
+  const analysis = analyzeDocument(document);
+  const invalidActionDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
+  const missingWithDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-conditional-inline-table-key");
+
+  assert.ok(invalidActionDiagnostic, "expected unknown regex actions to be rejected");
+  assert.ok(missingWithDiagnostic, "expected replace actions to require the with argument");
+  assert.match(invalidActionDiagnostic.message, /lower|upper|capitalize|trim|replace/);
+  assert.match(missingWithDiagnostic.message, /with/);
+  assert.match(missingWithDiagnostic.message, /replace/);
+});
+
+test("nested example, values, list_style, and types structures are validated strictly", () => {
+  const text = [
+    "[app]",
+    "[app.variables.city_id]",
+    'types=[{"revalue"="^[1-9]\\\\d*$"}]',
+    "[app.func.A3A417]",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    'list_style={style="repeat", delimiter=1, indexed=false, extra=true}',
+    'values=[{"foo"=1}]',
+    "[app.func.A3A417.examples]",
+    'examples=[{"inputs"={"query"="example"}, "test"=false}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///strict-nested-structures.msra");
+  const analysis = analyzeDocument(document);
+
+  const missingType = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-inline-table-key" && /type/.test(diagnostic.message));
+  const badDelimiter = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-assignment-value-type" && /delimiter|stringish|string/i.test(diagnostic.message));
+  const unknownListStyleKey = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unknown-inline-table-key" && /extra/.test(diagnostic.message));
+  const unknownValuesKey = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unknown-inline-table-key" && /foo/.test(diagnostic.message));
+  const missingExampleFile = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-inline-table-key" && /file/.test(diagnostic.message));
+
+  assert.ok(missingType, "expected a missing type field inside app.variables.city_id.types");
+  assert.ok(badDelimiter, "expected a non-string delimiter inside list_style to be rejected");
+  assert.ok(unknownListStyleKey, "expected unexpected list_style keys to be rejected");
+  assert.ok(unknownValuesKey, "expected unexpected values keys to be rejected");
+  assert.ok(missingExampleFile, "expected examples items to require file");
+});
+
+test("pipeline state is validated in the context of action", () => {
+  const text = [
+    "[app]",
+    "[app.warmup]",
+    'pipeline=[{action="wait_sniffer", what=<UNSTANDART_HEADERS.REQUEST.X-key>}, {action="wait_element", state="visible", what="div.page-content"}, {action="wait_network", state="idle"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///valid-pipeline-state.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("pipeline state rejects values that do not match the action context", () => {
+  const text = [
+    "[app]",
+    "[app.warmup]",
+    'pipeline=[{action="wait_sniffer", state="visible"}, {action="wait_element", state="idle", what="div.page-content"}, {action="wait_network", state="visible"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-pipeline-state.msra");
+  const analysis = analyzeDocument(document);
+  const forbiddenStateDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unexpected-conditional-inline-table-key");
+  const invalidStateDiagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
+
+  assert.ok(forbiddenStateDiagnostic, "expected wait_sniffer to reject an explicit state");
+  assert.strictEqual(invalidStateDiagnostics.length, 2, "expected action-specific state enums to reject mismatched values");
+  assert.match(forbiddenStateDiagnostic.message, /state/);
+  assert.match(forbiddenStateDiagnostic.message, /wait_sniffer/);
+});
+
+test("url param values require value unless default=true is present", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    'values=[{"value_in_url"="/searchSuggestions/search/"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///missing-url-param-value.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "missing-url-param-value");
+
+  assert.ok(diagnostic, "expected values entries without value or default=true to be rejected");
+  assert.match(diagnostic.message, /value/);
+  assert.match(diagnostic.message, /default=true/);
 });
 
 test("warmup browser must be one of the supported browsers", () => {
@@ -216,6 +348,15 @@ test("grammar highlights boolean and null keywords", () => {
   ]);
 });
 
+test("grammar treats number-sign comments as a full-line scope", () => {
+  const commentPattern = grammar.repository.comments.patterns[0];
+
+  assert.strictEqual(commentPattern.name, "comment.line.number-sign.msra");
+  assert.strictEqual(commentPattern.begin, "#");
+  assert.strictEqual(commentPattern.end, "$");
+  assert.deepStrictEqual(commentPattern.patterns, []);
+});
+
 test("grammar highlights numeric literals", () => {
   const numberPattern = grammar.repository.numbers.patterns[0];
 
@@ -307,6 +448,7 @@ test("package contributes a stable MSRA palette", () => {
   assert.strictEqual(scopeToColor.get("variable.other.readwrite.msra"), "#61AFEF");
   assert.strictEqual(scopeToColor.get("string.quoted.double.msra"), "#CE9178");
   assert.strictEqual(scopeToColor.get("constant.numeric.msra"), "#D19A66");
+  assert.strictEqual(semanticRules["variable.msra"].foreground, "#C678DD");
 });
 
 test("semantic tokens separate path segments, assignment keys, and inline table keys", () => {
@@ -350,6 +492,9 @@ test("semantic tokens color app prefixes keys differently from fixed assignment 
     'ORIGIN="https://www.ozon.ru/"',
     "[app]",
     "timeout_ms=35000",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.url]",
+    'prefix=<DOCUMENT.PREFIXES.BASE_API>',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///prefixes-semantic.msra");
@@ -363,9 +508,18 @@ test("semantic tokens color app prefixes keys differently from fixed assignment 
     const end = start + token.length;
     return text.slice(start, end) === needle;
   });
+  const findTokens = (needle, tokenType) => tokens.filter((token) => {
+    if (token.tokenType !== tokenType) {
+      return false;
+    }
+    const start = document.offsetAt({ line: token.line, character: token.character });
+    const end = start + token.length;
+    return text.slice(start, end) === needle;
+  });
 
-  assert.ok(findToken("BASE_API", "enumMember"), "expected BASE_API to be classified as a custom prefix key");
-  assert.ok(findToken("ORIGIN", "enumMember"), "expected ORIGIN to be classified as a custom prefix key");
+  assert.ok(findToken("BASE_API", "variable"), "expected BASE_API to be classified as a custom prefix variable");
+  assert.ok(findToken("ORIGIN", "variable"), "expected ORIGIN to be classified as a custom prefix variable");
+  assert.ok(findTokens("BASE_API", "variable").length >= 2, "expected the prefix reference to keep the same variable coloring");
   assert.ok(findToken("timeout_ms", "property"), "expected timeout_ms to remain a fixed assignment key");
 });
 
@@ -377,6 +531,8 @@ test("language configuration keeps brackets out of comments and strings", () => 
   assert.ok(bracketPairs.every((pair) => Array.isArray(pair.notIn) && pair.notIn.includes("comment") && pair.notIn.includes("string")));
   assert.ok(Array.isArray(quotePair?.notIn) && quotePair.notIn.includes("comment") && quotePair.notIn.includes("string"));
   assert.ok(unbalancedScopes.has("comment"));
+  assert.ok(unbalancedScopes.has("comment.line"));
+  assert.ok(unbalancedScopes.has("comment.line.number-sign"));
   assert.ok(unbalancedScopes.has("string"));
   assert.ok(unbalancedScopes.has("meta.path.segment.quoted"));
 });
