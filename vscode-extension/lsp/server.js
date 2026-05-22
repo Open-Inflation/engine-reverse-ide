@@ -13,6 +13,7 @@ const {
 const { parseDocument } = require("./parser");
 const {
   Position,
+  Range,
   comparePaths,
   pathKey,
   pathLabel,
@@ -372,10 +373,11 @@ class MsraLanguageServer {
       });
     }
     for (const assignment of assignments) {
+      const fullRange = this._rangeCover([assignment.keyRange, assignment.valueRange]);
       items.push({
         name: assignment.key,
         kind: 13,
-        range: this._rangeToLsp(assignment.valueRange),
+        range: this._rangeToLsp(fullRange),
         selectionRange: this._rangeToLsp(assignment.keyRange),
       });
     }
@@ -416,6 +418,29 @@ class MsraLanguageServer {
         character: range.end.character,
       },
     };
+  }
+
+  _rangeCover(ranges) {
+    if (!ranges.length) {
+      return new Range(new Position(0, 0), new Position(0, 0));
+    }
+    let start = ranges[0].start;
+    let end = ranges[0].end;
+    for (const range of ranges.slice(1)) {
+      if (
+        range.start.line < start.line ||
+        (range.start.line === start.line && range.start.character < start.character)
+      ) {
+        start = range.start;
+      }
+      if (
+        range.end.line > end.line ||
+        (range.end.line === end.line && range.end.character > end.character)
+      ) {
+        end = range.end;
+      }
+    }
+    return new Range(start, end);
   }
 
   _positionFromLsp(position) {
