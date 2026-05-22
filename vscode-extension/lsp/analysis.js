@@ -56,7 +56,7 @@ function analyzeDocument(document) {
       diagnostics.push(diagnostic);
     }
   }
-  diagnostics.push(...validateAssignmentRelations(assignmentIndex));
+  diagnostics.push(...validateAssignmentRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateGroupAssignments(tableIndex, assignmentIndex));
   const result = new AnalysisResult(document);
   result.diagnostics = diagnostics;

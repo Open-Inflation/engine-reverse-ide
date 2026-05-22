@@ -19,6 +19,7 @@ const STRINGISH = { kind: "stringish" };
 const STRING = { kind: "string" };
 const BOOLEAN = { kind: "boolean" };
 const INTEGER = { kind: "integer" };
+const NUMBER = { kind: "number" };
 const ARRAY = { kind: "array" };
 const OBJECT = { kind: "object" };
 const NULL = { kind: "null" };
@@ -44,6 +45,14 @@ function integerAtLeast(min) {
   return {
     kind: "integer",
     min,
+  };
+}
+
+function numberGreaterThan(min) {
+  return {
+    kind: "number",
+    min,
+    exclusiveMin: true,
   };
 }
 
@@ -98,6 +107,16 @@ function forbidKeyWhenValue(forbiddenKey, triggerKey, triggerValues, options = {
   };
 }
 
+function requireKeyOrder(lowerKey, upperKey, options = {}) {
+  return {
+    kind: "requireKeyOrder",
+    lowerKey,
+    upperKey,
+    code: options.code || "invalid-inline-table-value-order",
+    message: options.message || `Expected key "${upperKey}" to be greater than or equal to key "${lowerKey}".`,
+  };
+}
+
 function exactPath(expected) {
   return (path) => path.length === expected.length && expected.every((segment, index) => segment === "*" || segment === path[index]);
 }
@@ -112,6 +131,13 @@ function matchesGroupPath(path) {
 
 function matchesBodyPath(path) {
   return path.length >= 4 && path[0] === "app" && path[1] === "func" && path[3] === "body" && path[path.length - 1] !== "url";
+}
+
+function matchesFuncHeadersPath(path) {
+  if (path.length === 3) {
+    return path[0] === "app" && path[1] === "func" && path[2] === "headers";
+  }
+  return path.length === 4 && path[0] === "app" && path[1] === "func" && path[3] === "headers";
 }
 
 function matchesUrlPath(path) {
@@ -198,6 +224,21 @@ const LIST_STYLE_SPEC = objectShape(
   },
 );
 
+const HUMANIZE_ACTION_SPEC = objectShape(
+  {
+    from: integerAtLeast(0),
+    to: integerAtLeast(0),
+  },
+  {},
+  {
+    rules: [
+      requireKeyOrder("from", "to", {
+        message: 'Expected key "to" to be greater than or equal to key "from" in "humanize_action".',
+      }),
+    ],
+  },
+);
+
 const URL_PARAM_VALUE_SPEC = objectShape(
   {
     value_in_url: STRINGISH,
@@ -216,6 +257,11 @@ const URL_PARAM_VALUE_SPEC = objectShape(
   },
 );
 
+const BROWSER_SPEC = enumOf(["chromium", "firefox", "webkit", "camoufox"]);
+const METHOD_SPEC = enumOf(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
+const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
+const CREDENTIALS_SPEC = enumOf(["omit", "same-origin", "include"]);
+const HUMANIZE_SPEC = oneOf(BOOLEAN, numberGreaterThan(0));
 const REGEX_ACTION_ITEM_SPEC = objectShape(
   {
     action: enumOf(["lower", "upper", "capitalize", "trim", "replace"]),
@@ -239,39 +285,89 @@ const REGEX_ACTION_ITEM_SPEC = objectShape(
 );
 
 const PIPELINE_WAIT_ELEMENT_STATE_SPEC = enumOf(["visible", "hidden", "attached", "detached"]);
-const PIPELINE_WAIT_NETWORK_STATE_SPEC = enumOf(["load", "idle"]);
-
-const PIPELINE_ITEM_SPEC = objectShape(
+const PIPELINE_WAIT_NETWORK_STATE_SPEC = enumOf(["load", "idle", "commit"]);
+const PIPELINE_THEN_ACTION_SPEC = enumOf(["click", "commit"]);
+const PIPELINE_THEN_OBJECT_SPEC = objectShape(
   {
-    action: enumOf(["wait_sniffer", "wait_element", "wait_network"]),
+    action: PIPELINE_THEN_ACTION_SPEC,
   },
   {
     what: ANY,
-    state: STRINGISH,
-    then: STRINGISH,
-    for_tests: BOOLEAN,
-  },
-  {
-    rules: [
-      forbidKeyWhenValue("state", "action", ["wait_sniffer"], {
-        message: 'Expected no key "state" when action="wait_sniffer".',
-      }),
-      requireKeyWhenValue("state", "action", ["wait_element"], {
-        valueSpec: PIPELINE_WAIT_ELEMENT_STATE_SPEC,
-        message: 'Expected key "state" when action="wait_element".',
-      }),
-      requireKeyWhenValue("state", "action", ["wait_network"], {
-        valueSpec: PIPELINE_WAIT_NETWORK_STATE_SPEC,
-        message: 'Expected key "state" when action="wait_network".',
-      }),
-    ],
+    timeout_ms: integerAtLeast(0),
   },
 );
-
-const BROWSER_SPEC = enumOf(["chromium", "firefox", "webkit", "camoufox"]);
-const METHOD_SPEC = enumOf(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
-const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
-const CREDENTIALS_SPEC = enumOf(["omit", "same-origin", "include"]);
+const PIPELINE_THEN_SPEC = oneOf(PIPELINE_THEN_ACTION_SPEC, PIPELINE_THEN_OBJECT_SPEC);
+const PIPELINE_IF_ELEMENT_SPEC = objectShape(
+  {
+    action: enumOf(["element", "wait_element"]),
+  },
+  {
+    state: PIPELINE_WAIT_ELEMENT_STATE_SPEC,
+    what: ANY,
+  },
+);
+const PIPELINE_IF_NETWORK_SPEC = objectShape(
+  {
+    action: enumOf(["wait_network"]),
+  },
+  {
+    state: PIPELINE_WAIT_NETWORK_STATE_SPEC,
+  },
+);
+const PIPELINE_IF_SPEC = oneOf(PIPELINE_IF_ELEMENT_SPEC, PIPELINE_IF_NETWORK_SPEC);
+const PIPELINE_WAIT_SNIFFER_SPEC = objectShape(
+  {
+    action: enumOf(["wait_sniffer"]),
+    what: ANY,
+  },
+  {
+    raise: STRINGISH,
+    timeout_ms: integerAtLeast(0),
+    for_tests: BOOLEAN,
+  },
+);
+const PIPELINE_WAIT_ELEMENT_SPEC = objectShape(
+  {
+    action: enumOf(["wait_element", "element"]),
+    state: PIPELINE_WAIT_ELEMENT_STATE_SPEC,
+    what: ANY,
+  },
+  {
+    then: PIPELINE_THEN_SPEC,
+    raise: STRINGISH,
+    timeout_ms: integerAtLeast(0),
+    for_tests: BOOLEAN,
+  },
+);
+const PIPELINE_WAIT_NETWORK_SPEC = objectShape(
+  {
+    action: enumOf(["wait_network"]),
+    state: PIPELINE_WAIT_NETWORK_STATE_SPEC,
+  },
+  {
+    raise: STRINGISH,
+    timeout_ms: integerAtLeast(0),
+    for_tests: BOOLEAN,
+  },
+);
+const PIPELINE_ALWAYS_SPEC = objectShape(
+  {
+    action: enumOf(["always"]),
+    if: PIPELINE_IF_SPEC,
+    then: PIPELINE_THEN_SPEC,
+  },
+  {
+    raise: STRINGISH,
+    timeout_ms: integerAtLeast(0),
+    for_tests: BOOLEAN,
+  },
+);
+const PIPELINE_CONCURRENT_ITEM_SPEC = oneOf(PIPELINE_WAIT_SNIFFER_SPEC, PIPELINE_WAIT_ELEMENT_SPEC, PIPELINE_WAIT_NETWORK_SPEC);
+const PIPELINE_ITEM_SPEC = oneOf(
+  PIPELINE_CONCURRENT_ITEM_SPEC,
+  arrayOf(PIPELINE_CONCURRENT_ITEM_SPEC),
+  PIPELINE_ALWAYS_SPEC,
+);
 
 const BODY_TYPE_SPEC = patternOf(
   /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[^;]+)*$/i,
@@ -295,9 +391,12 @@ const TABLE_SCHEMAS = [
     version: STRINGISH,
     timeout_ms: integerAtLeast(0),
     class_name_pattern: CLASS_NAME_PATTERN_SPEC,
+    browser: BROWSER_SPEC,
   }),
   makeFixedSchema(exactPath(["app", "warmup"]), {
-    browser: BROWSER_SPEC,
+    humanize: HUMANIZE_SPEC,
+    block_images: BOOLEAN,
+    humanize_action: HUMANIZE_ACTION_SPEC,
     url: ANY,
     pipeline: arrayOf(PIPELINE_ITEM_SPEC),
     headers_sniffer: BOOLEAN,
@@ -322,6 +421,12 @@ const TABLE_SCHEMAS = [
   }),
   makeFixedSchema(matchesGroupPath, {
     description: STRINGISH,
+  }),
+  makeFixedSchema(matchesFuncHeadersPath, {
+    referrer: ANY,
+    cors_mode: CORS_MODE_SPEC,
+    credentials: CREDENTIALS_SPEC,
+    headers: ANY,
   }),
   makeFixedSchema(exactPath(["app", "func", "*"]), {
     name: STRINGISH,
@@ -351,12 +456,6 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(matchesBodyUrlPath, {
     prefix: ANY,
     base: STRINGISH,
-  }),
-  makeFixedSchema(exactPath(["app", "func", "*", "headers"]), {
-    referrer: ANY,
-    cors_mode: CORS_MODE_SPEC,
-    credentials: CREDENTIALS_SPEC,
-    headers: ANY,
   }),
   makeFixedSchema(matchesUrlPath, {
     prefix: ANY,
@@ -526,6 +625,18 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
     }
     return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
+  if (spec.kind === "number") {
+    if (value instanceof NumberExpr && Number.isFinite(value.value)) {
+      const belowMin = spec.min != null && (spec.exclusiveMin ? value.value <= spec.min : value.value < spec.min);
+      const aboveMax = spec.max != null && (spec.exclusiveMax ? value.value >= spec.max : value.value > spec.max);
+      if (belowMin || aboveMax) {
+        const actual = typeof value.raw === "string" ? value.raw : describeValue(value);
+        return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${actual}`, "invalid-assignment-value-type")];
+      }
+      return [];
+    }
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+  }
   if (spec.kind === "array") {
     if (value instanceof ArrayExpr) {
       return [];
@@ -629,6 +740,26 @@ function describeSpec(spec) {
       return `integer <= ${spec.max}`;
     }
     return "integer";
+  }
+  if (spec.kind === "number") {
+    if (spec.min != null && spec.max != null) {
+      if (spec.min === spec.max) {
+        if (spec.exclusiveMin || spec.exclusiveMax) {
+          return `number > ${spec.min} and < ${spec.max}`;
+        }
+        return `number between ${spec.min} and ${spec.max}`;
+      }
+      const lower = spec.exclusiveMin ? `> ${spec.min}` : `>= ${spec.min}`;
+      const upper = spec.exclusiveMax ? `< ${spec.max}` : `<= ${spec.max}`;
+      return `number ${lower} and ${upper}`;
+    }
+    if (spec.min != null) {
+      return spec.exclusiveMin ? `number > ${spec.min}` : `number >= ${spec.min}`;
+    }
+    if (spec.max != null) {
+      return spec.exclusiveMax ? `number < ${spec.max}` : `number <= ${spec.max}`;
+    }
+    return "number";
   }
   if (spec.kind === "oneOf") {
     return spec.options.map(describeSpec).join(" or ");

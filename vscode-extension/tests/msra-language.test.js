@@ -234,13 +234,10 @@ test("pipeline state rejects values that do not match the action context", () =>
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-pipeline-state.msra");
   const analysis = analyzeDocument(document);
-  const forbiddenStateDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unexpected-conditional-inline-table-key");
   const invalidStateDiagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
 
-  assert.ok(forbiddenStateDiagnostic, "expected wait_sniffer to reject an explicit state");
-  assert.strictEqual(invalidStateDiagnostics.length, 2, "expected action-specific state enums to reject mismatched values");
-  assert.match(forbiddenStateDiagnostic.message, /state/);
-  assert.match(forbiddenStateDiagnostic.message, /wait_sniffer/);
+  assert.strictEqual(invalidStateDiagnostics.length, 3, "expected each pipeline item to fail validation when the state does not match its action context");
+  assert.ok(invalidStateDiagnostics.every((diagnostic) => /Expected one of:/.test(diagnostic.message)));
 });
 
 test("url param values require value unless default=true is present", () => {
@@ -261,10 +258,9 @@ test("url param values require value unless default=true is present", () => {
   assert.match(diagnostic.message, /default=true/);
 });
 
-test("warmup browser must be one of the supported browsers", () => {
+test("app browser must be one of the supported browsers", () => {
   const text = [
     "[app]",
-    "[app.warmup]",
     'browser="ddd"',
     "",
   ].join("\n");
@@ -274,6 +270,38 @@ test("warmup browser must be one of the supported browsers", () => {
 
   assert.ok(browserDiagnostic, "expected an invalid browser name to be rejected");
   assert.match(browserDiagnostic.message, /chromium|firefox|webkit|camoufox/);
+});
+
+test("warmup humanize options require camoufox browser", () => {
+  const text = [
+    "[app]",
+    'browser="chromium"',
+    "[app.warmup]",
+    "humanize=true",
+    "block_images=true",
+    'humanize_action={from=1000, to=3000}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-warmup-context.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-warmup-context");
+
+  assert.strictEqual(diagnostics.length, 3);
+  assert.match(diagnostics[0].message, /camoufox/);
+});
+
+test("warmup humanize accepts positive numbers when camoufox is enabled", () => {
+  const text = [
+    "[app]",
+    'browser="camoufox"',
+    "[app.warmup]",
+    "humanize=0.5",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///valid-humanize-number.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
 test("body type must be a browser-supported MIME type", () => {
@@ -293,6 +321,75 @@ test("body type must be a browser-supported MIME type", () => {
   assert.match(typeDiagnostic.message, /browser-supported MIME type/);
 });
 
+test("multipart bodies require a boundary value", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.body]",
+    'type="multipart/form-data"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///missing-boundary.msra");
+  const analysis = analyzeDocument(document);
+  const boundaryDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-body-boundary");
+
+  assert.ok(boundaryDiagnostic, "expected multipart/form-data to require a boundary");
+  assert.match(boundaryDiagnostic.message, /boundary/);
+});
+
+test("non-multipart bodies cannot define a boundary", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.body]",
+    'type="application/json"',
+    'boundary="oops"',
+    'data={"key"="value"}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///unexpected-boundary.msra");
+  const analysis = analyzeDocument(document);
+  const boundaryDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unexpected-body-boundary");
+
+  assert.ok(boundaryDiagnostic, "expected a boundary outside multipart/form-data to be rejected");
+  assert.match(boundaryDiagnostic.message, /multipart\/form-data/);
+});
+
+test("urlencoded bodies require data or a nested url table", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.body]",
+    'type="application/x-www-form-urlencoded"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///missing-urlencoded-payload.msra");
+  const analysis = analyzeDocument(document);
+  const payloadDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-body-payload");
+
+  assert.ok(payloadDiagnostic, "expected x-www-form-urlencoded bodies to require data or a url table");
+  assert.match(payloadDiagnostic.message, /data/);
+  assert.match(payloadDiagnostic.message, /url/);
+});
+
+test("shared function headers accept referrer cors_mode credentials and headers", () => {
+  const text = [
+    "[app]",
+    "[app.prefixes]",
+    'ORIGIN="https://www.ozon.ru/"',
+    "[app.func.headers]",
+    'referrer=<DOCUMENT.PREFIXES.ORIGIN>',
+    'cors_mode="cors"',
+    'credentials="include"',
+    "headers=<UNSTANDART_HEADERS>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///shared-headers.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
 test("nested body tables require the parent body item", () => {
   const text = [
     "[app]",
@@ -308,6 +405,24 @@ test("nested body tables require the parent body item", () => {
 
   assert.ok(parentDiagnostic, "expected a missing parent body table to be reported");
   assert.match(parentDiagnostic.message, /app\.func\.A3A417\.body\.VLOJENNOS2T/);
+});
+
+test("url param values cannot define multiple defaults unless list=true", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    'list=false',
+    'values=[{"value_in_url"="/search", "default"=true}, {"value_in_url"="/search-alt", "default"=true}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///duplicate-url-param-default.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "duplicate-url-param-default");
+
+  assert.ok(diagnostic, "expected duplicate defaults to be rejected when list=false");
+  assert.match(diagnostic.message, /list=true/);
 });
 
 test("function group accepts relative group names and nested group names", () => {
