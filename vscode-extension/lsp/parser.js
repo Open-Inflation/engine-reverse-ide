@@ -459,6 +459,7 @@ class Parser {
       value,
       value.range,
       fullPath,
+      keyToken.type === "STRING",
     );
     const fullPathKey = JSON.stringify(fullPath);
     if (this.assignments.has(fullPathKey)) {
@@ -706,7 +707,7 @@ class Parser {
       return new RefExpr(new Range(start.range.start, end.range.end), parts);
     }
     const root = this._advance();
-    parts.push(new RefSegment("name", root.value, root.range));
+    parts.push(new RefSegment("name", root.value, root.range, root.type === "STRING"));
     while (!this._check("GT") && !this._check("EOF")) {
       if (this._match("DOT")) {
         const segment = this._parseRefNameSegment();
@@ -714,7 +715,7 @@ class Parser {
           this._error("Expected path segment in reference", this._current().range, "expected-ref-segment");
           break;
         }
-        parts.push(new RefSegment("name", segment.value, segment.range));
+        parts.push(new RefSegment("name", segment.value, segment.range, segment.type === "STRING"));
         continue;
       }
       if (this._check("LBRACK")) {
@@ -846,7 +847,7 @@ class Parser {
         break;
       }
       const value = this._parseExpr(false);
-      items.push(new InlineEntry(keyToken.value, keyToken.range, value));
+      items.push(new InlineEntry(keyToken.value, keyToken.range, value, keyToken.type === "STRING"));
       if (this._match("COMMA")) {
         while (this._check("NEWLINE")) {
           this._advance();

@@ -35,7 +35,18 @@
       {
         "language": "msra",
         "scopeName": "source.msra",
-        "path": "./syntaxes/msra.tmLanguage.json"
+        "path": "./syntaxes/msra.tmLanguage.json",
+        "balancedBracketScopes": [
+          "*"
+        ],
+        "unbalancedBracketScopes": [
+          "comment",
+          "comment.line.number-sign.msra",
+          "string",
+          "string.quoted.double.msra",
+          "meta.path.segment.quoted",
+          "meta.path.segment.quoted.msra"
+        ]
       }
     ],
     "configuration": {
@@ -63,6 +74,11 @@
           },
           "description": "Arguments passed to the external MSRA language server command. Supports ${workspaceFolder} and ${extensionPath} placeholders."
         }
+      }
+    },
+    "configurationDefaults": {
+      "[msra]": {
+        "editor.semanticHighlighting.enabled": true
       }
     }
   },

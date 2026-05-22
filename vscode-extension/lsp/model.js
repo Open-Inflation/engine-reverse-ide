@@ -92,10 +92,11 @@ class IndexExpr extends Expr {
 }
 
 class RefSegment {
-  constructor(kind, value, range) {
+  constructor(kind, value, range, quoted = false) {
     this.kind = kind;
     this.value = value;
     this.range = range;
+    this.quoted = quoted;
   }
 }
 
@@ -128,10 +129,11 @@ class ArrayExpr extends Expr {
 }
 
 class InlineEntry {
-  constructor(key, keyRange, value) {
+  constructor(key, keyRange, value, quoted = false) {
     this.key = key;
     this.keyRange = keyRange;
     this.value = value;
+    this.quoted = quoted;
   }
 }
 
@@ -152,13 +154,14 @@ class TableDef {
 }
 
 class AssignmentDef {
-  constructor(tablePath, key, keyRange, value, valueRange, fullPath) {
+  constructor(tablePath, key, keyRange, value, valueRange, fullPath, quoted = false) {
     this.tablePath = tablePath;
     this.key = key;
     this.keyRange = keyRange;
     this.value = value;
     this.valueRange = valueRange;
     this.fullPath = fullPath;
+    this.quoted = quoted;
   }
 }
 

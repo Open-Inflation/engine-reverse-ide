@@ -4,6 +4,9 @@ const {
   pathKey,
   pathLabel,
 } = require("./model");
+const { validateAssignment } = require("./assignment-schema");
+const { validateGroupAssignments } = require("./group-relations");
+const { validateTableRelations } = require("./table-relations");
 const { validateTablePath } = require("./path-schema");
 
 const KNOWN_DYNAMIC_ROOTS = new Set([
@@ -12,12 +15,6 @@ const KNOWN_DYNAMIC_ROOTS = new Set([
   "COOKIES",
   "LOCAL_STORAGE",
   "SESSION_STORAGE",
-]);
-
-const VIRTUAL_ROOTS = new Set([
-  "DOCUMENT",
-  "VARIABLES",
-  "INPUT",
 ]);
 
 class AnalysisResult {
@@ -52,6 +49,13 @@ function analyzeDocument(document) {
       }
     }
   }
+  diagnostics.push(...validateTableRelations(tableIndex));
+  for (const assignment of assignmentIndex.values()) {
+    for (const diagnostic of validateAssignment(assignment.tablePath, assignment)) {
+      diagnostics.push(diagnostic);
+    }
+  }
+  diagnostics.push(...validateGroupAssignments(tableIndex, assignmentIndex));
   const result = new AnalysisResult(document);
   result.diagnostics = diagnostics;
   result.tableIndex = tableIndex;
@@ -64,7 +68,7 @@ function analyzeDocument(document) {
     ref.resolvedKind = resolved ? resolved[1] : null;
     if (resolved === null && ref.expr.parts.length) {
       const root = ref.expr.parts[0].value;
-      if (!KNOWN_DYNAMIC_ROOTS.has(root) && !VIRTUAL_ROOTS.has(root)) {
+      if (!KNOWN_DYNAMIC_ROOTS.has(root)) {
         diagnostics.push(
           new Diagnostic(
             `Unresolved reference <${renderRef(ref.expr)}>`,
@@ -235,7 +239,6 @@ function* iterAllPaths(result) {
 module.exports = {
   AnalysisResult,
   KNOWN_DYNAMIC_ROOTS,
-  VIRTUAL_ROOTS,
   analyzeDocument,
   collectDefinitionLocations,
   currentFunctionId,

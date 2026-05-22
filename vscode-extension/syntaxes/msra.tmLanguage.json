@@ -3,9 +3,11 @@
   "scopeName": "source.msra",
   "patterns": [
     { "include": "#comments" },
+    { "include": "#assignments" },
     { "include": "#headers" },
     { "include": "#refs" },
     { "include": "#keywords" },
+    { "include": "#inline-tables" },
     { "include": "#strings" }
   ],
   "repository": {
@@ -17,23 +19,183 @@
         }
       ]
     },
+    "assignments": {
+      "patterns": [
+        {
+          "name": "keyword.other.attribute-name.msra",
+          "match": "^[ \\t]*[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*(?=[ \\t]*[:=])"
+        }
+      ]
+    },
+    "inline-table-keys": {
+      "patterns": [
+        {
+          "name": "support.type.property-name.msra",
+          "match": "\"(?:[^\"\\\\]|\\\\.)*\"(?=\\s*[:=])"
+        },
+        {
+          "name": "support.type.property-name.msra",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_-]*\\b(?=\\s*[:=])"
+        }
+      ]
+    },
+    "inline-tables": {
+      "patterns": [
+        {
+          "name": "meta.inline-table.msra",
+          "begin": "(\\{)",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.section.brackets.begin.msra"
+            }
+          },
+          "end": "(\\})",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.section.brackets.end.msra"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#inline-table-keys"
+            },
+            {
+              "include": "#refs"
+            },
+            {
+              "include": "#keywords"
+            },
+            {
+              "include": "#inline-tables"
+            },
+            {
+              "include": "#strings"
+            }
+          ]
+        }
+      ]
+    },
     "headers": {
       "patterns": [
         {
           "name": "meta.section.msra",
-          "match": "^\\s*\\[[^\\]]+\\]"
-        },
+          "begin": "^(\\s*)(\\[(?=app\\b|misklerreverseapi\\b))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.whitespace.leading.msra"
+            },
+            "2": {
+              "name": "punctuation.section.brackets.begin.msra"
+            }
+          },
+          "end": "(\\])(?=\\s*(?:#.*)?$)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.section.brackets.end.msra"
+            }
+          },
+          "contentName": "meta.path.msra",
+          "patterns": [
+            {
+              "include": "#path-dots"
+            },
+            {
+              "include": "#path-quoted-segment"
+            },
+            {
+              "include": "#path-system-segment"
+            },
+            {
+              "include": "#path-user-segment"
+            }
+          ]
+        }
+      ]
+    },
+    "path-dots": {
+      "patterns": [
         {
-          "name": "entity.name.tag.msra",
-          "match": "^[ \\t]*[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*(?=[ \\t]*[:=])"
+          "name": "punctuation.separator.period.msra",
+          "match": "\\."
+        }
+      ]
+    },
+    "path-quoted-segment": {
+      "patterns": [
+        {
+          "name": "meta.path.segment.quoted.msra",
+          "begin": "(\\\")",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.msra"
+            }
+          },
+          "end": "(\\\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.msra"
+            }
+          },
+          "contentName": "variable.other.readwrite.msra",
+          "patterns": [
+            {
+              "name": "constant.character.escape.msra",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "path-system-segment": {
+      "patterns": [
+        {
+          "name": "keyword.other.namespace.msra",
+          "match": "\\b(?:app|misklerreverseapi|warmup|variables|prefixes|regexes|groups|func|input|body|headers|url|params|examples|DOCUMENT|PREFIXES|REGEX|REGEXES|VARIABLES|INPUT|WARMUP|UNSTANDART_HEADERS|CAPTURED_URLS|COOKIES|LOCAL_STORAGE|SESSION_STORAGE|REQUEST|RESPONSE|SNIFF_RESPONSE)\\b"
+        }
+      ]
+    },
+    "path-user-segment": {
+      "patterns": [
+        {
+          "name": "variable.other.readwrite.msra",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_-]*\\b"
         }
       ]
     },
     "refs": {
       "patterns": [
         {
-          "name": "constant.other.reference.msra",
-          "match": "<[A-Za-z_][A-Za-z0-9_\\.-]*(?:\\([^<>]*\\))?>"
+          "name": "meta.reference.msra",
+          "begin": "(<)",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.reference.begin.msra"
+            }
+          },
+          "end": "(>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.reference.end.msra"
+            }
+          },
+          "contentName": "meta.reference.path.msra",
+          "patterns": [
+            {
+              "include": "#path-dots"
+            },
+            {
+              "include": "#path-quoted-segment"
+            },
+            {
+              "include": "#path-system-segment"
+            },
+            {
+              "include": "#path-user-segment"
+            }
+          ]
         }
       ]
     },

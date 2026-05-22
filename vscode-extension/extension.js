@@ -5,6 +5,8 @@ const {
   LanguageClient,
   TransportKind,
 } = require("vscode-languageclient/node");
+const { SEMANTIC_TOKEN_TYPES, collectSemanticTokens } = require("./lsp/semantic-tokens");
+const { parseDocument } = require("./lsp/parser");
 
 let client;
 
@@ -86,6 +88,27 @@ function activate(context) {
   if (!server) {
     return;
   }
+
+  const semanticLegend = new vscode.SemanticTokensLegend(SEMANTIC_TOKEN_TYPES, []);
+  const semanticProvider = vscode.languages.registerDocumentSemanticTokensProvider(
+    { scheme: "file", language: "msra" },
+    {
+      provideDocumentSemanticTokens(document) {
+        const parsed = parseDocument(document.getText(), document.uri.toString());
+        const builder = new vscode.SemanticTokensBuilder(semanticLegend);
+        for (const token of collectSemanticTokens(parsed)) {
+          const tokenTypeIndex = SEMANTIC_TOKEN_TYPES.indexOf(token.tokenType);
+          if (tokenTypeIndex < 0) {
+            continue;
+          }
+          builder.push(token.line, token.character, token.length, tokenTypeIndex, 0);
+        }
+        return builder.build();
+      },
+    },
+    semanticLegend,
+  );
+  context.subscriptions.push(semanticProvider);
 
   const serverOptions = {
     command: server.command,
