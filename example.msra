@@ -58,11 +58,18 @@ description="Группа функций, связанных с товарами
 
 [app.func.A3A417]
 name="feed"
-render_html=false # если пришел html, то он его отрендерит и вернет результат рендера
-method="GET"
+transport="fetch" # доступно direct и goto
+method="GET" # недоступно для goto
 group="Catalog"
 color="#D9A441"
 description="Основной способ получения карточек каталога.\n\nНе настраивается напрямую, должен получить url запроса"
+
+[app.func.A3A417.postprocess]
+render_html=false # если пришел html, то он его отрендерит и вернет результат рендера.
+goto_pipeline=[ # доступно только для goto, синтаксис идентичен warmup
+    {action="wait_element", state="visible", what="div.page-content", timeout_ms=10000}
+]
+evaluate="script.js" # недоступно для fetch/direct без render_html. Ожидаемый контракт {"data": string, "type": text/json} (перезапишет raw ответа по указанному type метода)
 
 [app.func.A3A417.input.query]
 type="string" # допустимо писать в массиве. Допустимые значения: string, integer, boolean, null, array, object
