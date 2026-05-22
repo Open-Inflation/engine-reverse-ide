@@ -91,7 +91,6 @@ headers={Accept="application/json, text/plain, */*"}+<UNSTANDART_HEADERS.REQUEST
 
 [app.func.CATALOG_TREE]
 name="tree"
-render_html=false
 method="GET"
 group="Catalog"
 color="#D9A441"
@@ -102,7 +101,6 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/category"
 
 [app.func.CATALOG_PRODUCTS_LIST]
 name="products_list"
-render_html=false
 method="POST"
 group="Catalog"
 color="#D9A441"
@@ -166,7 +164,6 @@ data={category=<INPUT.category_alias>, brand=[], price=[], isDividedPrice=false,
 
 [app.func.CATALOG_PRODUCT_BALANCE]
 name="balance"
-render_html=false
 method="GET"
 group="Catalog.Products"
 color="#E08A1E"
@@ -214,7 +211,6 @@ description="Present only when in_stock is true."
 
 [app.func.CATALOG_PRODUCT_INFO]
 name="info"
-render_html=true
 method="GET"
 group="Catalog.Products"
 color="#E08A1E"
@@ -245,9 +241,11 @@ description="Slug for the structured overload."
 [app.func.CATALOG_PRODUCT_INFO.url]
 base=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>"/catalog/"
 
+[app.func.CATALOG_PRODUCT_INFO.postprocess]
+render_html=true
+
 [app.func.GEOLOCATION_COUNTRIES_LIST]
 name="countries_list"
-render_html=false
 method="GET"
 group="Geolocation"
 color="#2AA198"
@@ -271,7 +269,6 @@ description="Optional alias query parameter."
 
 [app.func.GEOLOCATION_REGIONS_LIST]
 name="regions_list"
-render_html=false
 method="GET"
 group="Geolocation"
 color="#2AA198"
@@ -295,7 +292,6 @@ description="Optional countryId query parameter."
 
 [app.func.GEOLOCATION_CITIES_LIST]
 name="cities_list"
-render_html=false
 method="GET"
 group="Geolocation"
 color="#2AA198"
@@ -319,7 +315,6 @@ description="CountryId query parameter."
 
 [app.func.GEOLOCATION_CITY_INFO]
 name="city_info"
-render_html=false
 method="GET"
 group="Geolocation"
 color="#2AA198"
@@ -336,7 +331,6 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city/"<INPUT.city_id>
 
 [app.func.GEOLOCATION_SHOP_SEARCH]
 name="search"
-render_html=false
 method="GET"
 group="Geolocation"
 color="#2AA198"
@@ -419,7 +413,6 @@ description="Optional addressPart query parameter."
 
 [app.func.ADVERTISING_HOME_BRANDS_LIST]
 name="home_brands_list"
-render_html=false
 method="GET"
 group="Advertising"
 color="#3A87C6"
@@ -430,7 +423,6 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
 
 [app.func.GENERAL_DOWNLOAD_IMAGE]
 name="download_image"
-render_html=false
 method="GET"
 group="General"
 color="#6C7A89"

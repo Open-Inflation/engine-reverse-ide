@@ -58,8 +58,8 @@ description="Группа функций, связанных с товарами
 
 [app.func.A3A417]
 name="feed"
-transport="fetch" # доступно direct и goto
-method="GET" # недоступно для goto
+transport="goto" # доступно direct и goto
+# method="GET" # недоступно для goto
 group="Catalog"
 color="#D9A441"
 description="Основной способ получения карточек каталога.\n\nНе настраивается напрямую, должен получить url запроса"

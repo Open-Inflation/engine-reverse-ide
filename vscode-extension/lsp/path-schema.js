@@ -151,11 +151,14 @@ function validateFuncTable(segments, index) {
   if (segment.value === "examples") {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
+  if (segment.value === "postprocess") {
+    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
+  }
   return invalidPath(
     segments,
     index,
-    `Invalid child table "${renderSegment(segment)}" under "${renderPath(segments, index)}". Expected "input", "body", "headers", "url", or "examples".`,
-    ["input", "body", "headers", "url", "examples"],
+    `Invalid child table "${renderSegment(segment)}" under "${renderPath(segments, index)}". Expected "input", "body", "headers", "url", "examples", or "postprocess".`,
+    ["input", "body", "headers", "url", "examples", "postprocess"],
   );
 }
 

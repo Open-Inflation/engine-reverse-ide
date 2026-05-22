@@ -292,6 +292,7 @@ const URL_PARAM_VALUE_SPEC = objectShape(
 );
 
 const BROWSER_SPEC = enumOf(["chromium", "firefox", "webkit", "camoufox"]);
+const TRANSPORT_SPEC = enumOf(["direct", "fetch", "goto"]);
 const METHOD_SPEC = enumOf(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
 const CREDENTIALS_SPEC = enumOf(["omit", "same-origin", "include"]);
@@ -404,6 +405,12 @@ const PIPELINE_ITEM_SPEC = oneOf(
   PIPELINE_ALWAYS_SPEC,
 );
 
+const POSTPROCESS_TABLE_KEYS = {
+  render_html: BOOLEAN,
+  goto_pipeline: arrayOf(PIPELINE_ITEM_SPEC),
+  evaluate: STRINGISH,
+};
+
 const BODY_TYPE_SPEC = patternOf(
   /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[^;]+)*$/i,
   "browser-supported MIME type",
@@ -465,7 +472,7 @@ const TABLE_SCHEMAS = [
   }),
   makeFixedSchema(exactPath(["app", "func", "*"]), {
     name: STRINGISH,
-    render_html: BOOLEAN,
+    transport: TRANSPORT_SPEC,
     method: METHOD_SPEC,
     group: STRINGISH,
     color: STRINGISH,
@@ -494,6 +501,7 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(matchesUrlPath, {
     base: STRINGISH,
   }),
+  makeFixedSchema(exactPath(["app", "func", "*", "postprocess"]), POSTPROCESS_TABLE_KEYS),
   makeFixedSchema(matchesUrlParamsPath, {
     sub_url: BOOLEAN,
     required: BOOLEAN,

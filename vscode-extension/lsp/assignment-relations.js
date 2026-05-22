@@ -14,6 +14,8 @@ function validateAssignmentRelations(tableIndex, assignmentIndex) {
   const assignmentsByTable = collectAssignmentsByTable(assignmentIndex);
 
   diagnostics.push(...validateValuesRevalueConflicts(assignmentsByTable));
+  diagnostics.push(...validateFuncTransportRelations(assignmentsByTable));
+  diagnostics.push(...validateFuncPostprocessRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateWarmupRelations(assignmentIndex));
   diagnostics.push(...validateBodyRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateUrlParamValueRelations(assignmentsByTable));
@@ -57,6 +59,100 @@ function validateValuesRevalueConflicts(assignmentsByTable) {
         "conflicting-assignment-keys",
       ),
     );
+  }
+  return diagnostics;
+}
+
+function validateFuncTransportRelations(assignmentsByTable) {
+  const diagnostics = [];
+  for (const assignments of assignmentsByTable.values()) {
+    if (!assignments.length) {
+      continue;
+    }
+    const tablePath = assignments[0].tablePath || [];
+    if (!isFuncRootTable(tablePath)) {
+      continue;
+    }
+
+    const transportAssignment = assignments.find((assignment) => assignment.key === "transport");
+    if (!transportAssignment || !(transportAssignment.value instanceof StringExpr)) {
+      continue;
+    }
+
+    const transport = transportAssignment.value.value;
+    const methodAssignment = assignments.find((assignment) => assignment.key === "method");
+    if (transport === "goto") {
+      if (methodAssignment) {
+        diagnostics.push(
+          new Diagnostic(
+            `Function [${pathLabel(tablePath)}] with transport="goto" cannot define "method".`,
+            methodAssignment.keyRange || transportAssignment.keyRange,
+            "error",
+            "msra",
+            "unexpected-function-method",
+          ),
+        );
+      }
+      continue;
+    }
+
+    if (!methodAssignment) {
+      diagnostics.push(
+        new Diagnostic(
+          `Function [${pathLabel(tablePath)}] with transport="${transport}" requires a "method" value.`,
+          transportAssignment.keyRange,
+          "error",
+          "msra",
+          "missing-function-method",
+        ),
+      );
+    }
+  }
+  return diagnostics;
+}
+
+function validateFuncPostprocessRelations(tableIndex, assignmentIndex) {
+  const diagnostics = [];
+  for (const table of tableIndex.values()) {
+    const tablePath = table.path || [];
+    if (!isFuncPostprocessTable(tablePath)) {
+      continue;
+    }
+
+    const funcPath = tablePath.slice(0, 3);
+    const transport = getStringAssignmentValue(assignmentIndex, funcPath, "transport");
+    const renderHtml = getBooleanAssignmentValue(assignmentIndex, tablePath, "render_html");
+    const gotoPipeline = getAssignment(assignmentIndex, tablePath, "goto_pipeline");
+    const evaluate = getAssignment(assignmentIndex, tablePath, "evaluate");
+
+    if (gotoPipeline && transport !== "goto") {
+      diagnostics.push(
+        new Diagnostic(
+          `Function [${pathLabel(funcPath)}] with transport="${transport || "direct/fetch"}" cannot define "goto_pipeline".`,
+          gotoPipeline.keyRange,
+          "error",
+          "msra",
+          "unexpected-function-goto-pipeline",
+        ),
+      );
+    }
+
+    if (evaluate) {
+      if (transport === "goto") {
+        continue;
+      }
+      if (renderHtml !== true) {
+        diagnostics.push(
+          new Diagnostic(
+            `Function [${pathLabel(funcPath)}] with transport="${transport || "direct/fetch"}" can define "evaluate" only when postprocess.render_html=true.`,
+            evaluate.keyRange,
+            "error",
+            "msra",
+            "missing-function-render-html",
+          ),
+        );
+      }
+    }
   }
   return diagnostics;
 }
@@ -251,6 +347,14 @@ function getStringAssignmentValue(assignmentIndex, tablePath, key) {
   return null;
 }
 
+function getBooleanAssignmentValue(assignmentIndex, tablePath, key) {
+  const assignment = getAssignment(assignmentIndex, tablePath, key);
+  if (assignment && assignment.value instanceof BoolExpr) {
+    return assignment.value.value;
+  }
+  return null;
+}
+
 function isHumanizeEnabled(value) {
   if (value instanceof BoolExpr) {
     return value.value === true;
@@ -268,6 +372,22 @@ function isBodyItemTable(path) {
     && path[1] === "func"
     && path[3] === "body"
     && path[path.length - 1] !== "url";
+}
+
+function isFuncPostprocessTable(path) {
+  return Array.isArray(path)
+    && path.length === 4
+    && path[0] === "app"
+    && path[1] === "func"
+    && path[3] === "postprocess";
+}
+
+function isFuncRootTable(path) {
+  return Array.isArray(path)
+    && path.length === 3
+    && path[0] === "app"
+    && path[1] === "func"
+    && path[2] !== "headers";
 }
 
 function hasUnquotedChildTable(tableIndex, parentPath, childName) {

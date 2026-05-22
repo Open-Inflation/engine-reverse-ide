@@ -137,6 +137,73 @@ test("enum and pattern schema rules validate app function settings", () => {
   assert.match(diagnostics[4].message, /omit|same-origin|include/);
 });
 
+test("function transport validates its enum and forbids method for goto", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    'transport="websocket"',
+    'method="GET"',
+    "",
+    "[app.func.A3A418]",
+    'transport="goto"',
+    'method="POST"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///function-transport.msra");
+  const analysis = analyzeDocument(document);
+
+  const invalidTransport = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
+  const unexpectedMethod = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unexpected-function-method");
+
+  assert.ok(invalidTransport, "expected an unsupported transport value to be rejected");
+  assert.match(invalidTransport.message, /direct|fetch|goto/);
+  assert.ok(unexpectedMethod, "expected method to be rejected for goto transport");
+  assert.match(unexpectedMethod.message, /transport="goto"/);
+  assert.match(unexpectedMethod.message, /method/);
+});
+
+test("render_html is only valid inside postprocess", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    'transport="fetch"',
+    'render_html=true',
+    "",
+    "[app.func.A3A417.postprocess]",
+    "render_html=true",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///render-html-placement.msra");
+  const analysis = analyzeDocument(document);
+
+  const rootDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unknown-assignment-key");
+  assert.ok(rootDiagnostic, "expected render_html on the root function table to be rejected");
+  assert.match(rootDiagnostic.message, /render_html/);
+});
+
+test("function postprocess validates goto_pipeline and evaluate context", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    'transport="fetch"',
+    "[app.func.A3A417.postprocess]",
+    "render_html=false",
+    'goto_pipeline=[{action="wait_network", state="idle"}]',
+    'evaluate="script.js"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///function-postprocess-context.msra");
+  const analysis = analyzeDocument(document);
+
+  const gotoPipelineDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unexpected-function-goto-pipeline");
+  const evaluateDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-function-render-html");
+
+  assert.ok(gotoPipelineDiagnostic, "expected goto_pipeline to be rejected outside transport=goto");
+  assert.match(gotoPipelineDiagnostic.message, /goto_pipeline/);
+  assert.ok(evaluateDiagnostic, "expected evaluate to require render_html=true for fetch/direct transports");
+  assert.match(evaluateDiagnostic.message, /render_html=true/);
+});
+
 test("regex actions validate action enums and replace arguments", () => {
   const text = [
     "[app]",
