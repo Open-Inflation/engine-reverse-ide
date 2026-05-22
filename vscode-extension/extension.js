@@ -3,68 +3,111 @@ const path = require("path");
 const vscode = require("vscode");
 const {
   LanguageClient,
-  TransportKind
+  TransportKind,
 } = require("vscode-languageclient/node");
 
 let client;
 
-function resolveServerCommand(context) {
-  const config = vscode.workspace.getConfiguration("msra");
-  const command = config.get("server.command") || "python";
-  const configuredArgs = config.get("server.args") || [];
-  const args = Array.isArray(configuredArgs) ? configuredArgs.slice() : [];
+function getWorkspaceFolder() {
+  const workspaceFolders = vscode.workspace.workspaceFolders || [];
+  return workspaceFolders.length > 0 ? workspaceFolders[0] : null;
+}
+
+function expandTemplate(value, context) {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const workspaceFolder = getWorkspaceFolder();
+  const workspacePath = workspaceFolder ? workspaceFolder.uri.fsPath : "";
+  return value
+    .replace(/\$\{workspaceFolder\}/g, workspacePath)
+    .replace(/\$\{extensionPath\}/g, context.extensionPath);
+}
+
+function normalizeArgs(args, context) {
+  if (!Array.isArray(args)) {
+    return [];
+  }
+  return args.map((arg) => expandTemplate(String(arg), context));
+}
+
+function buildServerOptions(command, args) {
+  const workspaceFolder = getWorkspaceFolder();
   const options = {
-    env: { ...process.env }
+    cwd: workspaceFolder ? workspaceFolder.uri.fsPath : undefined,
+    env: { ...process.env },
   };
 
-  const workspaceFolder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0];
-  if (workspaceFolder) {
-    const srcRoot = path.join(workspaceFolder.uri.fsPath, "src");
-    const localPackage = path.join(srcRoot, "msra_lsp");
-    if (fs.existsSync(localPackage)) {
-      const existing = options.env.PYTHONPATH || "";
-      options.env.PYTHONPATH = existing ? `${srcRoot}${path.delimiter}${existing}` : srcRoot;
-    }
+  return {
+    command,
+    args,
+    options,
+  };
+}
+
+function resolveInternalServer(context) {
+  const serverPath = context.asAbsolutePath(path.join("lsp", "server.js"));
+  if (!fs.existsSync(serverPath)) {
+    vscode.window.showErrorMessage(
+      "MSRA Language Support could not find the bundled Node language server.",
+    );
+    return null;
   }
 
-  if (!options.env.PYTHONPATH) {
-    const bundledPythonRoot = path.join(context.extensionPath, "python");
-    const bundledPackage = path.join(bundledPythonRoot, "msra_lsp");
-    if (fs.existsSync(bundledPackage)) {
-      options.env.PYTHONPATH = bundledPythonRoot;
-    }
+  return buildServerOptions(process.execPath, [serverPath]);
+}
+
+function resolveExternalServer(context) {
+  const config = vscode.workspace.getConfiguration("msra");
+  const command = expandTemplate(String(config.get("server.command") || "").trim(), context);
+  if (!command) {
+    vscode.window.showErrorMessage(
+      "MSRA Language Support is in external mode, but msra.server.command is empty.",
+    );
+    return null;
   }
 
-  if (args.length === 0) {
-    args.push("-u", "-m", "msra_lsp", "server");
-  }
+  const configuredArgs = config.get("server.args") || [];
+  const args = normalizeArgs(configuredArgs, context);
+  return buildServerOptions(command, args);
+}
 
-  return { command, args, options };
+function resolveServer(context) {
+  const config = vscode.workspace.getConfiguration("msra");
+  const mode = String(config.get("server.mode") || "internal").toLowerCase();
+  if (mode === "external") {
+    return resolveExternalServer(context);
+  }
+  return resolveInternalServer(context);
 }
 
 function activate(context) {
-  const server = resolveServerCommand(context);
+  const server = resolveServer(context);
+  if (!server) {
+    return;
+  }
+
   const serverOptions = {
     command: server.command,
     args: server.args,
     options: server.options,
-    transport: TransportKind.stdio
+    transport: TransportKind.stdio,
   };
 
   const clientOptions = {
     documentSelector: [
-      { scheme: "file", language: "msra" }
+      { scheme: "file", language: "msra" },
     ],
     synchronize: {
-      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.msra")
-    }
+      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.msra"),
+    },
   };
 
   client = new LanguageClient(
     "msraLanguageServer",
     "MSRA Language Server",
     serverOptions,
-    clientOptions
+    clientOptions,
   );
 
   context.subscriptions.push(client.start());
@@ -79,5 +122,5 @@ function deactivate() {
 
 module.exports = {
   activate,
-  deactivate
+  deactivate,
 };

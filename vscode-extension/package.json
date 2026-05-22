@@ -1,7 +1,7 @@
 {
   "name": "msra-language-support",
   "displayName": "MSRA Language Support",
-  "description": "VS Code support for .msra files backed by a Python language server.",
+  "description": "VS Code support for .msra files with internal or external LSP server modes.",
   "version": "0.1.0",
   "publisher": "miskler",
   "engines": {
@@ -38,10 +38,19 @@
     "configuration": {
       "title": "MSRA",
       "properties": {
+        "msra.server.mode": {
+          "type": "string",
+          "enum": [
+            "internal",
+            "external"
+          ],
+          "default": "internal",
+          "description": "Use the bundled Node language server or launch an external MSRA LSP server."
+        },
         "msra.server.command": {
           "type": "string",
-          "default": "python",
-          "description": "Command used to start the MSRA language server."
+          "default": "",
+          "description": "Executable used to start the external MSRA language server. Supports ${workspaceFolder} and ${extensionPath} placeholders."
         },
         "msra.server.args": {
           "type": "array",
@@ -49,7 +58,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Extra arguments passed to the MSRA language server command."
+          "description": "Arguments passed to the external MSRA language server command. Supports ${workspaceFolder} and ${extensionPath} placeholders."
         }
       }
     }

@@ -19,6 +19,7 @@ pipeline=[ # так же доступно wait_url, timeout_ms возможно 
     {action="wait_network", state="idle"}
 ]
 headers_sniffer=true
+error_selector="div.error"
 on_error_screenshot_path="screenshot.png" # по умолчанию скриншоты не делаются
 
 [app.variables.city_id]

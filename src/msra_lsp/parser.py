@@ -33,7 +33,6 @@ from .model import (
 ATOM_STARTS = {
     "STRING",
     "NUMBER",
-    "IDENT",
     "LBRACE",
     "LBRACK",
     "LT",
@@ -383,7 +382,6 @@ class Parser:
             self._sync_to_next_statement()
 
     def _parse_assignment_or_recover(self) -> None:
-        start_index = self.index
         key_token = self._parse_key_token()
         if key_token is None:
             self._error("Expected key or table header", self._current().range, "expected-key")
@@ -393,6 +391,7 @@ class Parser:
             self._error("Expected '=' after key", self._current().range, "expected-equals")
             self._sync_to_next_statement()
             return
+        value_start_index = self.index
         value = self._parse_expr(stop_on_newline=True)
         assignment_range = Range(key_token.range.start, value.range.end if value else self._previous().range.end)
         key = key_token.value
@@ -420,7 +419,8 @@ class Parser:
         if self._check("NEWLINE"):
             self._advance()
         elif not self._check("EOF"):
-            self._error("Expected end of line after assignment", self._current().range, "trailing-assignment")
+            if not (isinstance(value, NullExpr) and self.index == value_start_index):
+                self._error("Expected end of line after assignment", self._current().range, "trailing-assignment")
             self._sync_to_next_statement()
 
     def _parse_key_token(self) -> Token | None:
@@ -449,19 +449,19 @@ class Parser:
             return self._advance().value
         return None
 
-    def _parse_expr(self, stop_on_newline: bool) -> Expr:
-        parts = [self._parse_concat(stop_on_newline)]
+    def _parse_expr(self, stop_on_newline: bool, allow_identifiers: bool = False) -> Expr:
+        parts = [self._parse_concat(stop_on_newline, allow_identifiers)]
         while self._match("PLUS"):
-            parts.append(self._parse_concat(stop_on_newline))
+            parts.append(self._parse_concat(stop_on_newline, allow_identifiers))
         if len(parts) == 1:
             return parts[0]
         start = parts[0].range.start
         end = parts[-1].range.end
         return MergeExpr(range=Range(start, end), parts=parts)
 
-    def _parse_concat(self, stop_on_newline: bool) -> Expr:
+    def _parse_concat(self, stop_on_newline: bool, allow_identifiers: bool = False) -> Expr:
         items: list[Expr] = []
-        first = self._parse_atom(stop_on_newline)
+        first = self._parse_atom(stop_on_newline, allow_identifiers)
         if first is None:
             empty_range = self._current().range
             self._error("Expected value", empty_range, "expected-value")
@@ -474,9 +474,11 @@ class Parser:
                 break
             if self._current().type == "NEWLINE" and stop_on_newline:
                 break
+            if self._current().type == "IDENT" and not allow_identifiers:
+                break
             if self._current().type not in ATOM_STARTS and self._current().type != "IDENT":
                 break
-            nxt = self._parse_atom(stop_on_newline)
+            nxt = self._parse_atom(stop_on_newline, allow_identifiers)
             if nxt is None:
                 break
             items.append(nxt)
@@ -491,7 +493,7 @@ class Parser:
             return True
         return False
 
-    def _parse_atom(self, stop_on_newline: bool) -> Expr | None:
+    def _parse_atom(self, stop_on_newline: bool, allow_identifiers: bool = False) -> Expr | None:
         token = self._current()
         if token.type == "STRING":
             self._advance()
@@ -512,6 +514,17 @@ class Parser:
                     value = 0
             return NumberExpr(range=token.range, value=value, raw=raw)
         if token.type == "IDENT":
+            if not allow_identifiers:
+                if token.value == "true":
+                    self._advance()
+                    return BoolExpr(range=token.range, value=True)
+                if token.value == "false":
+                    self._advance()
+                    return BoolExpr(range=token.range, value=False)
+                if token.value == "null":
+                    self._advance()
+                    return NullExpr(range=token.range)
+                return None
             self._advance()
             if token.value == "true":
                 return BoolExpr(range=token.range, value=True)
@@ -561,7 +574,7 @@ class Parser:
                 if self._match("COMMA"):
                     continue
                 break
-            value = self._parse_expr(stop_on_newline=False)
+            value = self._parse_expr(stop_on_newline=False, allow_identifiers=True)
             args.append(NamedArg(name=name_token.value, name_range=name_token.range, value=value))
             if self._match("COMMA"):
                 continue
@@ -639,7 +652,7 @@ class Parser:
                 if self._match("COMMA"):
                     continue
                 break
-            value = self._parse_expr(stop_on_newline=False)
+            value = self._parse_expr(stop_on_newline=False, allow_identifiers=True)
             args.append(NamedArg(name=name_token.value, name_range=name_token.range, value=value))
             if self._match("COMMA"):
                 continue

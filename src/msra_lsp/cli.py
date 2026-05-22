@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     server_parser = subparsers.add_parser("server", help="Run the language server over stdio")
+    server_parser.add_argument("--stdio", action="store_true", help=argparse.SUPPRESS)
 
     check_parser = subparsers.add_parser("check", help="Validate one or more .msra files")
     check_parser.add_argument("files", nargs="+", help="Files to validate")
