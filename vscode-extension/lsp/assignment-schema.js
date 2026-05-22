@@ -204,12 +204,29 @@ const EXAMPLE_ITEM_SPEC = objectShape(
   },
 );
 
+const NUMERIC_RANGE_SPEC = objectShape(
+  {
+    from: NUMBER,
+    to: NUMBER,
+  },
+  {},
+  {
+    rules: [
+      requireKeyOrder("from", "to", {
+        message: 'Expected key "to" to be greater than or equal to key "from" in numeric range.',
+      }),
+    ],
+  },
+);
+
+const REVALUE_SPEC = { kind: "revalue" };
+
 const VARIABLE_TYPE_ITEM_SPEC = objectShape(
   {
     type: enumOf(["string", "integer", "boolean", "null", "array", "object"]),
   },
   {
-    revalue: STRINGISH,
+    revalue: REVALUE_SPEC,
     value: ANY,
   },
 );
@@ -402,7 +419,6 @@ const TABLE_SCHEMAS = [
     headers_sniffer: BOOLEAN,
     error_selector: STRINGISH,
     on_error_screenshot_path: SCREENSHOT_PATH_SPEC,
-    wait_url: ANY,
     timeout_ms: integerAtLeast(0),
   }),
   makeFixedSchema(exactPath(["app", "variables", "*"]), {
@@ -443,7 +459,7 @@ const TABLE_SCHEMAS = [
     default: ANY,
     values: ARRAY,
     data: ANY,
-    revalue: ANY,
+    revalue: REVALUE_SPEC,
   }),
   makeFixedSchema(matchesBodyPath, {
     type: BODY_TYPE_SPEC,
@@ -454,11 +470,9 @@ const TABLE_SCHEMAS = [
     data: ANY,
   }),
   makeFixedSchema(matchesBodyUrlPath, {
-    prefix: ANY,
     base: STRINGISH,
   }),
   makeFixedSchema(matchesUrlPath, {
-    prefix: ANY,
     base: STRINGISH,
   }),
   makeFixedSchema(matchesUrlParamsPath, {
@@ -469,7 +483,7 @@ const TABLE_SCHEMAS = [
     values: arrayOf(URL_PARAM_VALUE_SPEC),
     description: STRINGISH,
     data: ANY,
-    revalue: ANY,
+    revalue: REVALUE_SPEC,
   }),
   makeFixedSchema(exactPath(["app", "func", "*", "examples"]), {
     examples: arrayOf(EXAMPLE_ITEM_SPEC),
@@ -585,6 +599,15 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
     }
     return diagnostics;
   }
+  if (spec.kind === "revalue") {
+    if (value instanceof StringExpr || value instanceof SequenceExpr || value instanceof MergeExpr || value instanceof RefExpr) {
+      return [];
+    }
+    if (value instanceof InlineTableExpr) {
+      return collectValueDiagnostics(value, NUMERIC_RANGE_SPEC, fallbackRange);
+    }
+    return [typeDiagnostic(fallbackRange || value.range, `Expected regex string or numeric range but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+  }
   if (spec.kind === "enum") {
     if (value instanceof StringExpr && spec.values.includes(value.value)) {
       return [];
@@ -699,6 +722,28 @@ function evaluateObjectRule(rule, value, entriesByKey, fallbackRange) {
     }
     return collectValueDiagnostics(requiredEntry.value, rule.valueSpec, requiredEntry.value.range);
   }
+  if (rule.kind === "requireKeyOrder") {
+    const lowerEntry = entriesByKey.get(rule.lowerKey);
+    const upperEntry = entriesByKey.get(rule.upperKey);
+    if (!lowerEntry || !upperEntry) {
+      return [];
+    }
+    const lowerValue = getNumericLiteral(lowerEntry.value);
+    const upperValue = getNumericLiteral(upperEntry.value);
+    if (lowerValue === null || upperValue === null) {
+      return [];
+    }
+    if (upperValue < lowerValue) {
+      return [
+        typeDiagnostic(
+          upperEntry.value.range || upperEntry.keyRange || fallbackRange,
+          rule.message,
+          rule.code,
+        ),
+      ];
+    }
+    return [];
+  }
   if (rule.kind === "forbidKeyWhenValue") {
     const triggerEntry = entriesByKey.get(rule.triggerKey);
     if (!triggerEntry || !(triggerEntry.value instanceof StringExpr)) {
@@ -720,6 +765,13 @@ function evaluateObjectRule(rule, value, entriesByKey, fallbackRange) {
     ];
   }
   return [];
+}
+
+function getNumericLiteral(value) {
+  if (value instanceof NumberExpr && Number.isFinite(value.value)) {
+    return value.value;
+  }
+  return null;
 }
 
 function describeSpec(spec) {
@@ -784,6 +836,9 @@ function describeSpec(spec) {
       return "inline table";
     }
     return `inline table with ${parts.join(" and ")}`;
+  }
+  if (spec.kind === "revalue") {
+    return "regex string or numeric range";
   }
   if (spec.kind === "enum") {
     return `one of ${spec.values.map((value) => JSON.stringify(value)).join(", ")}`;

@@ -108,7 +108,8 @@ function walkExpressions(expr, visitor) {
     return;
   }
   if (expr instanceof SequenceExpr || expr instanceof MergeExpr) {
-    for (const part of expr.parts) {
+    const parts = expr.parts || expr.items || [];
+    for (const part of parts) {
       walkExpressions(part, visitor);
     }
     return;

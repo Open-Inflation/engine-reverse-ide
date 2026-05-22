@@ -15,7 +15,7 @@ block_images=true # по умолч false
 humanize_action={from=1000, to=3000} # время в мс, которое будет потрачено на выполнение действия, доступно только при humanize=true
 
 url=<DOCUMENT.PREFIXES.ORIGIN>
-pipeline=[ # так же доступно wait_url, timeout_ms возможно переопределить по желанию
+pipeline=[ # timeout_ms возможно переопределить по желанию
     # по мимо wait_element доступен element (моментальная проверка) и always (выполнить действие всегда, не дожидаясь условия)
     {action="wait_sniffer", what=<UNSTANDART_HEADERS.REQUEST.X-key>}, # если ключ был получен ДО вызова действия, оно все равно считается успешным
     {for_tests=true, action="wait_element", state="visible", what="div.selected-city > div.buttons > button.button.normal", then="click"}, # then опционален
@@ -115,8 +115,7 @@ credentials="include" # значение по умолчанию, вписано
 headers=<UNSTANDART_HEADERS> # так же допустимо {city_id=<VARIABLES.city_id>, X-Key=<UNSTANDART_HEADERS.REQUEST.X-Key>} можно так же {city_id=<VARIABLES.city_id>}+<UNSTANDART_HEADERS.REQUEST>
 
 [app.func.A3A417.url]
-prefix=<DOCUMENT.PREFIXES.BASE_API>
-base="" # суффикс клеящийся к prefix не включая в себя параметры
+base=<DOCUMENT.PREFIXES.BASE_API> # суффиксы теперь клеятся сразу в base, без отдельного prefix
 
 [app.func.A3A417.url.params.url]
 sub_url=true

@@ -258,6 +258,41 @@ test("url param values require value unless default=true is present", () => {
   assert.match(diagnostic.message, /default=true/);
 });
 
+test("numeric revalue ranges accept integer and float bounds", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.limit]",
+    'type="integer"',
+    'revalue={from=1, to=27}',
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.ratio]",
+    'revalue={from=0.5, to=2.5}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///numeric-revalue-ranges.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("numeric revalue ranges require ordered bounds", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.limit]",
+    'type="integer"',
+    'revalue={from=27, to=1}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-numeric-revalue-range.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-inline-table-value-order");
+
+  assert.ok(diagnostic, "expected numeric range bounds to remain ordered");
+  assert.match(diagnostic.message, /numeric range/);
+});
+
 test("app browser must be one of the supported browsers", () => {
   const text = [
     "[app]",
@@ -302,6 +337,21 @@ test("warmup humanize accepts positive numbers when camoufox is enabled", () => 
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("warmup rejects unsupported keys like wait_url", () => {
+  const text = [
+    "[app]",
+    "[app.warmup]",
+    'wait_url="https://example.com"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///unsupported-warmup-key.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "unknown-assignment-key");
+
+  assert.ok(diagnostic, "expected wait_url to be rejected as an unsupported warmup key");
+  assert.match(diagnostic.message, /wait_url/);
 });
 
 test("body type must be a browser-supported MIME type", () => {
@@ -649,7 +699,7 @@ test("semantic tokens color app prefixes keys differently from fixed assignment 
     "timeout_ms=35000",
     "[app.func.A3A417]",
     "[app.func.A3A417.url]",
-    'prefix=<DOCUMENT.PREFIXES.BASE_API>',
+    'base=<DOCUMENT.PREFIXES.BASE_API>"/v1/product/in/"<INPUT.category_alias>',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///prefixes-semantic.msra");
