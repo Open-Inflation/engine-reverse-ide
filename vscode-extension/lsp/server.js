@@ -262,6 +262,7 @@ class MsraLanguageServer {
       ["body", "Function body definitions"],
       ["headers", "Function headers block"],
       ["url", "Function URL block"],
+      ["params", "Function URL parameter namespace"],
       ["examples", "Function examples"],
       ["from_global", "Shared input binding"],
     ];

@@ -409,15 +409,15 @@ class Parser {
 
   _parseTableHeader() {
     const start = this._advance();
-    const path = this._parsePath("RBRACK");
+    const pathSegments = this._parsePath("RBRACK");
     const end = this._expect("RBRACK", "Expected ']' to close table header");
     const tableRange = new Range(start.range.start, end ? end.range.end : this._previous().range.end);
-    if (!path.length) {
+    if (!pathSegments.length) {
       this._error("Empty table header", tableRange, "empty-table-header");
       this._syncToNextStatement();
       return;
     }
-    const tablePath = [...path];
+    const tablePath = pathSegments.map((segment) => segment.value);
     const tableKey = JSON.stringify(tablePath);
     if (this.tables.has(tableKey)) {
       this._error(
@@ -426,7 +426,7 @@ class Parser {
         "duplicate-table",
       );
     } else {
-      this.tables.set(tableKey, new TableDef(tablePath, tableRange));
+      this.tables.set(tableKey, new TableDef(tablePath, tableRange, pathSegments));
     }
     this.currentTable = tablePath;
     if (!this._match("NEWLINE", "EOF")) {
@@ -515,7 +515,12 @@ class Parser {
 
   _parsePathSegment() {
     if (this._check("IDENT") || this._check("STRING")) {
-      return this._advance().value;
+      const token = this._advance();
+      return {
+        value: token.value,
+        quoted: token.type === "STRING",
+        range: token.range,
+      };
     }
     return null;
   }

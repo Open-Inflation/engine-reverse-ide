@@ -5,6 +5,7 @@
     { "include": "#comments" },
     { "include": "#headers" },
     { "include": "#refs" },
+    { "include": "#keywords" },
     { "include": "#strings" }
   ],
   "repository": {
@@ -33,6 +34,22 @@
         {
           "name": "constant.other.reference.msra",
           "match": "<[A-Za-z_][A-Za-z0-9_\\.-]*(?:\\([^<>]*\\))?>"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.true.msra",
+          "match": "\\btrue\\b"
+        },
+        {
+          "name": "constant.language.boolean.false.msra",
+          "match": "\\bfalse\\b"
+        },
+        {
+          "name": "constant.language.null.msra",
+          "match": "\\bnull\\b"
         }
       ]
     },

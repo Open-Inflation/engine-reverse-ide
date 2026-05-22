@@ -1,14 +1,10 @@
 const {
-  AssignmentDef,
   Diagnostic,
-  ParsedDocument,
-  Range,
-  RefExpr,
-  TableDef,
   comparePaths,
   pathKey,
   pathLabel,
 } = require("./model");
+const { validateTablePath } = require("./path-schema");
 
 const KNOWN_DYNAMIC_ROOTS = new Set([
   "UNSTANDART_HEADERS",
@@ -42,6 +38,18 @@ function analyzeDocument(document) {
   for (const table of tableIndex.values()) {
     if (table.path.length) {
       rootTableIndex.set(pathLabel(table.path), table.path);
+      const validation = validateTablePath(table.pathSegments || table.path);
+      if (!validation.valid) {
+        diagnostics.push(
+          new Diagnostic(
+            validation.message,
+            tablePathSegmentRange(table, validation.segmentIndex),
+            "error",
+            "msra",
+            validation.code,
+          ),
+        );
+      }
     }
   }
   const result = new AnalysisResult(document);
@@ -71,6 +79,13 @@ function analyzeDocument(document) {
   }
 
   return result;
+}
+
+function tablePathSegmentRange(table, segmentIndex) {
+  if (table.pathSegments && table.pathSegments[segmentIndex] && table.pathSegments[segmentIndex].range) {
+    return table.pathSegments[segmentIndex].range;
+  }
+  return table.headerRange;
 }
 
 function renderRef(ref) {
