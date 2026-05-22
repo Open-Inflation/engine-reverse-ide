@@ -211,7 +211,7 @@ description="Present only when in_stock is true."
 
 [app.func.CATALOG_PRODUCT_INFO]
 name="info"
-method="GET"
+transport="goto"
 group="Catalog.Products"
 color="#E08A1E"
 description="Loads the product page, extracts window.__NUXT__, and overrides resp.json to return the product payload."
@@ -243,6 +243,7 @@ base=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>"/catalog/"
 
 [app.func.CATALOG_PRODUCT_INFO.postprocess]
 render_html=true
+evaluate="postprocess/catalog-product-info.evaluate.js"
 
 [app.func.GEOLOCATION_COUNTRIES_LIST]
 name="countries_list"
