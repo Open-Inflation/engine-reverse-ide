@@ -4,6 +4,11 @@
   "description": "VS Code support for .msra files with internal or external LSP server modes.",
   "version": "0.1.0",
   "publisher": "miskler",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Miskler/engine-reverse-ide.git"
+  },
+  "license": "GPL-3.0-or-later",
   "engines": {
     "vscode": "^1.85.0"
   },

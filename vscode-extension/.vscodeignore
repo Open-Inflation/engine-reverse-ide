@@ -1,0 +1,9 @@
+**
+!extension.js
+!language-configuration.json
+!package.json
+!LICENSE
+!lsp/**
+!syntaxes/**
+!node_modules/**
+../**
