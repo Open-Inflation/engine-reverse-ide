@@ -4,6 +4,7 @@ const {
   pathKey,
   pathLabel,
 } = require("./model");
+const { validateAssignmentRelations } = require("./assignment-relations");
 const { validateAssignment } = require("./assignment-schema");
 const { validateGroupAssignments } = require("./group-relations");
 const { validateTableRelations } = require("./table-relations");
@@ -55,6 +56,7 @@ function analyzeDocument(document) {
       diagnostics.push(diagnostic);
     }
   }
+  diagnostics.push(...validateAssignmentRelations(assignmentIndex));
   diagnostics.push(...validateGroupAssignments(tableIndex, assignmentIndex));
   const result = new AnalysisResult(document);
   result.diagnostics = diagnostics;

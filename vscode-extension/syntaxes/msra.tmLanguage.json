@@ -3,6 +3,7 @@
   "scopeName": "source.msra",
   "patterns": [
     { "include": "#comments" },
+    { "include": "#prefix-sections" },
     { "include": "#assignments" },
     { "include": "#headers" },
     { "include": "#refs" },
@@ -32,6 +33,67 @@
         {
           "name": "keyword.other.attribute-name.msra",
           "match": "^[ \\t]*[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*(?=[ \\t]*[:=])"
+        }
+      ]
+    },
+    "prefix-section-assignments": {
+      "patterns": [
+        {
+          "name": "entity.name.variable.prefix.msra",
+          "match": "^[ \\t]*[A-Za-z_][A-Za-z0-9_-]*(?=[ \\t]*[:=])"
+        }
+      ]
+    },
+    "prefix-sections": {
+      "patterns": [
+        {
+          "name": "meta.section.prefix.msra",
+          "begin": "^(\\s*)(\\[)(app)(\\.)(prefixes)(\\])(?=\\s*(?:#.*)?$)",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.whitespace.leading.msra"
+            },
+            "2": {
+              "name": "punctuation.section.brackets.begin.msra"
+            },
+            "3": {
+              "name": "keyword.other.namespace.msra"
+            },
+            "4": {
+              "name": "punctuation.separator.period.msra"
+            },
+            "5": {
+              "name": "keyword.other.namespace.msra"
+            },
+            "6": {
+              "name": "punctuation.section.brackets.end.msra"
+            }
+          },
+          "end": "^(?=\\s*\\[)",
+          "contentName": "meta.section.content.prefix.msra",
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#prefix-section-assignments"
+            },
+            {
+              "include": "#refs"
+            },
+            {
+              "include": "#keywords"
+            },
+            {
+              "include": "#numbers"
+            },
+            {
+              "include": "#inline-tables"
+            },
+            {
+              "include": "#strings"
+            }
+          ]
         }
       ]
     },

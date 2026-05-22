@@ -118,6 +118,12 @@
             }
           },
           {
+            "scope": "entity.name.variable.prefix.msra",
+            "settings": {
+              "foreground": "#C678DD"
+            }
+          },
+          {
             "scope": "support.type.property-name.msra",
             "settings": {
               "foreground": "#98C379"

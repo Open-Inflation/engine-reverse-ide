@@ -1,4 +1,7 @@
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
+const { mkdtempSync, writeFileSync } = require("node:fs");
+const os = require("node:os");
 const { readFileSync } = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
@@ -182,6 +185,31 @@ test("nested example, values, list_style, and types structures are validated str
   assert.ok(unknownListStyleKey, "expected unexpected list_style keys to be rejected");
   assert.ok(unknownValuesKey, "expected unexpected values keys to be rejected");
   assert.ok(missingExampleFile, "expected examples items to require file");
+});
+
+test("values and revalue cannot coexist in input and url params tables", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    'type="string"',
+    'values=["one", "two"]',
+    'revalue="^[a-z]+$"',
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    'values=[{"value_in_url"="/search", "value"="search"}]',
+    'revalue="^/search$"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///conflicting-values-revalue.msra");
+  const analysis = analyzeDocument(document);
+  const conflictDiagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "conflicting-assignment-keys");
+
+  assert.strictEqual(conflictDiagnostics.length, 2);
+  assert.match(conflictDiagnostics[0].message, /values/);
+  assert.match(conflictDiagnostics[0].message, /revalue/);
+  assert.match(conflictDiagnostics[1].message, /values/);
+  assert.match(conflictDiagnostics[1].message, /revalue/);
 });
 
 test("pipeline state is validated in the context of action", () => {
@@ -431,6 +459,17 @@ test("grammar distinguishes path segments, assignment keys, and inline table key
   assert.strictEqual(inlineKeyPatterns[1].name, "support.type.property-name.msra");
 });
 
+test("grammar treats prefixes as a dedicated visual section", () => {
+  const prefixSectionPatterns = grammar.repository["prefix-sections"].patterns;
+  const prefixAssignmentPattern = grammar.repository["prefix-section-assignments"].patterns[0];
+
+  assert.strictEqual(prefixSectionPatterns.length, 1);
+  assert.strictEqual(prefixSectionPatterns[0].name, "meta.section.prefix.msra");
+  assert.strictEqual(prefixSectionPatterns[0].contentName, "meta.section.content.prefix.msra");
+  assert.strictEqual(prefixSectionPatterns[0].beginCaptures[5].name, "keyword.other.namespace.msra");
+  assert.strictEqual(prefixAssignmentPattern.name, "entity.name.variable.prefix.msra");
+});
+
 test("package contributes a stable MSRA palette", () => {
   const defaults = require("../package.json").contributes.configurationDefaults;
   const semanticRules = defaults["editor.semanticTokenColorCustomizations"].rules;
@@ -443,6 +482,7 @@ test("package contributes a stable MSRA palette", () => {
   assert.strictEqual(semanticRules["property.msra"].foreground, "#E5C07B");
   assert.strictEqual(semanticRules["enumMember.msra"].foreground, "#98C379");
   assert.strictEqual(scopeToColor.get("keyword.other.attribute-name.msra"), "#E5C07B");
+  assert.strictEqual(scopeToColor.get("entity.name.variable.prefix.msra"), "#C678DD");
   assert.strictEqual(scopeToColor.get("support.type.property-name.msra"), "#98C379");
   assert.strictEqual(scopeToColor.get("keyword.other.namespace.msra"), "#56B6C2");
   assert.strictEqual(scopeToColor.get("variable.other.readwrite.msra"), "#61AFEF");
@@ -535,4 +575,32 @@ test("language configuration keeps brackets out of comments and strings", () => 
   assert.ok(unbalancedScopes.has("comment.line.number-sign"));
   assert.ok(unbalancedScopes.has("string"));
   assert.ok(unbalancedScopes.has("meta.path.segment.quoted"));
+});
+
+test("cli check uses the same analyzer diagnostics", () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "msra-cli-"));
+  const filePath = path.join(tmpDir, "invalid.msra");
+  writeFileSync(
+    filePath,
+    [
+      "[app]",
+      "[app.func.A3A417]",
+      "[app.func.A3A417.input.query]",
+      'values=["one"]',
+      'revalue="^[a-z]+$"',
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const cliPath = path.resolve(__dirname, "..", "..", "bin", "msra.js");
+  const result = spawnSync(process.execPath, [cliPath, "check", filePath], {
+    encoding: "utf8",
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+
+  assert.notStrictEqual(result.status, 0);
+  assert.match(output, /conflicting-assignment-keys/);
+  assert.match(output, /values/);
+  assert.match(output, /revalue/);
 });

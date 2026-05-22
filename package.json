@@ -1,0 +1,15 @@
+{
+  "name": "msra-workspace",
+  "private": true,
+  "workspaces": [
+    "vscode-extension"
+  ],
+  "bin": {
+    "msra-lsp": "./bin/msra.js"
+  },
+  "scripts": {
+    "check": "node ./bin/msra.js check example.msra",
+    "serve": "node ./bin/msra.js serve",
+    "test": "npm test --workspace vscode-extension"
+  }
+}

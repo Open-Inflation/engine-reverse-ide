@@ -56,8 +56,9 @@ function collectSemanticTokens(document) {
 
   const tables = [...document.tables.values()].sort(compareByStart);
   for (const table of tables) {
-    for (const segment of table.pathSegments || []) {
-      addToken(tokens, segment.range, classifySegment(segment), segment.quoted);
+    for (let index = 0; index < (table.pathSegments || []).length; index += 1) {
+      const segment = table.pathSegments[index];
+      addToken(tokens, segment.range, classifyTableSegment(segment, index, table.path), segment.quoted);
     }
   }
 
@@ -141,6 +142,13 @@ function classifySegment(segment) {
   return SYSTEM_SEGMENT_VALUES.has(String(segment.value)) ? "namespace" : "parameter";
 }
 
+function classifyTableSegment(segment, index, tablePath) {
+  if (isCustomPrefixPath(tablePath) && index === 2) {
+    return "variable";
+  }
+  return classifySegment(segment);
+}
+
 function classifyReferenceSegment(segment, index, parts) {
   if (!segment) {
     return null;
@@ -163,6 +171,10 @@ function classifyAssignmentKey(assignment) {
 
 function isCustomPrefixAssignment(tablePath) {
   return Array.isArray(tablePath) && tablePath.length === 2 && tablePath[0] === "app" && tablePath[1] === "prefixes";
+}
+
+function isCustomPrefixPath(tablePath) {
+  return Array.isArray(tablePath) && tablePath.length === 3 && tablePath[0] === "app" && tablePath[1] === "prefixes";
 }
 
 function addToken(tokens, range, tokenType, quoted = false) {
