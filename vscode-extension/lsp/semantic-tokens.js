@@ -14,6 +14,10 @@ const SEMANTIC_TOKEN_TYPES = [
   "enumMember",
 ];
 
+const SEMANTIC_TOKEN_MODIFIERS = [
+  "msra",
+];
+
 const SYSTEM_SEGMENT_VALUES = new Set([
   "app",
   "misklerreverseapi",
@@ -58,7 +62,7 @@ function collectSemanticTokens(document) {
 
   const assignments = [...document.assignments.values()].sort(compareByStart);
   for (const assignment of assignments) {
-    addToken(tokens, assignment.keyRange, "property", assignment.quoted);
+    addToken(tokens, assignment.keyRange, classifyAssignmentKey(assignment), assignment.quoted);
     collectInlineTableTokens(assignment.value, tokens);
   }
 
@@ -134,6 +138,20 @@ function classifySegment(segment) {
   return SYSTEM_SEGMENT_VALUES.has(String(segment.value)) ? "namespace" : "parameter";
 }
 
+function classifyAssignmentKey(assignment) {
+  if (!assignment) {
+    return null;
+  }
+  if (isCustomPrefixAssignment(assignment.tablePath)) {
+    return "enumMember";
+  }
+  return "property";
+}
+
+function isCustomPrefixAssignment(tablePath) {
+  return Array.isArray(tablePath) && tablePath.length === 2 && tablePath[0] === "app" && tablePath[1] === "prefixes";
+}
+
 function addToken(tokens, range, tokenType, quoted = false) {
   if (!range || !tokenType) {
     return;
@@ -156,7 +174,7 @@ function addToken(tokens, range, tokenType, quoted = false) {
     character: start.character,
     length,
     tokenType,
-    tokenModifiers: [],
+    tokenModifiers: [...SEMANTIC_TOKEN_MODIFIERS],
   });
 }
 
@@ -220,7 +238,8 @@ function dedupeTokens(tokens) {
   const seen = new Set();
   const deduped = [];
   for (const token of tokens) {
-    const key = `${token.line}:${token.character}:${token.length}:${token.tokenType}`;
+    const modifiers = Array.isArray(token.tokenModifiers) ? token.tokenModifiers.join(",") : "";
+    const key = `${token.line}:${token.character}:${token.length}:${token.tokenType}:${modifiers}`;
     if (seen.has(key)) {
       continue;
     }
@@ -232,8 +251,10 @@ function dedupeTokens(tokens) {
 
 module.exports = {
   SEMANTIC_TOKEN_TYPES,
+  SEMANTIC_TOKEN_MODIFIERS,
   collectSemanticTokens,
   collectInlineTableTokens,
   classifySegment,
+  classifyAssignmentKey,
   compareRanges,
 };

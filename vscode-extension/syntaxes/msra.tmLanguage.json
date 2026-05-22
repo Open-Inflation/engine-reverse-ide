@@ -7,6 +7,7 @@
     { "include": "#headers" },
     { "include": "#refs" },
     { "include": "#keywords" },
+    { "include": "#numbers" },
     { "include": "#inline-tables" },
     { "include": "#strings" }
   ],
@@ -67,6 +68,9 @@
             },
             {
               "include": "#keywords"
+            },
+            {
+              "include": "#numbers"
             },
             {
               "include": "#inline-tables"
@@ -212,6 +216,14 @@
         {
           "name": "constant.language.null.msra",
           "match": "\\bnull\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.msra",
+          "match": "(?<![A-Za-z0-9_])[-+]?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?(?![A-Za-z0-9_])"
         }
       ]
     },

@@ -5,7 +5,11 @@ const {
   LanguageClient,
   TransportKind,
 } = require("vscode-languageclient/node");
-const { SEMANTIC_TOKEN_TYPES, collectSemanticTokens } = require("./lsp/semantic-tokens");
+const {
+  SEMANTIC_TOKEN_MODIFIERS,
+  SEMANTIC_TOKEN_TYPES,
+  collectSemanticTokens,
+} = require("./lsp/semantic-tokens");
 const { parseDocument } = require("./lsp/parser");
 
 let client;
@@ -89,24 +93,32 @@ function activate(context) {
     return;
   }
 
-  const semanticLegend = new vscode.SemanticTokensLegend(SEMANTIC_TOKEN_TYPES, []);
+  const semanticModifierIndex = new Map(SEMANTIC_TOKEN_MODIFIERS.map((modifier, index) => [modifier, index]));
+  const semanticLegendWithModifiers = new vscode.SemanticTokensLegend(SEMANTIC_TOKEN_TYPES, SEMANTIC_TOKEN_MODIFIERS);
   const semanticProvider = vscode.languages.registerDocumentSemanticTokensProvider(
     { scheme: "file", language: "msra" },
     {
       provideDocumentSemanticTokens(document) {
         const parsed = parseDocument(document.getText(), document.uri.toString());
-        const builder = new vscode.SemanticTokensBuilder(semanticLegend);
+        const builder = new vscode.SemanticTokensBuilder(semanticLegendWithModifiers);
         for (const token of collectSemanticTokens(parsed)) {
           const tokenTypeIndex = SEMANTIC_TOKEN_TYPES.indexOf(token.tokenType);
           if (tokenTypeIndex < 0) {
             continue;
           }
-          builder.push(token.line, token.character, token.length, tokenTypeIndex, 0);
+          let tokenModifiers = 0;
+          for (const modifier of token.tokenModifiers || []) {
+            const modifierIndex = semanticModifierIndex.get(modifier);
+            if (modifierIndex !== undefined) {
+              tokenModifiers |= (1 << modifierIndex);
+            }
+          }
+          builder.push(token.line, token.character, token.length, tokenTypeIndex, tokenModifiers);
         }
         return builder.build();
       },
     },
-    semanticLegend,
+    semanticLegendWithModifiers,
   );
   context.subscriptions.push(semanticProvider);
 

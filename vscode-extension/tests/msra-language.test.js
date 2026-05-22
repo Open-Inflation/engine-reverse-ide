@@ -216,6 +216,13 @@ test("grammar highlights boolean and null keywords", () => {
   ]);
 });
 
+test("grammar highlights numeric literals", () => {
+  const numberPattern = grammar.repository.numbers.patterns[0];
+
+  assert.strictEqual(numberPattern.name, "constant.numeric.msra");
+  assert.match(numberPattern.match, /\\d/);
+});
+
 test("grammar splits table paths into system segments, user segments, dots, and quoted literals", () => {
   const assignmentPattern = grammar.repository.assignments.patterns[0];
   const headerPattern = grammar.repository.headers.patterns[0];
@@ -275,11 +282,31 @@ test("grammar distinguishes path segments, assignment keys, and inline table key
     "#inline-table-keys",
     "#refs",
     "#keywords",
+    "#numbers",
     "#inline-tables",
     "#strings",
   ]);
   assert.strictEqual(inlineKeyPatterns[0].name, "support.type.property-name.msra");
   assert.strictEqual(inlineKeyPatterns[1].name, "support.type.property-name.msra");
+});
+
+test("package contributes a stable MSRA palette", () => {
+  const defaults = require("../package.json").contributes.configurationDefaults;
+  const semanticRules = defaults["editor.semanticTokenColorCustomizations"].rules;
+  const tokenRules = defaults["editor.tokenColorCustomizations"].textMateRules;
+  const scopeToColor = new Map(tokenRules.map((rule) => [rule.scope, rule.settings.foreground]));
+
+  assert.strictEqual(defaults["[msra]"]["editor.semanticHighlighting.enabled"], true);
+  assert.strictEqual(semanticRules["namespace.msra"].foreground, "#56B6C2");
+  assert.strictEqual(semanticRules["parameter.msra"].foreground, "#61AFEF");
+  assert.strictEqual(semanticRules["property.msra"].foreground, "#E5C07B");
+  assert.strictEqual(semanticRules["enumMember.msra"].foreground, "#98C379");
+  assert.strictEqual(scopeToColor.get("keyword.other.attribute-name.msra"), "#E5C07B");
+  assert.strictEqual(scopeToColor.get("support.type.property-name.msra"), "#98C379");
+  assert.strictEqual(scopeToColor.get("keyword.other.namespace.msra"), "#56B6C2");
+  assert.strictEqual(scopeToColor.get("variable.other.readwrite.msra"), "#61AFEF");
+  assert.strictEqual(scopeToColor.get("string.quoted.double.msra"), "#CE9178");
+  assert.strictEqual(scopeToColor.get("constant.numeric.msra"), "#D19A66");
 });
 
 test("semantic tokens separate path segments, assignment keys, and inline table keys", () => {
@@ -313,6 +340,33 @@ test("semantic tokens separate path segments, assignment keys, and inline table 
   }
   assert.ok(findToken("app", "namespace"), "expected app to be classified as a system segment");
   assert.ok(findToken("body", "namespace"), "expected body to be classified as a system segment");
+  assert.ok(tokens.every((token) => token.tokenModifiers.includes("msra")), "expected all semantic tokens to carry the msra modifier");
+});
+
+test("semantic tokens color app prefixes keys differently from fixed assignment keys", () => {
+  const text = [
+    "[app.prefixes]",
+    'BASE_API="https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2"',
+    'ORIGIN="https://www.ozon.ru/"',
+    "[app]",
+    "timeout_ms=35000",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///prefixes-semantic.msra");
+  const tokens = collectSemanticTokens(document);
+
+  const findToken = (needle, tokenType) => tokens.find((token) => {
+    if (token.tokenType !== tokenType) {
+      return false;
+    }
+    const start = document.offsetAt({ line: token.line, character: token.character });
+    const end = start + token.length;
+    return text.slice(start, end) === needle;
+  });
+
+  assert.ok(findToken("BASE_API", "enumMember"), "expected BASE_API to be classified as a custom prefix key");
+  assert.ok(findToken("ORIGIN", "enumMember"), "expected ORIGIN to be classified as a custom prefix key");
+  assert.ok(findToken("timeout_ms", "property"), "expected timeout_ms to remain a fixed assignment key");
 });
 
 test("language configuration keeps brackets out of comments and strings", () => {
