@@ -29,12 +29,13 @@ headers_sniffer=true
 on_error_screenshot_path="screenshot.png"
 
 [app.variables.city_id]
-types=[{"type"="integer", "value"=null, "revalue"="^[1-9]\\d*$"}, {"type"="null", "value"=null}]
+types=[{"type"="integer", "revalue"="^[1-9]\\d*$"}, {"type"="null", "value"=null}]
 description="Current city id used by catalog and balance requests."
+read_only=false
 from=<UNSTANDART_HEADERS.REQUEST.x-city>
 
 [app.variables.language]
-types=[{"type"="string", "value"=null, "revalue"="^[a-z]{2}(?:-[A-Z]{2})?$"}, {"type"="null", "value"=null}]
+types=[{"type"="string", "revalue"="^[a-z]{2}(?:-[A-Z]{2})?$"}, {"type"="null", "value"=null}]
 description="Current language header value."
 from=<UNSTANDART_HEADERS.REQUEST.x-language>
 
@@ -44,12 +45,12 @@ description="Access token captured by the warmup sniffer."
 from=<UNSTANDART_HEADERS.REQUEST.x-key>
 
 [app.variables.delivery_type]
-types=[{"type"="string", "value"=null, "revalue"="^(store|pickup|courier)$"}, {"type"="null", "value"=null}]
+types=[{"type"="string", "revalue"="^(store|pickup|courier)$"}, {"type"="null", "value"=null}]
 description="Delivery mode used by the catalog."
 from=<UNSTANDART_HEADERS.REQUEST.x-delivery-type>
 
 [app.variables.store_id]
-types=[{"type"="string", "value"=null, "revalue"="^[A-Za-z]\\d{3}$"}, {"type"="null", "value"=null}]
+types=[{"type"="string", "revalue"="^[A-Za-z]\\d{3}$"}, {"type"="null", "value"=null}]
 description="Store or PFM identifier."
 from=<UNSTANDART_HEADERS.REQUEST.x-pfm>
 

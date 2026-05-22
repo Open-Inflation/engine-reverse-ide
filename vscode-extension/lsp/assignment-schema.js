@@ -107,6 +107,16 @@ function forbidKeyWhenValue(forbiddenKey, triggerKey, triggerValues, options = {
   };
 }
 
+function forbidKeyWhenPresent(forbiddenKey, triggerKey, options = {}) {
+  return {
+    kind: "forbidKeyWhenPresent",
+    forbiddenKey,
+    triggerKey,
+    code: options.code || "conflicting-inline-table-keys",
+    message: options.message || `Table item cannot define both "${triggerKey}" and "${forbiddenKey}".`,
+  };
+}
+
 function requireKeyOrder(lowerKey, upperKey, options = {}) {
   return {
     kind: "requireKeyOrder",
@@ -228,6 +238,13 @@ const VARIABLE_TYPE_ITEM_SPEC = objectShape(
   {
     revalue: REVALUE_SPEC,
     value: ANY,
+  },
+  {
+    rules: [
+      forbidKeyWhenPresent("value", "revalue", {
+        message: 'Table item cannot define both "value" and "revalue".',
+      }),
+    ],
   },
 );
 
@@ -425,6 +442,7 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["app", "variables", "*"]), {
     types: arrayOf(VARIABLE_TYPE_ITEM_SPEC),
     description: STRINGISH,
+    read_only: BOOLEAN,
     from: ANY,
   }),
   makeDynamicSchema(exactPath(["app", "prefixes"]), STRINGISH, {
@@ -751,6 +769,23 @@ function evaluateObjectRule(rule, value, entriesByKey, fallbackRange) {
       return [];
     }
     if (!rule.triggerValues.includes(triggerEntry.value.value)) {
+      return [];
+    }
+    const forbiddenEntry = entriesByKey.get(rule.forbiddenKey);
+    if (!forbiddenEntry) {
+      return [];
+    }
+    return [
+      typeDiagnostic(
+        forbiddenEntry.keyRange || fallbackRange,
+        rule.message,
+        rule.code,
+      ),
+    ];
+  }
+  if (rule.kind === "forbidKeyWhenPresent") {
+    const triggerEntry = entriesByKey.get(rule.triggerKey);
+    if (!triggerEntry) {
       return [];
     }
     const forbiddenEntry = entriesByKey.get(rule.forbiddenKey);

@@ -35,6 +35,7 @@ on_error_screenshot_path="screenshot.png" # по умолчанию скринш
 [app.variables.city_id]
 types=[{"type"="integer", "revalue"="^[1-9]\\d*$"}, {"type"="null", "value"=null}]
 description="Идентификатор города"
+read_only=false # по умолчанию
 from=<UNSTANDART_HEADERS.REQUEST.x-city> # доступно так же "value" или <LOCAL_STORAGE.x-city> или COOKIES так же можно указать COOKIES.key если по факту хранилище это список/словарь (опасно - если нет, runtime ошибка распарса json)
 
 [app.prefixes]

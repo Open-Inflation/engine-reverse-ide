@@ -176,6 +176,7 @@ test("nested example, values, list_style, and types structures are validated str
     "[app]",
     "[app.variables.city_id]",
     'types=[{"revalue"="^[1-9]\\\\d*$"}]',
+    "read_only=false",
     "[app.func.A3A417]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
@@ -199,6 +200,38 @@ test("nested example, values, list_style, and types structures are validated str
   assert.ok(unknownListStyleKey, "expected unexpected list_style keys to be rejected");
   assert.ok(unknownValuesKey, "expected unexpected values keys to be rejected");
   assert.ok(missingExampleFile, "expected examples items to require file");
+});
+
+test("variable type items reject value and revalue together", () => {
+  const text = [
+    "[app]",
+    "[app.variables.city_id]",
+    'types=[{"type"="integer", "value"=null, "revalue"="^[1-9]\\\\d*$"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///conflicting-variable-type-value-revalue.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "conflicting-inline-table-keys");
+
+  assert.ok(diagnostic, "expected value and revalue to conflict inside variable type items");
+  assert.match(diagnostic.message, /value/);
+  assert.match(diagnostic.message, /revalue/);
+});
+
+test("read_only on app.variables must be boolean", () => {
+  const text = [
+    "[app]",
+    "[app.variables.city_id]",
+    'types=[{"type"="integer"}]',
+    'read_only="false"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-variable-read-only.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(diagnostic, "expected read_only to reject string values");
+  assert.match(diagnostic.message, /boolean/i);
 });
 
 test("values and revalue cannot coexist in input and url params tables", () => {
