@@ -278,6 +278,7 @@ const BROWSER_SPEC = enumOf(["chromium", "firefox", "webkit", "camoufox"]);
 const METHOD_SPEC = enumOf(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
 const CREDENTIALS_SPEC = enumOf(["omit", "same-origin", "include"]);
+const APP_NAME_SPEC = patternOf(/^\S+$/, "string without spaces");
 const HUMANIZE_SPEC = oneOf(BOOLEAN, numberGreaterThan(0));
 const REGEX_ACTION_ITEM_SPEC = objectShape(
   {
@@ -404,7 +405,7 @@ const TABLE_SCHEMAS = [
     version: STRINGISH,
   }),
   makeFixedSchema(exactPath(["app"]), {
-    name: STRINGISH,
+    name: APP_NAME_SPEC,
     version: STRINGISH,
     timeout_ms: integerAtLeast(0),
     class_name_pattern: CLASS_NAME_PATTERN_SPEC,

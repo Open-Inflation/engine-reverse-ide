@@ -78,6 +78,20 @@ test("assignment schema flags invalid app keys and timeout value types", () => {
   assert.match(typeDiagnostic.message, /non-negative integer/);
 });
 
+test("app name must not contain spaces", () => {
+  const text = [
+    "[app]",
+    'name="FixPrice API"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-app-name.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(diagnostic, "expected app.name with spaces to be rejected");
+  assert.match(diagnostic.message, /without spaces/);
+});
+
 test("timeout_ms must be a non-negative integer", () => {
   const text = [
     "[app]",

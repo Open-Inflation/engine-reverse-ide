@@ -145,7 +145,7 @@ data=<INPUT.query>
 revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>
 description="Текст запроса"
 
-[app.func.A3A417.url.params."from_global"] # если data не указан, INPUT все равно объявится с тем же именем что параметр, при условии что оно свободно, иначе ошибка синтаксиса
+[app.func.A3A417.url.params.from_global] # если data не указан, INPUT все равно объявится с тем же именем что параметр, при условии что оно свободно, иначе ошибка синтаксиса
 sub_url=false
 required=false
 list=false
