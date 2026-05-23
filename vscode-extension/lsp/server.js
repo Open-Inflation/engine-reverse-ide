@@ -226,6 +226,8 @@ class MsraLanguageServer {
       ["DOCUMENT.REGEX.TEXT_REQUEST", "Text filter regex"],
       ["DOCUMENT.REGEXES.TEXT_REQUEST", "Text filter regex"],
       ["VARIABLES", "Resolves to [app.variables]"],
+      ["GROUPS", "Resolves to [app.groups]"],
+      ["GROUPS.Catalog.Product", "Reference to a named function group"],
       ["INPUT", "Resolves to the current function input namespace"],
       ["UNSTANDART_HEADERS", "Runtime request/response headers"],
       ["CAPTURED_URLS", "Runtime captured URL list"],

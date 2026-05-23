@@ -1046,9 +1046,13 @@ def variable_revalue_pattern(variable: dict[str, Any]) -> str | None:
 def revalue_to_pattern(expr: dict[str, Any] | None) -> str | None:
     if not expr:
         return None
-    if expr.get("kind") != "ref":
-        return None
-    return render_text_expr(expr, self_ref="self")
+    if expr.get("kind") == "string":
+        return render_simple_value(expr.get("value"))
+    if expr.get("kind") == "ref":
+        parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
+        if len(parts) >= 3 and parts[0] == "DOCUMENT" and parts[1] == "REGEXES":
+            return f"abstraction.{regex_class_name(parts[2])}.REGEX"
+    return None
 
 
 def revalue_to_error(expr: dict[str, Any] | None) -> str | None:

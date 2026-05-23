@@ -165,6 +165,9 @@ function expandVirtualPath(path, currentTable) {
   if (root === "VARIABLES") {
     return ["app", "variables", ...path.slice(1)];
   }
+  if (root === "GROUPS") {
+    return ["app", "groups", ...path.slice(1)];
+  }
   if (root === "INPUT") {
     const functionId = currentFunctionId(currentTable);
     if (functionId) {

@@ -4,6 +4,7 @@ const {
   Diagnostic,
   CallExpr,
   InlineTableExpr,
+  IdentExpr,
   MergeExpr,
   NumberExpr,
   RefExpr,
@@ -79,11 +80,10 @@ function validateFuncTransportRelations(assignmentsByTable) {
     }
 
     const transportAssignment = assignments.find((assignment) => assignment.key === "transport");
-    if (!transportAssignment || !(transportAssignment.value instanceof StringExpr)) {
+    const transport = getEnumAssignmentValueFromValue(transportAssignment && transportAssignment.value);
+    if (transport === null) {
       continue;
     }
-
-    const transport = transportAssignment.value.value;
     const methodAssignment = assignments.find((assignment) => assignment.key === "method");
     if (transport === "goto") {
       if (methodAssignment) {
@@ -124,7 +124,7 @@ function validateFuncPostprocessRelations(tableIndex, assignmentIndex) {
     }
 
     const funcPath = tablePath.slice(0, 3);
-    const transport = getStringAssignmentValue(assignmentIndex, funcPath, "transport");
+    const transport = getEnumAssignmentValue(assignmentIndex, funcPath, "transport");
     const renderHtml = getBooleanAssignmentValue(assignmentIndex, tablePath, "render_html");
     const gotoPipeline = getAssignment(assignmentIndex, tablePath, "goto_pipeline");
     const evaluate = getAssignment(assignmentIndex, tablePath, "evaluate");
@@ -164,7 +164,7 @@ function validateFuncPostprocessRelations(tableIndex, assignmentIndex) {
 function validateWarmupRelations(assignmentIndex) {
   const diagnostics = [];
   const warmupPath = ["app", "warmup"];
-  const browser = getStringAssignmentValue(assignmentIndex, ["app"], "browser");
+  const browser = getEnumAssignmentValue(assignmentIndex, ["app"], "browser");
   const browserIsCamoufox = browser === "camoufox";
 
   for (const key of ["humanize", "block_images", "humanize_action"]) {
@@ -498,8 +498,23 @@ function getAssignment(assignmentIndex, tablePath, key) {
 
 function getStringAssignmentValue(assignmentIndex, tablePath, key) {
   const assignment = getAssignment(assignmentIndex, tablePath, key);
-  if (assignment && assignment.value instanceof StringExpr) {
+  if (assignment && assignment.value instanceof StringExpr && assignment.value.quoted !== false) {
     return assignment.value.value;
+  }
+  return null;
+}
+
+function getEnumAssignmentValue(assignmentIndex, tablePath, key) {
+  const assignment = getAssignment(assignmentIndex, tablePath, key);
+  return getEnumAssignmentValueFromValue(assignment && assignment.value);
+}
+
+function getEnumAssignmentValueFromValue(value) {
+  if (value instanceof StringExpr && value.quoted === false) {
+    return value.value;
+  }
+  if (value instanceof IdentExpr) {
+    return value.name;
   }
   return null;
 }

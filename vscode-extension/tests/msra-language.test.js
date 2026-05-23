@@ -118,10 +118,10 @@ test("enum and pattern schema rules validate app function settings", () => {
     "[app.warmup]",
     'on_error_screenshot_path="screenshot.txt"',
     "[app.func.A3A417]",
-    'method="FETCH"',
+    'method=FETCH',
     "[app.func.A3A417.headers]",
-    'cors_mode="corss"',
-    'credentials="maybe"',
+    'cors_mode=corss',
+    'credentials=maybe',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///enum-pattern-schema.msra");
@@ -141,12 +141,12 @@ test("function transport validates its enum and forbids method for goto", () => 
   const text = [
     "[app]",
     "[app.func.A3A417]",
-    'transport="websocket"',
-    'method="GET"',
+    'transport=websocket',
+    'method=GET',
     "",
     "[app.func.A3A418]",
-    'transport="goto"',
-    'method="POST"',
+    'transport=goto',
+    'method=POST',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///function-transport.msra");
@@ -166,7 +166,7 @@ test("render_html is only valid inside postprocess", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
-    'transport="fetch"',
+    'transport=fetch',
     'render_html=true',
     "",
     "[app.func.A3A417.postprocess]",
@@ -185,10 +185,10 @@ test("function postprocess validates goto_pipeline and evaluate context", () => 
   const text = [
     "[app]",
     "[app.func.A3A417]",
-    'transport="fetch"',
+    'transport=fetch',
     "[app.func.A3A417.postprocess]",
     "render_html=false",
-    'goto_pipeline=[{action="wait_network", state="idle"}]',
+    'goto_pipeline=[{action=wait_network, state=idle}]',
     'evaluate="script.js"',
     "",
   ].join("\n");
@@ -209,7 +209,7 @@ test("regex actions validate action enums and replace arguments", () => {
     "[app]",
     "[app.regexes.TEXT_REQUEST]",
     'regex="^[a-zа-яё+]+$"',
-    'actions=[{action="lower"}, {action="replace", what=" ", with="+"}]',
+    'actions=[{action=lower}, {action=replace, what=" ", with="+"}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-regex-actions.msra");
@@ -223,7 +223,7 @@ test("regex actions reject unknown action names and missing replace arguments", 
     "[app]",
     "[app.regexes.TEXT_REQUEST]",
     'regex="^[a-zа-яё+]+$"',
-    'actions=[{action="lowerr"}, {action="replace", what=" "}]',
+    'actions=[{action=lowerr}, {action=replace, what=" "}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-regex-actions.msra");
@@ -247,7 +247,7 @@ test("nested example, values, list_style, and types structures are validated str
     "[app.func.A3A417]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
-    'list_style={style="repeat", delimiter=1, indexed=false, extra=true}',
+    'list_style={style=repeat, delimiter=1, indexed=false, extra=true}',
     'values=[{"foo"=1}]',
     "[app.func.A3A417.examples]",
     'examples=[{"inputs"={"query"="example"}, "test"=false}]',
@@ -273,7 +273,7 @@ test("variable type items reject value and revalue together", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"="integer", "value"=null, "revalue"={from=1, to=27}}]',
+    'types=[{"type"=integer, "value"=null, "revalue"={from=1, to=27}}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///conflicting-variable-type-value-revalue.msra");
@@ -289,7 +289,7 @@ test("read_only on app.variables must be boolean", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"="integer"}]',
+    'types=[{"type"=integer}]',
     'read_only="false"',
     "",
   ].join("\n");
@@ -306,7 +306,7 @@ test("values and revalue cannot coexist in input and url params tables", () => {
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
-    'type="string"',
+    'type=string',
     'values=["one", "two"]',
     'revalue={from=1, to=27}',
     "[app.func.A3A417.url]",
@@ -331,7 +331,7 @@ test("string revalue syntax is rejected in favor of reference or numeric range f
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
-    'type="string"',
+    'type=string',
     'revalue="^[a-z]+$"',
     "",
   ].join("\n");
@@ -350,7 +350,7 @@ test("reference revalue syntax is accepted", () => {
     'regex="^[a-z]+$"',
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
-    'type="string"',
+    'type=string',
     'revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>',
     "",
   ].join("\n");
@@ -365,7 +365,7 @@ test("inline regex object revalue syntax is rejected in favor of reference or nu
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
-    'type="string"',
+    'type=string',
     'revalue={regex="^[a-z]+$"}',
     "",
   ].join("\n");
@@ -381,7 +381,7 @@ test("pipeline state is validated in the context of action", () => {
   const text = [
     "[app]",
     "[app.warmup]",
-    'pipeline=[{action="wait_sniffer", what=<UNSTANDART_HEADERS.REQUEST.X-key>}, {action="wait_element", state="visible", what="div.page-content"}, {action="wait_network", state="idle"}]',
+    'pipeline=[{action=wait_sniffer, what=<UNSTANDART_HEADERS.REQUEST.X-key>}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=idle}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-pipeline-state.msra");
@@ -394,7 +394,7 @@ test("pipeline state rejects values that do not match the action context", () =>
   const text = [
     "[app]",
     "[app.warmup]",
-    'pipeline=[{action="wait_sniffer", state="visible"}, {action="wait_element", state="idle", what="div.page-content"}, {action="wait_network", state="visible"}]',
+    'pipeline=[{action=wait_sniffer, state=visible}, {action=wait_element, state=idle, what="div.page-content"}, {action=wait_network, state=visible}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-pipeline-state.msra");
@@ -428,7 +428,7 @@ test("list url params reject non-list inputs in data", () => {
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
-    'type="string"',
+    'type=string',
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     "list=true",
@@ -467,7 +467,7 @@ test("numeric revalue ranges accept integer and float bounds", () => {
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.limit]",
-    'type="integer"',
+    'type=integer',
     'revalue={from=1, to=27}',
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.ratio]",
@@ -485,7 +485,7 @@ test("numeric revalue ranges require ordered bounds", () => {
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.limit]",
-    'type="integer"',
+    'type=integer',
     'revalue={from=27, to=1}',
     "",
   ].join("\n");
@@ -500,7 +500,7 @@ test("numeric revalue ranges require ordered bounds", () => {
 test("app browser must be one of the supported browsers", () => {
   const text = [
     "[app]",
-    'browser="ddd"',
+    'browser=ddd',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-browser.msra");
@@ -514,7 +514,7 @@ test("app browser must be one of the supported browsers", () => {
 test("warmup humanize options require camoufox browser", () => {
   const text = [
     "[app]",
-    'browser="chromium"',
+    'browser=chromium',
     "[app.warmup]",
     "humanize=true",
     "block_images=true",
@@ -532,7 +532,7 @@ test("warmup humanize options require camoufox browser", () => {
 test("warmup humanize accepts positive numbers when camoufox is enabled", () => {
   const text = [
     "[app]",
-    'browser="camoufox"',
+    'browser=camoufox',
     "[app.warmup]",
     "humanize=0.5",
     "",
@@ -569,7 +569,7 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     'name="PipelineApp"',
     'version="0.1.0"',
     "timeout_ms=1000",
-    'browser="camoufox"',
+    'browser=camoufox',
     'class_name_pattern="Class{class_name}"',
     'description=""',
     "",
@@ -578,7 +578,7 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     "",
     "[app.warmup]",
     'url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>',
-    'pipeline=[{for_tests=true, action="wait_network", state="load"}, {for_tests=true, action="wait_element", state="visible", what="div.one", then="click"}, {action="wait_network", state="idle"}]',
+    'pipeline=[{for_tests=true, action=wait_network, state=load}, {for_tests=true, action=wait_element, state=visible, what="div.one", then=click}, {action=wait_network, state=idle}]',
     "",
   ].join("\n");
 
@@ -679,8 +679,8 @@ test("shared function headers accept referrer cors_mode credentials and headers"
     'ORIGIN="https://www.ozon.ru/"',
     "[app.func.headers]",
     'referrer=<DOCUMENT.PREFIXES.ORIGIN>',
-    'cors_mode="cors"',
-    'credentials="include"',
+    'cors_mode=cors',
+    'credentials=include',
     "headers=<UNSTANDART_HEADERS>",
     "",
   ].join("\n");
@@ -725,13 +725,13 @@ test("url param values cannot define multiple defaults unless list=true", () => 
   assert.match(diagnostic.message, /list=true/);
 });
 
-test("function group accepts relative group names and nested group names", () => {
+test("function group accepts group references and nested group references", () => {
   const text = [
     "[app]",
     "[app.groups.Catalog]",
-    "[app.groups.Catalog.Products]",
+    "[app.groups.Catalog.Product]",
     "[app.func.A3A417]",
-    'group="Catalog.Products"',
+    'group=<GROUPS.Catalog.Product>',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-group.msra");
@@ -740,30 +740,47 @@ test("function group accepts relative group names and nested group names", () =>
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
-test("function group rejects the full app.groups prefix", () => {
+test("function group rejects string links and unresolved group references", () => {
   const text = [
     "[app]",
     "[app.groups.Catalog]",
-    "[app.groups.Catalog.Products]",
+    "[app.groups.Catalog.Product]",
     "[app.func.A3A417]",
     'group="app.groups.Catalog"',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///missing-group.msra");
   const analysis = analyzeDocument(document);
+  const groupDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
+
+  assert.ok(groupDiagnostic, "expected string-based group links to be rejected");
+  assert.match(groupDiagnostic.message, /reference/i);
+  assert.match(groupDiagnostic.message, /GROUPS/i);
+});
+
+test("group references must point to existing app.groups tables", () => {
+  const text = [
+    "[app]",
+    "[app.groups.Catalog]",
+    "[app.groups.Catalog.Product]",
+    "[app.func.A3A417]",
+    'group=<GROUPS.Catalog.Products>',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///missing-group-reference.msra");
+  const analysis = analyzeDocument(document);
   const groupDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-group");
 
-  assert.ok(groupDiagnostic, "expected the full app.groups prefix to be rejected");
-  assert.match(groupDiagnostic.message, /app\.groups\.Catalog/);
-  assert.match(groupDiagnostic.message, /Catalog/);
+  assert.ok(groupDiagnostic, "expected unresolved group references inside GROUPS to be rejected");
   assert.match(groupDiagnostic.message, /Catalog\.Products/);
+  assert.match(groupDiagnostic.message, /Catalog\.Product/);
 });
 
 test("virtual variable references must resolve to declared variables", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"="integer", "revalue"={from=1, to=27}}, {"type"="null", "value"=null}]',
+    'types=[{"type"=integer, "revalue"={from=1, to=27}}, {"type"=null, "value"=null}]',
     'description="Идентификатор города"',
     'from=<UNSTANDART_HEADERS.REQUEST.x-city>',
     "",

@@ -37,10 +37,11 @@ class Expr {
 }
 
 class StringExpr extends Expr {
-  constructor(range, value, raw) {
+  constructor(range, value, raw, quoted = true) {
     super(range);
     this.value = value;
     this.raw = raw;
+    this.quoted = quoted;
   }
 }
 

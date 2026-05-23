@@ -448,7 +448,7 @@ class Parser {
       return;
     }
     const valueStartIndex = this.index;
-    const value = this._parseExpr(true);
+    const value = this._parseExpr(true, true, true);
     const assignmentRange = new Range(keyToken.range.start, value ? value.range.end : this._previous().range.end);
     const key = keyToken.value;
     const fullPath = [...this.currentTable, key];
@@ -526,10 +526,10 @@ class Parser {
     return null;
   }
 
-  _parseExpr(stopOnNewline, allowIdentifiers = false) {
-    const parts = [this._parseConcat(stopOnNewline, allowIdentifiers)];
+  _parseExpr(stopOnNewline, allowIdentifiers = false, bareStrings = false) {
+    const parts = [this._parseConcat(stopOnNewline, allowIdentifiers, bareStrings)];
     while (this._match("PLUS")) {
-      parts.push(this._parseConcat(stopOnNewline, allowIdentifiers));
+      parts.push(this._parseConcat(stopOnNewline, allowIdentifiers, bareStrings));
     }
     if (parts.length === 1) {
       return parts[0];
@@ -539,9 +539,9 @@ class Parser {
     return new MergeExpr(new Range(start, end), parts);
   }
 
-  _parseConcat(stopOnNewline, allowIdentifiers = false) {
+  _parseConcat(stopOnNewline, allowIdentifiers = false, bareStrings = false) {
     const items = [];
-    const first = this._parseAtom(stopOnNewline, allowIdentifiers);
+    const first = this._parseAtom(stopOnNewline, allowIdentifiers, bareStrings);
     if (first === null) {
       const emptyRange = this._current().range;
       this._error("Expected value", emptyRange, "expected-value");
@@ -586,11 +586,11 @@ class Parser {
     return false;
   }
 
-  _parseAtom(stopOnNewline, allowIdentifiers = false) {
+  _parseAtom(stopOnNewline, allowIdentifiers = false, bareStrings = false) {
     const token = this._current();
     if (token.type === "STRING") {
       this._advance();
-      return new StringExpr(token.range, token.value, token.value);
+      return new StringExpr(token.range, token.value, token.value, true);
     }
     if (token.type === "NUMBER") {
       this._advance();
@@ -630,6 +630,9 @@ class Parser {
       }
       if (token.value === "null") {
         return new NullExpr(token.range);
+      }
+      if (bareStrings) {
+        return new StringExpr(token.range, token.value, token.value, false);
       }
       let expr = new IdentExpr(token.range, token.value);
       if (this._check("LPAREN")) {
@@ -796,7 +799,7 @@ class Parser {
         this._advance();
         continue;
       }
-      const item = this._parseExpr(false);
+      const item = this._parseExpr(false, true, true);
       items.push(item);
       if (this._match("COMMA")) {
         while (this._check("NEWLINE")) {
@@ -846,7 +849,7 @@ class Parser {
         }
         break;
       }
-      const value = this._parseExpr(false);
+      const value = this._parseExpr(false, true, true);
       items.push(new InlineEntry(keyToken.value, keyToken.range, value, keyToken.type === "STRING"));
       if (this._match("COMMA")) {
         while (this._check("NEWLINE")) {

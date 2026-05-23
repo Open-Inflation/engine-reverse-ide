@@ -1,4 +1,4 @@
-const { Diagnostic, MergeExpr, SequenceExpr, StringExpr } = require("./model");
+const { Diagnostic, RefExpr } = require("./model");
 const { normalizePathSegments, renderPath } = require("./path-schema");
 
 function validateGroupAssignments(tableIndex, assignmentIndex) {
@@ -10,7 +10,7 @@ function validateGroupAssignments(tableIndex, assignmentIndex) {
       continue;
     }
 
-    const groupName = resolveStaticString(assignment.value);
+    const groupName = resolveGroupReferenceName(assignment.value);
     if (groupName === null) {
       continue;
     }
@@ -56,22 +56,21 @@ function isFunctionGroupAssignment(assignment) {
   );
 }
 
-function resolveStaticString(value) {
-  if (value instanceof StringExpr) {
-    return value.value;
+function resolveGroupReferenceName(value) {
+  if (!(value instanceof RefExpr)) {
+    return null;
   }
-  if (value instanceof SequenceExpr || value instanceof MergeExpr) {
-    const parts = [];
-    for (const part of value.items || value.parts || []) {
-      const resolved = resolveStaticString(part);
-      if (resolved === null) {
-        return null;
-      }
-      parts.push(resolved);
+  const path = [];
+  for (const part of value.parts || []) {
+    if (part.kind !== "name") {
+      break;
     }
-    return parts.join("");
+    path.push(String(part.value));
   }
-  return null;
+  if (path[0] !== "GROUPS" || path.length < 2) {
+    return null;
+  }
+  return path.slice(1).join(".");
 }
 
 function buildMissingGroupMessage(groupName, availableGroups) {
@@ -92,7 +91,6 @@ function renderGroupName(table) {
 
 module.exports = {
   collectAvailableGroups,
-  resolveStaticString,
   renderGroupName,
   validateGroupAssignments,
 };

@@ -3,6 +3,7 @@ const {
   BoolExpr,
   Diagnostic,
   InlineTableExpr,
+  IdentExpr,
   MergeExpr,
   NullExpr,
   NumberExpr,
@@ -27,6 +28,13 @@ const NULL_OR_STRING = { kind: "oneOf", options: [NULL, STRINGISH] };
 
 function enumOf(values) {
   return { kind: "enum", values };
+}
+
+function referenceOf(roots) {
+  return {
+    kind: "reference",
+    roots: Array.isArray(roots) ? roots : [roots],
+  };
 }
 
 function patternOf(pattern, description) {
@@ -295,6 +303,7 @@ const URL_PARAM_VALUE_SPEC = objectShape(
 const BROWSER_SPEC = enumOf(["chromium", "firefox", "webkit", "camoufox"]);
 const TRANSPORT_SPEC = enumOf(["direct", "fetch", "goto"]);
 const METHOD_SPEC = enumOf(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
+const GROUP_REFERENCE_SPEC = referenceOf(["GROUPS"]);
 const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
 const CREDENTIALS_SPEC = enumOf(["omit", "same-origin", "include"]);
 const APP_NAME_SPEC = patternOf(/^\S+$/, "string without spaces");
@@ -476,7 +485,7 @@ const TABLE_SCHEMAS = [
     name: STRINGISH,
     transport: TRANSPORT_SPEC,
     method: METHOD_SPEC,
-    group: STRINGISH,
+    group: GROUP_REFERENCE_SPEC,
     color: STRINGISH,
     description: STRINGISH,
   }),
@@ -645,25 +654,41 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
     return [typeDiagnostic(fallbackRange || value.range, `Expected reference <...> or numeric range inline table for revalue but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "enum") {
-    if (value instanceof StringExpr && spec.values.includes(value.value)) {
+    if (value instanceof StringExpr && value.quoted === false && spec.values.includes(value.value)) {
+      return [];
+    }
+    if (value instanceof IdentExpr && spec.values.includes(value.name)) {
+      return [];
+    }
+    if (value instanceof NullExpr && spec.values.includes("null")) {
       return [];
     }
     return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
+  if (spec.kind === "reference") {
+    if (!(value instanceof RefExpr)) {
+      return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+    }
+    const path = referencePathSegments(value);
+    if (!path.length || (spec.roots && spec.roots.length && !spec.roots.includes(path[0]))) {
+      return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+    }
+    return [];
+  }
   if (spec.kind === "stringish") {
-    if (value instanceof StringExpr || value instanceof SequenceExpr || value instanceof MergeExpr || value instanceof RefExpr) {
+    if ((value instanceof StringExpr && value.quoted !== false) || value instanceof SequenceExpr || value instanceof MergeExpr || value instanceof RefExpr) {
       return [];
     }
     return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "pattern") {
-    if (value instanceof StringExpr && spec.pattern.test(value.value)) {
+    if (value instanceof StringExpr && value.quoted !== false && spec.pattern.test(value.value)) {
       return [];
     }
     return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "string") {
-    if (value instanceof StringExpr) {
+    if (value instanceof StringExpr && value.quoted !== false) {
       return [];
     }
     return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
@@ -737,7 +762,7 @@ function evaluateObjectRule(rule, value, entriesByKey, fallbackRange) {
   }
   if (rule.kind === "requireKeyWhenValue") {
     const triggerEntry = entriesByKey.get(rule.triggerKey);
-    if (!triggerEntry || !(triggerEntry.value instanceof StringExpr)) {
+    if (!triggerEntry || !isBareEnumValue(triggerEntry.value)) {
       return [];
     }
     if (!rule.triggerValues.includes(triggerEntry.value.value)) {
@@ -782,7 +807,7 @@ function evaluateObjectRule(rule, value, entriesByKey, fallbackRange) {
   }
   if (rule.kind === "forbidKeyWhenValue") {
     const triggerEntry = entriesByKey.get(rule.triggerKey);
-    if (!triggerEntry || !(triggerEntry.value instanceof StringExpr)) {
+    if (!triggerEntry || !isBareEnumValue(triggerEntry.value)) {
       return [];
     }
     if (!rule.triggerValues.includes(triggerEntry.value.value)) {
@@ -896,6 +921,12 @@ function describeSpec(spec) {
   if (spec.kind === "enum") {
     return `one of ${spec.values.map((value) => JSON.stringify(value)).join(", ")}`;
   }
+  if (spec.kind === "reference") {
+    if (Array.isArray(spec.roots) && spec.roots.length) {
+      return `reference <${spec.roots.map((root) => `${root}...`).join(" or ")}>`;
+    }
+    return "reference <...>";
+  }
   if (spec.kind === "pattern") {
     return spec.description || `string matching ${spec.pattern}`;
   }
@@ -914,7 +945,10 @@ function typeDiagnostic(range, message, code = "invalid-assignment-value-type") 
 
 function describeValue(value) {
   if (value instanceof StringExpr) {
-    return "string";
+    return value.quoted === false ? "identifier" : "string";
+  }
+  if (value instanceof IdentExpr) {
+    return "identifier";
   }
   if (value instanceof NumberExpr) {
     return Number.isInteger(value.value) && !/[.eE]/.test(value.raw) ? "integer" : "number";
@@ -938,6 +972,21 @@ function describeValue(value) {
     return "string interpolation";
   }
   return "value";
+}
+
+function referencePathSegments(ref) {
+  const path = [];
+  for (const part of ref.parts || []) {
+    if (part.kind !== "name") {
+      break;
+    }
+    path.push(String(part.value));
+  }
+  return path;
+}
+
+function isBareEnumValue(value) {
+  return (value instanceof StringExpr && value.quoted === false) || value instanceof IdentExpr;
 }
 
 module.exports = {
