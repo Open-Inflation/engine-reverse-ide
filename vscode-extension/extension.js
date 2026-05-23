@@ -13,6 +13,7 @@ const {
 const { parseDocument } = require("./lsp/parser");
 
 let client;
+let retokenizeScheduled = false;
 
 function getWorkspaceFolder() {
   const workspaceFolders = vscode.workspace.workspaceFolders || [];
@@ -87,6 +88,38 @@ function resolveServer(context) {
   return resolveInternalServer(context);
 }
 
+function scheduleStartupRetokenize(context) {
+  if (retokenizeScheduled) {
+    return;
+  }
+  retokenizeScheduled = true;
+
+  const tryRetokenize = async () => {
+    const editors = vscode.window.visibleTextEditors.filter((editor) => editor.document.languageId === "msra");
+    if (!editors.length) {
+      return false;
+    }
+    try {
+      await vscode.commands.executeCommand("editor.action.forceRetokenize");
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const delays = [0, 100, 250, 500, 1500];
+  for (const delay of delays) {
+    const timer = setTimeout(() => {
+      void tryRetokenize();
+    }, delay);
+    context.subscriptions.push({ dispose: () => clearTimeout(timer) });
+  }
+
+  context.subscriptions.push(vscode.window.onDidChangeVisibleTextEditors(() => {
+    void tryRetokenize();
+  }));
+}
+
 function activate(context) {
   const server = resolveServer(context);
   if (!server) {
@@ -146,6 +179,7 @@ function activate(context) {
   );
 
   context.subscriptions.push(client.start());
+  scheduleStartupRetokenize(context);
 }
 
 function deactivate() {

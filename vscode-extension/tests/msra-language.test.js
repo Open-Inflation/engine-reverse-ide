@@ -881,10 +881,9 @@ test("grammar highlights boolean and null keywords", () => {
 test("grammar treats number-sign comments as a full-line scope", () => {
   const commentPattern = grammar.repository.comments.patterns[0];
 
-  assert.strictEqual(commentPattern.name, "meta.comment.line.number-sign.msra");
+  assert.strictEqual(commentPattern.name, "comment.line.number-sign.msra");
   assert.strictEqual(commentPattern.begin, "#");
   assert.strictEqual(commentPattern.end, "$");
-  assert.strictEqual(commentPattern.contentName, "comment.line.number-sign.msra");
   assert.deepStrictEqual(commentPattern.patterns, []);
 });
 
@@ -984,11 +983,13 @@ test("grammar treats prefixes as a dedicated visual section", () => {
 
 test("package contributes a stable MSRA palette", () => {
   const defaults = require("../package.json").contributes.configurationDefaults;
+  const activationEvents = require("../package.json").activationEvents;
   const grammarContribution = require("../package.json").contributes.grammars[0];
   const semanticRules = defaults["editor.semanticTokenColorCustomizations"].rules;
   const tokenRules = defaults["editor.tokenColorCustomizations"].textMateRules;
   const scopeToColor = new Map(tokenRules.map((rule) => [rule.scope, rule.settings.foreground]));
 
+  assert.ok(activationEvents.includes("*"));
   assert.strictEqual(defaults["[msra]"]["editor.semanticHighlighting.enabled"], true);
   assert.strictEqual(semanticRules["namespace.msra"].foreground, "#56B6C2");
   assert.strictEqual(semanticRules["parameter.msra"].foreground, "#61AFEF");
@@ -1005,7 +1006,6 @@ test("package contributes a stable MSRA palette", () => {
   assert.strictEqual(scopeToColor.get("constant.numeric.msra"), "#D19A66");
   assert.strictEqual(semanticRules["variable.msra"].foreground, "#C678DD");
   assert.strictEqual(grammarContribution.tokenTypes["comment.line.number-sign.msra"], "comment");
-  assert.strictEqual(grammarContribution.tokenTypes["meta.comment.line.number-sign.msra"], "comment");
   assert.strictEqual(grammarContribution.tokenTypes["string.quoted.double.msra"], "string");
   assert.strictEqual(grammarContribution.tokenTypes["meta.path.segment.quoted.msra"], "string");
 });
