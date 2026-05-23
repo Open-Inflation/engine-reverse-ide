@@ -242,7 +242,7 @@ test("nested example, values, list_style, and types structures are validated str
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"revalue"="^[1-9]\\\\d*$"}]',
+    'types=[{"revalue"={from=1, to=27}}]',
     "read_only=false",
     "[app.func.A3A417]",
     "[app.func.A3A417.url]",
@@ -273,7 +273,7 @@ test("variable type items reject value and revalue together", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"="integer", "value"=null, "revalue"="^[1-9]\\\\d*$"}]',
+    'types=[{"type"="integer", "value"=null, "revalue"={from=1, to=27}}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///conflicting-variable-type-value-revalue.msra");
@@ -308,11 +308,11 @@ test("values and revalue cannot coexist in input and url params tables", () => {
     "[app.func.A3A417.input.query]",
     'type="string"',
     'values=["one", "two"]',
-    'revalue="^[a-z]+$"',
+    'revalue={from=1, to=27}',
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     'values=[{"value_in_url"="/search", "value"="search"}]',
-    'revalue="^/search$"',
+    'revalue={from=1, to=27}',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///conflicting-values-revalue.msra");
@@ -324,6 +324,57 @@ test("values and revalue cannot coexist in input and url params tables", () => {
   assert.match(conflictDiagnostics[0].message, /revalue/);
   assert.match(conflictDiagnostics[1].message, /values/);
   assert.match(conflictDiagnostics[1].message, /revalue/);
+});
+
+test("string revalue syntax is rejected in favor of reference or numeric range form", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    'type="string"',
+    'revalue="^[a-z]+$"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///string-revalue-is-invalid.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(diagnostic, "expected string revalue syntax to be rejected");
+  assert.match(diagnostic.message, /reference <\.\.\.>|numeric range/i);
+});
+
+test("reference revalue syntax is accepted", () => {
+  const text = [
+    "[app]",
+    "[app.regexes.TEXT_REQUEST]",
+    'regex="^[a-z]+$"',
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    'type="string"',
+    'revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///reference-revalue-is-valid.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("inline regex object revalue syntax is rejected in favor of reference or numeric range form", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    'type="string"',
+    'revalue={regex="^[a-z]+$"}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///inline-regex-revalue-is-invalid.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(diagnostic, "expected inline regex object syntax to be rejected");
+  assert.match(diagnostic.message, /reference <\.\.\.>|numeric range/i);
 });
 
 test("pipeline state is validated in the context of action", () => {
@@ -712,7 +763,7 @@ test("virtual variable references must resolve to declared variables", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"="integer", "revalue"="^[1-9]\\\\d*$"}, {"type"="null", "value"=null}]',
+    'types=[{"type"="integer", "revalue"={from=1, to=27}}, {"type"="null", "value"=null}]',
     'description="Идентификатор города"',
     'from=<UNSTANDART_HEADERS.REQUEST.x-city>',
     "",
@@ -951,7 +1002,7 @@ test("cli check uses the same analyzer diagnostics", () => {
       "[app.func.A3A417]",
       "[app.func.A3A417.input.query]",
       'values=["one"]',
-      'revalue="^[a-z]+$"',
+      'revalue={from=1, to=27}',
       "",
     ].join("\n"),
     "utf8",

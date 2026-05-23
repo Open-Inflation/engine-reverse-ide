@@ -629,13 +629,20 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
     return diagnostics;
   }
   if (spec.kind === "revalue") {
-    if (value instanceof StringExpr || value instanceof SequenceExpr || value instanceof MergeExpr || value instanceof RefExpr) {
+    if (value instanceof RefExpr) {
       return [];
     }
     if (value instanceof InlineTableExpr) {
-      return collectValueDiagnostics(value, NUMERIC_RANGE_SPEC, fallbackRange);
+      const diagnostics = collectValueDiagnostics(value, NUMERIC_RANGE_SPEC, fallbackRange);
+      if (diagnostics.length > 0) {
+        const keys = new Set(value.items.map((entry) => entry.key));
+        if (keys.has("regex")) {
+          return [typeDiagnostic(fallbackRange || value.range, `Expected reference <...> or numeric range inline table for revalue but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+        }
+      }
+      return diagnostics;
     }
-    return [typeDiagnostic(fallbackRange || value.range, `Expected regex string or numeric range but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+    return [typeDiagnostic(fallbackRange || value.range, `Expected reference <...> or numeric range inline table for revalue but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "enum") {
     if (value instanceof StringExpr && spec.values.includes(value.value)) {
@@ -884,7 +891,7 @@ function describeSpec(spec) {
     return `inline table with ${parts.join(" and ")}`;
   }
   if (spec.kind === "revalue") {
-    return "regex string or numeric range";
+    return "reference <...> or numeric range inline table";
   }
   if (spec.kind === "enum") {
     return `one of ${spec.values.map((value) => JSON.stringify(value)).join(", ")}`;
