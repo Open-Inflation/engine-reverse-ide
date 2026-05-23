@@ -1,5 +1,5 @@
 [misklerreverseapi]
-version="21.05.2026"
+version="05.2026" # это enum значение, что угодно не принимаем
 
 [app]
 name="OzonAPI"
@@ -154,8 +154,7 @@ data=<INPUT.query>
 revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>
 description="Текст запроса"
 
-[app.func.A3A417.url.params.from_global] # если data не указан, INPUT все равно объявится с тем же именем что параметр, при условии что оно свободно, иначе ошибка синтаксиса
-sub_url=false
+[app.func.A3A417.url.params.from_global]
 required=false
 list=false
 values=[{"value_in_url"="true", "value"=true, "default"=true}, {"value_in_url"="false", "value"=false}]

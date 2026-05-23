@@ -372,6 +372,45 @@ test("url param values require value unless default=true is present", () => {
   assert.match(diagnostic.message, /default=true/);
 });
 
+test("list url params reject non-list inputs in data", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    'type="string"',
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    "list=true",
+    "data=<INPUT.query>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-list-url-param-input.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-url-param-list-input-type");
+
+  assert.ok(diagnostic, "expected list url params to reject non-list inputs in data");
+  assert.match(diagnostic.message, /list=true/);
+  assert.match(diagnostic.message, /INPUT\.query/);
+});
+
+test("list url params accept list-typed inputs in data", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    'type="list[string]"',
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    "list=true",
+    "data=<INPUT.query>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///valid-list-url-param-input.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
 test("numeric revalue ranges accept integer and float bounds", () => {
   const text = [
     "[app]",

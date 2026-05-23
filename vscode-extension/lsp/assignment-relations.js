@@ -2,8 +2,12 @@ const {
   ArrayExpr,
   BoolExpr,
   Diagnostic,
+  CallExpr,
   InlineTableExpr,
+  MergeExpr,
   NumberExpr,
+  RefExpr,
+  SequenceExpr,
   StringExpr,
   pathKey,
   pathLabel,
@@ -301,6 +305,19 @@ function validateUrlParamValueRelations(assignmentsByTable) {
 
     const valuesAssignment = assignments.find((assignment) => assignment.key === "values");
     const listAssignment = assignments.find((assignment) => assignment.key === "list");
+    const dataAssignment = assignments.find((assignment) => assignment.key === "data");
+
+    if (
+      tablePath[3] === "url" &&
+      tablePath[4] === "params" &&
+      listAssignment &&
+      listAssignment.value instanceof BoolExpr &&
+      listAssignment.value.value === true &&
+      dataAssignment
+    ) {
+      diagnostics.push(...validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAssignment));
+    }
+
     if (!valuesAssignment || !(valuesAssignment.value instanceof ArrayExpr)) {
       continue;
     }
@@ -333,6 +350,146 @@ function validateUrlParamValueRelations(assignmentsByTable) {
     }
   }
   return diagnostics;
+}
+
+function validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAssignment) {
+  const diagnostics = [];
+  const functionId = currentFunctionId(tablePath);
+  if (!functionId) {
+    return diagnostics;
+  }
+
+  for (const inputRef of collectInputRefs(dataAssignment.value)) {
+    const inputName = inputRef.path[1];
+    if (!inputName) {
+      continue;
+    }
+
+    const inputPath = ["app", "func", functionId, "input", inputName];
+    const typeAssignment = getTableAssignment(assignmentsByTable, inputPath, "type");
+    if (typeAssignment && isListInputType(typeAssignment.value)) {
+      continue;
+    }
+
+    diagnostics.push(
+      new Diagnostic(
+        `URL parameter [${pathLabel(tablePath)}] with list=true requires data to reference INPUT.${inputName} as a list type (${pathLabel(inputPath)}).`,
+        inputRef.range,
+        "error",
+        "msra",
+        "invalid-url-param-list-input-type",
+      ),
+    );
+    break;
+  }
+
+  return diagnostics;
+}
+
+function collectInputRefs(expr) {
+  const refs = [];
+  walkExpressions(expr, (node) => {
+    if (!(node instanceof RefExpr)) {
+      return;
+    }
+    const path = refPathSegments(node);
+    if (path[0] === "INPUT" && path.length >= 2) {
+      refs.push({ path, range: node.range });
+    }
+  });
+  return refs;
+}
+
+function walkExpressions(expr, visitor) {
+  if (!expr) {
+    return;
+  }
+
+  visitor(expr);
+
+  if (expr instanceof ArrayExpr) {
+    for (const item of expr.items) {
+      walkExpressions(item, visitor);
+    }
+    return;
+  }
+
+  if (expr instanceof InlineTableExpr) {
+    for (const entry of expr.items) {
+      walkExpressions(entry.value, visitor);
+    }
+    return;
+  }
+
+  if (expr instanceof SequenceExpr || expr instanceof MergeExpr) {
+    const parts = expr.parts || expr.items || [];
+    for (const part of parts) {
+      walkExpressions(part, visitor);
+    }
+    return;
+  }
+
+  if (expr instanceof CallExpr) {
+    for (const arg of expr.args) {
+      walkExpressions(arg.value, visitor);
+    }
+    return;
+  }
+
+  if (expr instanceof RefExpr) {
+    for (const part of expr.parts) {
+      if (part.kind === "index") {
+        walkExpressions(part.value, visitor);
+      } else if (part.kind === "call") {
+        for (const arg of part.value || []) {
+          walkExpressions(arg.value, visitor);
+        }
+      }
+    }
+  }
+}
+
+function refPathSegments(ref) {
+  const path = [];
+  for (const part of ref.parts) {
+    if (part.kind !== "name") {
+      break;
+    }
+    path.push(String(part.value));
+  }
+  return path;
+}
+
+function currentFunctionId(tablePath) {
+  const segments = [...tablePath];
+  for (let index = 0; index < segments.length - 2; index += 1) {
+    if (segments[index] === "app" && segments[index + 1] === "func") {
+      return segments[index + 2];
+    }
+  }
+  return null;
+}
+
+function getTableAssignment(assignmentsByTable, tablePath, key) {
+  const assignments = assignmentsByTable.get(pathKey(tablePath));
+  if (!assignments) {
+    return null;
+  }
+  return assignments.find((assignment) => assignment.key === key) || null;
+}
+
+function isListInputType(value) {
+  if (value instanceof StringExpr) {
+    return isListTypeName(value.value);
+  }
+  if (value instanceof ArrayExpr) {
+    return value.items.some((item) => item instanceof StringExpr && isListTypeName(item.value));
+  }
+  return false;
+}
+
+function isListTypeName(typeName) {
+  return typeof typeName === "string" && /^list\[(?:string|integer|boolean|null|array|object)\]$/.test(typeName.trim());
 }
 
 function getAssignment(assignmentIndex, tablePath, key) {

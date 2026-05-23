@@ -5,3 +5,9 @@ authors = [
 ]
 2. license в [app]
 3. description в [app]
+4. list[ANY_TYPE] и требование его для параметров списка в data
+5. examples=[{"inputs"={"query"="example"}}] не проверяет существование input'а
+6. запретить для revalue string - разрешаем только обьекты
+
+# Кодогенерация
+1. учитывать списки в кодогенерации 
