@@ -53,6 +53,12 @@ This repo also includes a Python generator that turns an `.msra` document into a
 python -m msra_codegen .\fixprice.msra -o .\generated
 ```
 
+The generator uses Jinja2 templates, so install its Python dependency first if your environment does not already have it:
+
+```powershell
+python -m pip install -r .\msra_codegen\requirements.txt
+```
+
 The generator writes:
 
 - `pyproject.toml`
@@ -61,6 +67,8 @@ The generator writes:
 - `<package-name>/abstraction.py`
 - `<package-name>/endpoints/*.py`
 - referenced `postprocess/*.js` assets
+
+The reusable Jinja2 templates live under `msra_codegen/templates/`, so the output shape can be adjusted without editing the generator logic itself.
 
 For the current FixPrice project, the default package name is `fixprice_api`.
 

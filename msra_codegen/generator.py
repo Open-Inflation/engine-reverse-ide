@@ -5,6 +5,131 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+try:
+    from jinja2 import Environment, FileSystemLoader, StrictUndefined
+except ImportError as exc:  # pragma: no cover - helpful runtime error
+    raise RuntimeError(
+        "msra_codegen requires Jinja2. Install it with `pip install jinja2`."
+    ) from exc
+
+
+TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
+TEMPLATE_ENV = Environment(
+    loader=FileSystemLoader(str(TEMPLATE_ROOT)),
+    autoescape=False,
+    trim_blocks=True,
+    lstrip_blocks=True,
+    keep_trailing_newline=True,
+    undefined=StrictUndefined,
+)
+
+
+def render_template(name: str, context: dict[str, Any]) -> str:
+    return TEMPLATE_ENV.get_template(name).render(**context)
+
+
+def build_group_tree(project: dict[str, Any]) -> dict[str, Any]:
+    root: dict[str, Any] = {"children": {}, "functions": [], "path": []}
+    for group in project.get("groups", []):
+        node = root
+        for segment in group.get("path", []):
+            node = node["children"].setdefault(
+                segment,
+                {
+                    "name": segment,
+                    "path": node["path"] + [segment],
+                    "description": "",
+                    "children": {},
+                    "functions": [],
+                },
+            )
+            node["path"] = node["path"]
+        node["description"] = group.get("description", "")
+    for func in project.get("functions", []):
+        path = [part for part in str(func.get("group", "")).split(".") if part]
+        node = root
+        for segment in path:
+            node = node["children"].setdefault(
+                segment,
+                {
+                    "name": segment,
+                    "path": node["path"] + [segment],
+                    "description": "",
+                    "children": {},
+                    "functions": [],
+                },
+            )
+        node["functions"].append(func)
+    return root
+
+
+def iter_group_nodes(tree: dict[str, Any]) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
+
+    def walk(node: dict[str, Any]) -> None:
+        for child in node.get("children", {}).values():
+            nodes.append(child)
+            walk(child)
+
+    walk(tree)
+    return nodes
+
+
+def top_level_groups(tree: dict[str, Any]) -> list[dict[str, Any]]:
+    return list(tree.get("children", {}).values())
+
+
+def module_name_for_group(path: list[str]) -> str:
+    return snake_case(path[0]) if path else "generated"
+
+
+def class_name_for_group(path: list[str]) -> str:
+    if not path:
+        return "GeneratedGroup"
+    if len(path) == 1:
+        return f"Class{pascal_case(path[0])}"
+    return f"{singularize(pascal_case(path[-1]))}Service"
+
+
+def field_name_for_group(path: list[str]) -> str:
+    if not path:
+        return "Group"
+    return singularize(path[-1])
+
+
+def snake_case(text: str) -> str:
+    text = re.sub(r"(?<!^)(?=[A-Z])", "_", text).replace("-", "_")
+    text = re.sub(r"[^A-Za-z0-9_]+", "_", text)
+    return text.strip("_").lower() or "generated"
+
+
+def pascal_case(text: str) -> str:
+    parts = re.split(r"[^A-Za-z0-9]+", text)
+    cleaned = []
+    for part in parts:
+        if not part:
+            continue
+        cleaned.append(part[:1].upper() + part[1:])
+    return "".join(cleaned) or "Generated"
+
+
+def root_client_class_name(project: dict[str, Any]) -> str:
+    name = str(project["app"]["name"])
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+        return name
+    return pascal_case(name)
+
+
+def singularize(text: str) -> str:
+    lowered = text.lower()
+    if lowered.endswith("ies") and len(text) > 3:
+        return text[:-3] + "y"
+    if lowered.endswith("ses") and len(text) > 3:
+        return text[:-2]
+    if lowered.endswith("s") and not lowered.endswith("ss") and len(text) > 1:
+        return text[:-1]
+    return text
+
 
 def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     tables = [table for table in ast.get("tables", [])]
@@ -227,6 +352,7 @@ def generate_project(
     output_dir = output_dir.resolve()
     source_root = source_root.resolve() if source_root is not None else Path(project["source_path"]).resolve().parent
     package_name = package_name or infer_package_name(project["app"]["name"])
+    group_tree = build_group_tree(project)
 
     package_root = output_dir / package_name
     endpoints_root = package_root / "endpoints"
@@ -235,14 +361,22 @@ def generate_project(
     endpoints_root.mkdir(parents=True, exist_ok=True)
     postprocess_root.mkdir(parents=True, exist_ok=True)
 
-    write_text(output_dir / "pyproject.toml", render_pyproject(project, package_name))
+    write_text(
+        output_dir / "pyproject.toml",
+        render_pyproject(project, package_name),
+    )
     write_text(package_root / "__init__.py", render_init(project, package_name))
-    write_text(package_root / "abstraction.py", render_abstraction(project))
-    write_text(package_root / "manager.py", render_manager(project, package_name))
-    write_text(endpoints_root / "catalog.py", render_catalog_module(project, package_name))
-    write_text(endpoints_root / "geolocation.py", render_geolocation_module(project, package_name))
-    write_text(endpoints_root / "advertising.py", render_advertising_module(project, package_name))
-    write_text(endpoints_root / "general.py", render_general_module(project, package_name))
+    write_text(
+        package_root / "abstraction.py",
+        render_template("abstraction.py.tpl", build_abstraction_context(project)),
+    )
+    write_text(package_root / "manager.py", render_manager_template(project, package_name, group_tree))
+    for group_node in top_level_groups(group_tree):
+        module_name = module_name_for_group(group_node["path"])
+        write_text(
+            endpoints_root / f"{module_name}.py",
+            render_group_template(group_node, project, package_name),
+        )
 
     for script in collect_postprocess_scripts(project):
         source = source_root / script
@@ -252,66 +386,31 @@ def generate_project(
 
 
 def render_pyproject(project: dict[str, Any], package_name: str) -> str:
-    version = project["app"]["version"]
-    return "\n".join(
-        [
-            "[build-system]",
-            'requires = ["setuptools>=61.0", "wheel"]',
-            "build-backend = \"setuptools.build_meta\"",
-            "",
-            "[project]",
-            f'name = "{package_name}"',
-            'dynamic = ["version"]',
-            'description = "Generated async Python client from MSRA"',
-            'readme = "README.md"',
-            'requires-python = ">=3.10"',
-            'license = "MIT"',
-            'authors = [',
-            '    { name = "Miskler" }',
-            "]",
-            "",
-            "[tool.setuptools]",
-            "include-package-data = true",
-            "",
-            "[tool.setuptools.package-data]",
-            f'{package_name} = ["postprocess/*.js"]',
-            "",
-            'dependencies = [',
-            '    "camoufox[geoip]",',
-            '    "human_requests",',
-            '    "aiohttp",',
-            '    "aiohttp-retry"',
-            "]",
-            "",
-            "[tool.setuptools.dynamic]",
-            'version = { attr = "%s.__version__" }' % package_name,
-            "",
-            "[tool.pytest.ini_options]",
-            'pythonpath = ["."]',
-            'testpaths = ["tests"]',
-            'python_files = ["*_test.py", "*_tests.py"]',
-            'filterwarnings = [',
-            '    "ignore::pytest.PytestUnraisableExceptionWarning",',
-            '    "ignore:Event loop is closed:RuntimeWarning",',
-            "]",
-            'anyio_mode = "auto"',
-            f'autotest_start_class = "{package_name}.FixPriceAPI"',
-            'addopts = "-v --tb=short --disable-warnings"',
-            "",
-        ]
+    client_class_name = root_client_class_name(project)
+    return render_template(
+        "pyproject.toml.tpl",
+        {
+            "package_name": package_name,
+            "autotest_start_class": f"{package_name}.{client_class_name}",
+        },
     )
 
 
 def render_init(project: dict[str, Any], package_name: str) -> str:
-    lines = [
-        f"from .abstraction import {', '.join(abstraction_exports(project))}",
-        "from .manager import FixPriceAPI",
-        "",
-        f'__all__ = ["FixPriceAPI", {", ".join(repr(name) for name in abstraction_exports(project))}]' if abstraction_exports(project) else '__all__ = ["FixPriceAPI"]',
-        f'__version__ = "{project["app"]["version"]}"',
-        "",
-    ]
-    return "\n".join(lines)
+    client_class_name = root_client_class_name(project)
+    exports = abstraction_exports(project)
+    return render_template(
+        "init.py.tpl",
+        {
+            "imports": (
+                [f"from .abstraction import {', '.join(exports)}"] if exports else []
+            )
+            + [f"from .manager import {client_class_name}"],
+            "exports": exports,
+            "client_class_name": client_class_name,
+            "version": project["app"]["version"],
+        },
+    )
 
 
 def abstraction_exports(project: dict[str, Any]) -> list[str]:
@@ -321,764 +420,346 @@ def abstraction_exports(project: dict[str, Any]) -> list[str]:
     return exports
 
 
-def render_abstraction(project: dict[str, Any]) -> str:
-    lines = ["\"\"\"Shared generated constants and enums.\"\"\"", ""]
-    for regex in project["regexes"]:
-        lines.append(f'{regex["name"]} = r"{escape_regex_literal(str(regex["regex"]))}"')
-        if regex["raise"]:
-            lines.append(f'# {regex["raise"]}')
-        lines.append("")
-
-    if any(is_catalog_sort_function(func) for func in project["functions"]):
-        lines.extend(
-            [
-                "class CatalogSort:",
-                '    """Sort order helper generated from MSRA values."""',
-                "",
-                '    POPULARITY = "sold"',
-                '    """Most popular first."""',
-                "",
-                '    ALPHABET = "abc"',
-                "",
-                "    class Price:",
-                '        """Sort by price."""',
-                "",
-                '        ASC = "min"',
-                '        """Cheapest first."""',
-                "",
-                '        DESC = "max"',
-                '        """Most expensive first."""',
-                "",
-            ]
-        )
-    return "\n".join(lines).rstrip() + "\n"
+def build_abstraction_context(project: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "regexes": [
+            {
+                "name": regex["name"],
+                "pattern": escape_regex_literal(str(regex["regex"])),
+                "raise": regex["raise"],
+                "description": regex["description"],
+            }
+            for regex in project["regexes"]
+        ],
+        "has_catalog_sort": any(is_catalog_sort_function(func) for func in project["functions"]),
+    }
 
 
-def render_manager(project: dict[str, Any], package_name: str) -> str:
-    app = project["app"]
-    prefixes = project["prefixes"]
-    headers = project["headers"] or {}
-    warmup = project["warmup"] or {}
-    functions = project["functions"]
-    lines: list[str] = [
-        '"""Async FixPrice client generated from MSRA."""',
-        "",
-        "from collections import defaultdict",
-        "from dataclasses import dataclass, field",
-        "from typing import Any, Literal",
-        "",
-        "from camoufox import AsyncCamoufox, DefaultAddons",
-        "from human_requests import (ApiParent, HumanBrowser, HumanContext, HumanPage,",
-        "                            api_child_field)",
-        "from human_requests.abstraction import FetchResponse, HttpMethod, Proxy",
-        "from human_requests.network_analyzer.anomaly_sniffer import (",
-        "    HeaderAnomalySniffer, WaitHeader, WaitSource)",
-        "import re",
-        "",
-        "from . import abstraction",
-        f"from .abstraction import {', '.join(abstraction_exports(project))}" if abstraction_exports(project) else "",
-        "from .endpoints.advertising import ClassAdvertising",
-        "from .endpoints.catalog import ClassCatalog",
-        "from .endpoints.general import ClassGeneral",
-        "from .endpoints.geolocation import ClassGeolocation",
-        "",
-        "",
-        "@dataclass",
-        "class FixPriceAPI(ApiParent):",
-        '    """Generated async client for FixPrice."""',
-        "",
-    ]
-    if app.get("timeout_ms") is not None:
-        lines.extend(
-            [
-                f"    timeout_ms: float = {float(app['timeout_ms']):.1f}",
-                '    """Timeout in milliseconds."""',
-                "    headless: bool = True",
-                '    """Run browser in headless mode."""',
-                "    test_mode: bool = False",
-                '    """Enable warmup steps used by tests."""',
-                "    proxy: str | dict | Proxy | None = field(default_factory=Proxy.from_env)",
-                '    """Proxy configuration for browser and direct requests."""',
-                "    browser_opts: dict[str, Any] = field(default_factory=dict)",
-                '    """Additional options passed to Camoufox."""',
-                "",
-            ]
-        )
-    for prefix_name, prefix_value in prefixes.items():
-        lines.append(f'    {prefix_name}: str = {render_simple_value(prefix_value)}')
-    if prefixes:
-        lines.append("")
-    lines.extend(
-        [
-            "    # Created in _warmup",
-            "    session: HumanBrowser = field(init=False, repr=False)",
-            '    """Browser session used for requests."""',
-            "    ctx: HumanContext = field(init=False, repr=False)",
-            '    """Browser context."""',
-            "    page: HumanPage = field(init=False, repr=False)",
-            '    """Browser page."""',
-            "",
-            "    unstandard_headers: dict[str, str] = field(init=False, repr=False)",
-            '    """Collected custom headers."""',
-            "    unstandard_urls: dict[str, list[str]] = field(init=False, repr=False)",
-            '    """Collected request urls grouped by header/anomaly name."""',
-            "",
-            "    Geolocation: ClassGeolocation = api_child_field(ClassGeolocation)",
-            '    """API for geolocation and store lookup."""',
-            "    Catalog: ClassCatalog = api_child_field(ClassCatalog)",
-            '    """API for catalog and products."""',
-            "    Advertising: ClassAdvertising = api_child_field(ClassAdvertising)",
-            '    """API for advertising content."""',
-            "    General: ClassGeneral = api_child_field(ClassGeneral)",
-            '    """API for general helpers."""',
-            "",
-            "    async def __aenter__(self):",
-            "        await self._warmup()",
-            "        return self",
-            "",
-            "    async def _warmup(self) -> None:",
-            '        """Warm up the browser session and capture anti-bot headers."""',
-            "        px = self.proxy if isinstance(self.proxy, Proxy) else Proxy(self.proxy)",
-            "        br = await AsyncCamoufox(",
-            f"            headless=self.headless,",
-            "            proxy=px.as_dict(),",
-            f"            humanize={str(bool(warmup.get('humanize', True)))},",
-            "            **self.browser_opts,",
-            f"            block_images={str(bool(warmup.get('block_images', True)))},",
-            "            i_know_what_im_doing=True,",
-            "            exclude_addons=[DefaultAddons.UBO],",
-            "        ).start()",
-            "",
-            "        self.session = HumanBrowser.replace(br)",
-            "        self.ctx = await self.session.new_context()",
-            "        self.page = await self.ctx.new_page()",
-            f'        self.page.on_error_screenshot_path = {render_simple_value(warmup.get("on_error_screenshot_path", "screenshot.png"))}',
-            "",
-        ]
-    )
-
-    if warmup.get("headers_sniffer"):
-        lines.extend(
-            [
-                "        sniffer = HeaderAnomalySniffer(",
-                "            include_subresources=True,",
-                "            url_filter=lambda u: u.startswith(self.CATALOG_URL),",
-                "        )",
-                "        await sniffer.start(self.ctx)",
-                "",
-            ]
-        )
-    else:
-        lines.extend(
-            [
-                "        sniffer = None",
-                "",
-            ]
-        )
-
-    lines.extend(_render_warmup_flow(project, warmup))
-
-    lines.extend(
-        [
-            "",
-            "    async def __aexit__(self, *exc):",
-            "        await self.close()",
-            "",
-            "    async def close(self):",
-            "        await self.session.close()",
-            "",
-        ]
-    )
-
-    for variable in project["variables"]:
-        lines.extend(render_variable_property(variable))
-        lines.append("")
-
-    lines.extend(
-        [
-            "    async def _request(",
-            "        self,",
-            "        method: HttpMethod,",
-            "        url: str,",
-            "        *,",
-            "        real_route: str | None = None,",
-            "        json_body: Any | None = None,",
-            "        add_unstandard_headers: bool = True,",
-            "        credentials: bool = True,",
-            "    ) -> FetchResponse:",
-            '        """Perform an HTTP request through the human browser session."""',
-            "        if real_route:",
-            "            self.client_route = real_route",
-            "",
-            "        async def f() -> FetchResponse:",
-            "            return await self.page.fetch(",
-            "                url=url,",
-            "                method=method,",
-            "                body=json_body,",
-            f'                mode={render_simple_value(headers.get("cors_mode", "cors"))},',
-            '                credentials="include" if credentials else "omit",',
-            "                timeout_ms=self.timeout_ms,",
-            f"                referrer={render_ref_value(headers.get('referrer'), self_ref='self') if headers.get('referrer') is not None else 'self.MAIN_SITE_ORIGIN'},",
-            f"                headers={render_request_headers(headers)},",
-            "            )",
-            "",
-            "        resp = await f()",
-            '        if "html" in resp.headers.get("content-type", ""):',
-            '            temporal_page = await resp.render(wait_until="networkidle")',
-            "            await temporal_page.wait_for_selector(",
-            '                selector="body > pre", timeout=self.timeout_ms, state="visible"',
-            "            )",
-            "            await temporal_page.close()",
-            "            resp = await f()",
-            "",
-            "        return resp",
-            "",
-        ]
-    )
-
-    return "\n".join(lines)
-
-
-def render_variable_property(variable: dict[str, Any]) -> list[str]:
-    name = variable["name"]
+def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
+    type_names = variable_type_names(variable)
     header = variable_header_name(variable)
-    type_names = variable_type_names(variable)
-    getter_return = type_annotation_from_types(type_names)
-    if "| None" not in getter_return:
-        getter_return = f"{getter_return} | None"
-    lines = [
-        "    @property",
-        f"    def {name}(self) -> {getter_return}:",
-        f"        \"\"\"{escape_docstring(variable['description'] or name)}\"\"\"",
-        f"        raw = self.unstandard_headers.get({render_simple_value(header)}, None)",
+    return {
+        "name": variable["name"],
+        "description": escape_docstring(variable["description"] or variable["name"]),
+        "header_expr": render_simple_value(header),
+        "getter_return": type_annotation_from_types(type_names) if "| None" in type_annotation_from_types(type_names) else f"{type_annotation_from_types(type_names)} | None",
+        "has_integer": "integer" in type_names,
+        "has_boolean": "boolean" in type_names,
+        "has_number": "number" in type_names,
+        "has_string": "string" in type_names or not type_names,
+        "has_null": "null" in type_names,
+        "setter_enabled": should_render_setter(variable),
+        "revalue_pattern": (
+            render_simple_value(pattern)
+            if (pattern := revalue_to_pattern(variable.get("revalue"))) is not None
+            else None
+        ),
+        "revalue_range": revalue_to_range(variable.get("revalue")),
+    }
+
+
+def build_pipeline_step_context(step_expr: dict[str, Any], *, page_ref: str, sniffer_ref: str | None, test_mode_ref: str | None) -> dict[str, Any]:
+    step = step_expr if isinstance(step_expr, dict) else get_plain_value(step_expr)
+    if not isinstance(step, dict):
+        step = {}
+    action = step.get("action")
+    nested_then = step.get("then")
+    then_step = None
+    if isinstance(nested_then, dict):
+        then_step = build_pipeline_step_context(nested_then, page_ref=page_ref, sniffer_ref=sniffer_ref, test_mode_ref=test_mode_ref)
+    elif isinstance(nested_then, str):
+        then_step = {
+            "action": nested_then,
+            "for_tests": bool(step.get("for_tests", False)),
+            "state": step.get("state", "load"),
+            "state_expr": render_simple_value("networkidle" if step.get("state", "load") == "idle" else step.get("state", "load")),
+            "what_expr": render_expr(step.get("what"), self_ref="self._parent"),
+            "sniffer_headers": header_names_from_wait_sniffer(step),
+            "then_step": None,
+            "then": None,
+        }
+    return {
+        "action": action,
+        "for_tests": bool(step.get("for_tests", False)),
+        "state": step.get("state", "load"),
+        "state_expr": render_simple_value("networkidle" if step.get("state", "load") == "idle" else step.get("state", "load")),
+        "what_expr": render_expr(step.get("what"), self_ref="self._parent"),
+        "sniffer_headers": header_names_from_wait_sniffer(step),
+        "sniffer_headers_expr": render_simple_value(header_names_from_wait_sniffer(step)),
+        "then_step": then_step,
+        "then": nested_then if isinstance(nested_then, str) else None,
+        "page_ref": page_ref,
+        "sniffer_ref": sniffer_ref,
+        "test_mode_ref": test_mode_ref,
+    }
+
+
+def build_pipeline_steps_context(
+    pipeline_expr: dict[str, Any] | None,
+    *,
+    page_ref: str,
+    sniffer_ref: str | None,
+    test_mode_ref: str | None,
+) -> list[dict[str, Any]]:
+    steps = inline_array_to_list(pipeline_expr)
+    return [
+        build_pipeline_step_context(step, page_ref=page_ref, sniffer_ref=sniffer_ref, test_mode_ref=test_mode_ref)
+        for step in steps
     ]
-    if "integer" in type_names:
-        lines.extend(
-            [
-                "        if raw is None:",
-                "            return None",
-                "        return int(raw)",
-            ]
-        )
-    else:
-        lines.append("        return raw")
-
-    if should_render_setter(variable):
-        lines.extend(
-            [
-                "",
-                f"    @{name}.setter",
-                f"    def {name}(self, value) -> None:",
-            ]
-        )
-        lines.extend(render_variable_setter(variable, header))
-    return lines
 
 
-def render_variable_setter(variable: dict[str, Any], header: str) -> list[str]:
-    name = variable["name"]
-    type_names = variable_type_names(variable)
-    revalue = variable.get("revalue")
-    lines: list[str] = []
-    if "null" in type_names:
-        lines.extend(
-            [
-                "        if value is None:",
-                f"            self.unstandard_headers.pop({render_simple_value(header)}, None)",
-                "            return",
-                "",
-            ]
+def build_function_context(func: dict[str, Any], root_client_name: str) -> dict[str, Any]:
+    transport = str(func.get("transport", "fetch"))
+    method = str(func.get("method", "GET"))
+    method_name = str(func.get("name", func["id"]))
+    inputs = func.get("inputs", [])
+    signature_parts = []
+    signature_specs = []
+    for input_spec in inputs:
+        arg_name = input_spec["name"]
+        annotation = render_input_annotation(input_spec)
+        default_expr = render_input_default(input_spec)
+        signature_specs.append(
+            {
+                "name": arg_name,
+                "annotation": annotation,
+                "default_expr": default_expr,
+            }
         )
-    if "integer" in type_names:
-        lines.extend(
-            [
-                "        if not isinstance(value, int) or isinstance(value, bool):",
-                f'            raise TypeError("`{name}` must be int")',
-            ]
-        )
-    elif "boolean" in type_names:
-        lines.extend(
-            [
-                "        if not isinstance(value, bool):",
-                f'            raise TypeError("`{name}` must be bool")',
-            ]
-        )
-    else:
-        lines.extend(
-            [
-                "        if not isinstance(value, str):",
-                f'            raise TypeError("`{name}` must be str")',
-            ]
-        )
-    if revalue is not None:
-        pattern = revalue_to_pattern(revalue)
-        if pattern:
-            lines.extend(
-                [
-                    f"        if re.fullmatch({render_simple_value(pattern)}, str(value)) is None:",
-                    f'            raise ValueError("`{name}` does not match the expected format")',
-                ]
-            )
+        if default_expr is None:
+            signature_parts.append(f"{arg_name}: {annotation}")
         else:
-            numeric_range = revalue_to_range(revalue)
-            if numeric_range:
-                lo, hi = numeric_range
-                lines.extend(
-                    [
-                        f"        if int(value) < {lo} or int(value) > {hi}:",
-                        f'            raise ValueError("`{name}` must be between {lo} and {hi}")',
-                    ]
-                )
+            signature_parts.append(f"{arg_name}: {annotation} = {default_expr}")
 
-    lines.extend(
-        [
-            f"        self.unstandard_headers.update({{{render_simple_value(header)}: str(value)}})",
-        ]
+    url_spec = func.get("url") or {}
+    body = func.get("body")
+    postprocess = func.get("postprocess") or {}
+    direct_args: list[str] = []
+    if any(input_spec["name"] == "retry_attempts" for input_spec in inputs):
+        direct_args.append("retry_attempts=retry_attempts")
+    if any(input_spec["name"] == "timeout" for input_spec in inputs):
+        direct_args.append("timeout=timeout")
+    if not direct_args:
+        direct_args = ["retry_attempts=3", "timeout=10"]
+    return {
+        "method_name": method_name,
+        "description": escape_docstring(func.get("description") or method_name),
+        "signature": ", ".join(signature_parts),
+        "signature_specs": signature_specs,
+        "return_annotation": render_return_annotation(func),
+        "transport": transport,
+        "method": method,
+        "url_expr": render_expr(url_spec.get("base"), self_ref="self._parent"),
+        "body_expr": render_expr(body.get("data"), self_ref="self._parent") if body else None,
+        "body_type": body.get("type") if body else None,
+        "validation": build_input_validation_context(func),
+        "query_params": build_query_param_context(func),
+        "direct_args": direct_args,
+        "postprocess": {
+            "render_html": bool(postprocess.get("render_html", False)),
+            "goto_pipeline": build_pipeline_steps_context(
+                postprocess.get("goto_pipeline"),
+                page_ref="page",
+                sniffer_ref=None,
+                test_mode_ref=None,
+            ),
+            "evaluate_path_expr": (
+                render_simple_value(str(get_plain_value(postprocess.get("evaluate"))))
+                if isinstance(postprocess.get("evaluate"), dict) or isinstance(postprocess.get("evaluate"), str)
+                else None
+            ),
+        },
+    }
+
+
+def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]:
+    validations: list[dict[str, Any]] = []
+    for input_spec in func.get("inputs", []):
+        type_names = type_names_from_expr(input_spec.get("type"))
+        values = get_plain_value(input_spec.get("values"))
+        validations.append(
+            {
+                "name": input_spec["name"],
+                "required": bool(input_spec.get("required", False)),
+                "type_names": sorted(type_names),
+                "revalue_pattern": (
+                    render_simple_value(pattern)
+                    if (pattern := revalue_to_pattern(input_spec.get("revalue"))) is not None
+                    else None
+                ),
+                "revalue_range": revalue_to_range(input_spec.get("revalue")),
+                "values_expr": render_simple_value(values) if isinstance(values, list) and values and all(not isinstance(item, dict) for item in values) else None,
+            }
+        )
+    return validations
+
+
+def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
+    url_spec = func.get("url") or {}
+    params = url_spec.get("params") or []
+    inputs = {normalize_name(input_spec["name"]): input_spec for input_spec in func.get("inputs", [])}
+    result: list[dict[str, Any]] = []
+    for param in params:
+        param_name = param["name"]
+        data_expr = param.get("data")
+        values = get_plain_value(param.get("values"))
+        matched_input = inputs.get(normalize_name(param_name))
+        item: dict[str, Any] = {"name": param_name, "name_expr": render_simple_value(param_name)}
+        if data_expr is not None:
+            item["kind"] = "data"
+            item["value_expr"] = render_expr(data_expr, self_ref="self._parent")
+            result.append(item)
+            continue
+        if isinstance(values, list) and len(values) == 1 and isinstance(values[0], dict):
+            value_in_url = values[0].get("value_in_url")
+            default = bool(values[0].get("default", False))
+            if matched_input and "boolean" in type_names_from_expr(matched_input.get("type")) and value_in_url in {True, False, "true", "false"}:
+                item.update(
+                    {
+                        "kind": "boolean_literal",
+                        "input_name": matched_input["name"],
+                        "value_expr": render_simple_value("true" if str(value_in_url).lower() == "true" else "false"),
+                    }
+                )
+                result.append(item)
+                continue
+            if default:
+                item.update({"kind": "literal", "value_expr": render_simple_value(value_in_url)})
+                result.append(item)
+                continue
+            if matched_input:
+                item.update({"kind": "input_passthrough", "input_name": matched_input["name"]})
+                result.append(item)
+                continue
+        if matched_input:
+            item.update({"kind": "input_passthrough", "input_name": matched_input["name"]})
+            result.append(item)
+    return result
+
+
+def render_variable_block(variable: dict[str, Any]) -> str:
+    return render_template("variable.py.tpl", build_variable_context(variable))
+
+
+def render_function_block(func: dict[str, Any], root_client_name: str) -> str:
+    return render_template("function.py.tpl", build_function_context(func, root_client_name))
+
+
+def build_manager_context(
+    project: dict[str, Any],
+    package_name: str,
+    group_tree: dict[str, Any],
+) -> dict[str, Any]:
+    app = project["app"]
+    headers_spec = project.get("headers")
+    warmup = project.get("warmup") or {}
+    top_groups = top_level_groups(group_tree)
+    return {
+        "client_class_name": root_client_class_name(project),
+        "app": app,
+        "app_name_doc": escape_docstring(app["name"]),
+        "package_name": package_name,
+        "prefixes": [
+            {
+                "name": prefix_name,
+                "value": render_simple_value(prefix_value),
+            }
+            for prefix_name, prefix_value in project["prefixes"].items()
+        ],
+        "top_groups": [
+            {
+                "field_name": field_name_for_group(group["path"]),
+                "class_name": class_name_for_group(group["path"]),
+                "module_name": module_name_for_group(group["path"]),
+                "description": escape_docstring(group.get("description") or group["name"]),
+            }
+            for group in top_groups
+        ],
+        "variables": [
+            {
+                "code": render_variable_block(variable),
+            }
+            for variable in project["variables"]
+        ],
+        "warmup": {
+            "humanize": bool(warmup.get("humanize", True)),
+            "block_images": bool(warmup.get("block_images", True)),
+            "url_expr": render_expr(warmup.get("url"), self_ref="self"),
+            "headers_sniffer": bool(warmup.get("headers_sniffer", False)),
+            "on_error_screenshot_path": render_simple_value(
+                warmup.get("on_error_screenshot_path", "screenshot.png")
+            ),
+            "pipeline": build_pipeline_steps_context(
+                warmup.get("pipeline"),
+                page_ref="self.page",
+                sniffer_ref="sniffer",
+                test_mode_ref="self.test_mode",
+            ),
+        },
+        "headers": {
+            "referrer": (
+                render_ref_value(headers_spec.get("referrer"), self_ref="self")
+                if headers_spec and headers_spec.get("referrer") is not None
+                else "self.MAIN_SITE_ORIGIN"
+            ),
+            "cors_mode": render_simple_value((headers_spec or {}).get("cors_mode", "cors")),
+            "credentials": render_simple_value((headers_spec or {}).get("credentials", "include")),
+            "headers_expr": render_request_headers(headers_spec),
+        },
+    }
+
+
+def build_group_context(
+    group_node: dict[str, Any],
+    project: dict[str, Any],
+    package_name: str,
+) -> dict[str, Any]:
+    root_client_name = root_client_class_name(project)
+    return {
+        "package_name": package_name,
+        "root_client_name": root_client_name,
+        "group_name": ".".join(group_node["path"]) or "MSRA",
+        "class_name": class_name_for_group(group_node["path"]),
+        "description": escape_docstring(group_node.get("description") or "Generated API group."),
+        "children": [
+            {
+                "field_name": field_name_for_group(child["path"]),
+                "class_name": class_name_for_group(child["path"]),
+                "description": escape_docstring(child.get("description") or class_name_for_group(child["path"])),
+            }
+            for child in group_node.get("children", {}).values()
+        ],
+        "functions": [
+            {
+                "code": render_function_block(func, root_client_name),
+            }
+            for func in sorted(group_node.get("functions", []), key=lambda item: item["name"])
+        ],
+    }
+
+
+def render_manager_template(project: dict[str, Any], package_name: str, group_tree: dict[str, Any]) -> str:
+    return render_template(
+        "manager.py.tpl",
+        build_manager_context(project, package_name, group_tree),
     )
-    return lines
+
+
+def render_group_template(
+    group_node: dict[str, Any],
+    project: dict[str, Any],
+    package_name: str,
+) -> str:
+    return render_template(
+        "group.py.tpl",
+        build_group_context(group_node, project, package_name),
+    )
 
 
 def should_render_setter(variable: dict[str, Any]) -> bool:
     if variable["name"] == "token":
         return False
     return not bool(variable.get("read_only", False))
-
-
-def render_catalog_module(project: dict[str, Any], package_name: str) -> str:
-    catalog_group = find_group(project, ["Catalog"])
-    lines = [
-        '"""Catalog-related generated endpoints."""',
-        "",
-        "from __future__ import annotations",
-        "",
-        "import json",
-        "from dataclasses import dataclass",
-        "from types import MethodType",
-        "from pathlib import Path",
-        "from typing import TYPE_CHECKING, Optional, overload",
-        "",
-        "from human_requests import ApiChild, ApiParent, api_child_field, autotest",
-        "from human_requests.abstraction import FetchResponse, HttpMethod",
-        "from playwright.async_api import Response as PWResponse",
-        "",
-        "from .. import abstraction",
-        "",
-        "if TYPE_CHECKING:",
-        f"    from {package_name}.manager import FixPriceAPI",
-        "",
-        "",
-        "@dataclass(init=False)",
-        f'class ClassCatalog(ApiChild["FixPriceAPI"], ApiParent):',
-        '    """Methods for catalog tree and product listing."""',
-        "",
-        "    Product: ProductService = api_child_field(",
-        "        lambda parent: ProductService(parent.parent)",
-        "    )",
-        '    """Service for catalog products."""',
-        "",
-        "    def __init__(self, parent: \"FixPriceAPI\"):",
-        "        super().__init__(parent)",
-        "        ApiParent.__post_init__(self)",
-        "",
-        "    @autotest",
-        "    async def tree(self) -> FetchResponse:",
-        '        """Return catalog tree."""',
-        "        return await self._parent._request(",
-        "            HttpMethod.GET, f\"{self._parent.CATALOG_URL}/v1/category\"",
-        "        )",
-        "",
-        "    @autotest",
-        "    async def products_list(",
-        "        self,",
-        "        category_alias: str,",
-        "        subcategory_alias: Optional[str] = None,",
-        "        page: int = 1,",
-        "        limit: int = 24,",
-        "        sort: abstraction.CatalogSort | str = abstraction.CatalogSort.POPULARITY,",
-        "    ) -> FetchResponse:",
-        '        """Return products inside a category or subcategory."""',
-        "        if page < 1:",
-        "            raise ValueError(\"`page` must be greater than 0\")",
-        "        elif limit > 27 or limit < 1:",
-        "            raise ValueError(\"`limit` must be in range 1-27\")",
-        "",
-        "        url = f\"{self._parent.CATALOG_URL}/v1/product/in/{category_alias}\"",
-        "        real_route = f\"/catalog/{category_alias}\"",
-        "        if subcategory_alias:",
-        "            url += f\"/{subcategory_alias}\"",
-        "            real_route += f\"/{subcategory_alias}\"",
-        "        url += f\"?page={page}&limit={limit}&sort={sort}\"",
-        "",
-        "        json_body = {",
-        '            "category": category_alias,',
-        '            "brand": [],',
-        '            "price": [],',
-        '            "isDividedPrice": False,',
-        '            "isNew": False,',
-        '            "isHit": False,',
-        '            "isSpecialPrice": False,',
-        "        }",
-        "        if subcategory_alias:",
-        '            json_body["category"] += f"/{subcategory_alias}"',
-        "",
-        "        return await self._parent._request(",
-        "            HttpMethod.POST, url=url, real_route=real_route, json_body=json_body",
-        "        )",
-        "",
-        "",
-        "class ProductService(ApiChild[\"FixPriceAPI\"]):",
-        '    """Product-level catalog operations."""',
-        "",
-        "    @autotest",
-        "    async def balance(",
-        "        self, product_id: int, in_stock: bool = True, search: Optional[str] = None",
-        "    ) -> FetchResponse:",
-        '        """Check product balance in the current city."""',
-        "        if self._parent.city_id is None:",
-        '            raise ValueError("City ID is not set")',
-        "",
-        "        url = f\"{self._parent.CATALOG_URL}/v1/store/balance/{product_id}?canPickup=all\"",
-        "        if search:",
-        "            url += f\"&addressPart={search}\"",
-        "        if in_stock:",
-        "            url += \"&inStock=true\"",
-        "",
-        "        return await self._parent._request(HttpMethod.GET, url)",
-        "",
-        "    @overload",
-        "    async def info(self, *, url: str): ...",
-        "",
-        "    @overload",
-        "    async def info(self, *, category: str, product_id: int, slug: str): ...",
-        "",
-        "    @autotest",
-        "    async def info(",
-        "        self,",
-        "        *,",
-        "        url: str | None = None,",
-        "        category: str | None = None,",
-        "        product_id: int | None = None,",
-        "        slug: str | None = None,",
-        "    ) -> PWResponse:",
-        '        """Load product page HTML and replace resp.json with parsed product data."""',
-        "        real_url = \"https://fix-price.com/catalog/\"",
-        "        if url is None:",
-        "            if category is None or product_id is None or slug is None:",
-        '                raise TypeError("Either url or (category, product_id, slug) must be provided")',
-        "",
-        "            real_url += f\"{category}/p-{product_id}-{slug}\"",
-        "        else:",
-        "            real_url += url",
-        "",
-        "        page = await self._parent.ctx.new_page()",
-        "        try:",
-        "            resp = await page.goto(real_url, wait_until=\"domcontentloaded\")",
-        "            if resp is None:",
-        '                raise RuntimeError("page.goto() returned None")',
-        "",
-        "            evaluate_script = (",
-        "                Path(__file__).resolve().parent",
-        "                / \"postprocess\"",
-        "                / \"catalog-product-info.evaluate.js\"",
-        "            ).read_text(encoding=\"utf-8\")",
-        "            evaluate_result = await page.evaluate(evaluate_script)",
-        "            raw_json = (",
-        "                evaluate_result.get(\"data\")",
-        "                if isinstance(evaluate_result, dict)",
-        "                else evaluate_result",
-        "            )",
-        "",
-        "            nuxt_data = (",
-        "                json.loads(raw_json)[\"useState\"][\"uniquePseudoAsyncDataStateKey\"][",
-        '                    "product"',
-        "                ]",
-        "                if raw_json",
-        "                else None",
-        "            )",
-        "",
-        "            def _json(self):",
-        "                return nuxt_data",
-        "",
-        "            resp.json = MethodType(_json, resp)",
-        "",
-        "            return resp",
-        "        finally:",
-        "            await page.close()",
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def render_geolocation_module(project: dict[str, Any], package_name: str) -> str:
-    lines = [
-        '"""Geolocation endpoints."""',
-        "",
-        "from __future__ import annotations",
-        "",
-        "from dataclasses import dataclass",
-        "from typing import TYPE_CHECKING",
-        "",
-        "from human_requests import ApiChild, ApiParent, api_child_field, autotest",
-        "from human_requests.abstraction import FetchResponse, HttpMethod",
-        "",
-        "if TYPE_CHECKING:",
-        f"    from {package_name}.manager import FixPriceAPI",
-        "",
-        "",
-        "@dataclass(init=False)",
-        f'class ClassGeolocation(ApiChild["FixPriceAPI"], ApiParent):',
-        '    """Geolocation and store lookup methods."""',
-        "",
-        "    Shop: ShopService = api_child_field(lambda parent: ShopService(parent.parent))",
-        '    """Store lookup service."""',
-        "",
-        "    def __init__(self, parent: \"FixPriceAPI\"):",
-        "        super().__init__(parent)",
-        "        ApiParent.__post_init__(self)",
-        "",
-        "    @autotest",
-        "    async def countries_list(self, alias: str = None) -> FetchResponse:",
-        '        """Return all countries and optional ISO-2 alias filter."""',
-        "        url = f\"{self._parent.CATALOG_URL}/v1/location/country\"",
-        "        if alias:",
-        "            if len(alias) != 2:",
-        '                raise ValueError("`alias` must be ISO-2. Length must be 2")',
-        "",
-        "            url += f\"?alias={alias.upper()}\"",
-        "",
-        "        return await self._parent._request(HttpMethod.GET, url=url)",
-        "",
-        "    @autotest",
-        "    async def regions_list(self, country_id: int = None) -> FetchResponse:",
-        '        """Return all regions."""',
-        "        url = f\"{self._parent.CATALOG_URL}/v1/location/region\"",
-        "        if country_id:",
-        "            url += f\"?countryId={country_id}\"",
-        "",
-        "        return await self._parent._request(HttpMethod.GET, url=url)",
-        "",
-        "    @autotest",
-        "    async def cities_list(self, country_id: int) -> FetchResponse:",
-        '        """Return city list."""',
-        "        url = f\"{self._parent.CATALOG_URL}/v1/location/city\"",
-        "        if country_id:",
-        "            url += f\"?countryId={country_id}\"",
-        "",
-        "        return await self._parent._request(HttpMethod.GET, url=url)",
-        "",
-        "    @autotest",
-        "    async def city_info(self, city_id: int) -> FetchResponse:",
-        '        """Return single city info."""',
-        "        return await self._parent._request(",
-        "            HttpMethod.GET, f\"{self._parent.CATALOG_URL}/v1/location/city/{city_id}\"",
-        "        )",
-        "",
-        "",
-        "class ShopService(ApiChild[\"FixPriceAPI\"]):",
-        '    """Store search service."""',
-        "",
-        "    @autotest",
-        "    async def search(",
-        "        self,",
-        "        country_id: int = None,",
-        "        region_id: int = None,",
-        "        city_id: int = None,",
-        "        search: str = None,",
-        "    ) -> FetchResponse:",
-        '        """Search stores by country, region, city, or address."""',
-        "        url = f\"{self._parent.CATALOG_URL}/v1/store?searchType=metro&canPickup=all&showTemporarilyClosed=all\"",
-        "",
-        "        if country_id:",
-        "            url += f\"&countryId={country_id}\"",
-        "        if region_id:",
-        "            url += f\"&regionId={region_id}\"",
-        "        if city_id:",
-        "            url += f\"&cityId={city_id}\"",
-        "        if search:",
-        "            url += f\"&addressPart={search}\"",
-        "",
-        "        return await self._parent._request(HttpMethod.GET, url=url)",
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def render_advertising_module(project: dict[str, Any], package_name: str) -> str:
-    return "\n".join(
-        [
-            '"""Advertising endpoints."""',
-            "",
-            "from typing import TYPE_CHECKING",
-            "",
-            "from human_requests import ApiChild, autotest",
-            "from human_requests.abstraction import FetchResponse, HttpMethod",
-            "",
-            "if TYPE_CHECKING:",
-            f"    from {package_name}.manager import FixPriceAPI",
-            "",
-            "",
-            "class ClassAdvertising(ApiChild[\"FixPriceAPI\"]):",
-            '    """Advertising-related endpoints."""',
-            "",
-            "    @autotest",
-            "    async def home_brands_list(self) -> FetchResponse:",
-            '        """Return homepage brand list."""',
-            "        return await self._parent._request(",
-            "            HttpMethod.GET, f\"{self._parent.CATALOG_URL}/v1/home/brand\"",
-            "        )",
-            "",
-        ]
-    )
-
-
-def render_general_module(project: dict[str, Any], package_name: str) -> str:
-    return "\n".join(
-        [
-            '"""General helpers."""',
-            "",
-            "from io import BytesIO",
-            "from typing import TYPE_CHECKING",
-            "",
-            "from aiohttp_retry import ExponentialRetry, RetryClient",
-            "from human_requests import ApiChild",
-            "from human_requests.abstraction import Proxy",
-            "",
-            "if TYPE_CHECKING:",
-            f"    from {package_name}.manager import FixPriceAPI",
-            "",
-            "",
-            "class ClassGeneral(ApiChild[\"FixPriceAPI\"]):",
-            '    """General helper methods."""',
-            "",
-            "    async def download_image(",
-            "        self, url: str, retry_attempts: int = 3, timeout: float = 10",
-            "    ) -> BytesIO:",
-            '        """Download an image using direct HTTP retries."""',
-            "        retry_options = ExponentialRetry(",
-            "            attempts=retry_attempts, start_timeout=3.0, max_timeout=timeout",
-            "        )",
-            "",
-            "        px = (",
-            "            self._parent.proxy",
-            "            if isinstance(self._parent.proxy, Proxy)",
-            "            else Proxy(self._parent.proxy)",
-            "        )",
-            "        async with RetryClient(retry_options=retry_options) as retry_client:",
-            "            async with retry_client.get(",
-            "                url, raise_for_status=True, proxy=px.as_str()",
-            "            ) as resp:",
-            "                body = await resp.read()",
-            "                file = BytesIO(body)",
-            '                file.name = url.split("/")[-1]',
-            "        return file",
-            "",
-        ]
-    )
-
-
-def _render_warmup_flow(project: dict[str, Any], warmup: dict[str, Any]) -> list[str]:
-    pipeline = warmup.get("pipeline")
-    steps = inline_array_to_list(pipeline)
-    wait_sniffer_step = next((step for step in steps if step.get("action") == "wait_sniffer"), None)
-    wait_network_idle = next((step for step in steps if step.get("action") == "wait_network" and step.get("state") == "idle"), None)
-    wait_network_load = next((step for step in steps if step.get("action") == "wait_network" and step.get("state") == "load"), None)
-    test_steps = [step for step in steps if step.get("for_tests")]
-    final_wait_step = next((step for step in steps if step.get("action") == "wait_element" and step.get("what") == "body > pre"), None)
-    main_click_step = next((step for step in test_steps if step.get("what") == "div.selected-city > div.buttons > button.button.normal"), None)
-    category_click_step = next((step for step in test_steps if step.get("what") == "a.link.product-category"), None)
-    page_content_step = next((step for step in test_steps if step.get("what") == "div.page-content"), None)
-
-    lines: list[str] = []
-    lines.extend(
-        [
-            f"        await self.page.goto(self.MAIN_SITE_URL, wait_until={render_simple_value('networkidle' if wait_network_idle else 'networkidle')})",
-        ]
-    )
-    if wait_sniffer_step:
-        header_names = header_names_from_wait_sniffer(wait_sniffer_step)
-        lines.extend(
-            [
-                "",
-                "        await sniffer.wait(",
-                "            tasks=[",
-                "                WaitHeader(",
-                "                    source=WaitSource.REQUEST,",
-                f"                    headers={render_simple_value(header_names)},",
-                "                )",
-                "            ],",
-                "            timeout_ms=self.timeout_ms,",
-                "        )",
-            ]
-        )
-    if test_steps:
-        lines.extend(["", "        if self.test_mode:"])
-        if main_click_step:
-            lines.extend(
-                [
-                    "            btn = self.page.locator(",
-                    f"                {render_simple_value(main_click_step['what'])}",
-                    "            ).first",
-                    "            await btn.wait_for(state=\"visible\", timeout=self.timeout_ms)",
-                    "            await btn.click(timeout=self.timeout_ms)",
-                    "",
-                ]
-            )
-        if category_click_step:
-            lines.extend(
-                [
-                    f"            await self.page.locator({render_simple_value(category_click_step['what'])}).first.click()",
-                ]
-            )
-        if page_content_step:
-            lines.extend(
-                [
-                    "            await self.page.wait_for_selector(",
-                    f"                selector={render_simple_value(page_content_step['what'])}, timeout=self.timeout_ms, state=\"visible\"",
-                    "            )",
-                ]
-            )
-        if wait_network_load:
-            lines.extend(
-                [
-                    "            await self.page.wait_for_load_state(",
-                    f"                {render_simple_value(wait_network_load.get('state', 'load'))}",
-                    "            )",
-                ]
-            )
-
-    lines.extend(
-        [
-            "",
-            "        await self.page.goto(",
-            "            self.CATALOG_URL, wait_until=\"networkidle\"",
-            "        )  # acceleration: skip OPTION pre-fetch",
-        ]
-    )
-    if final_wait_step:
-        lines.extend(
-            [
-                "        await self.page.wait_for_selector(",
-                f"            selector={render_simple_value(final_wait_step['what'])}, timeout=self.timeout_ms, state=\"visible\"",
-                "        )",
-            ]
-        )
-    lines.extend(
-        [
-            "",
-            "        result_sniffer = await sniffer.complete()",
-            "",
-            "        result = defaultdict(set)",
-            "",
-            "        for _url, headers in result_sniffer[\"request\"].items():",
-            "            for header, values in headers.items():",
-            "                result[header].update(values)",
-            "",
-            "        self.unstandard_headers = {k: list(v)[0] for k, v in result.items()}",
-            "        self.unstandard_urls = result_sniffer[\"request\"]",
-            "",
-        ]
-    )
-    return lines
 
 
 def render_ref_value(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> str:
@@ -1109,6 +790,8 @@ def render_ref_value(expr: dict[str, Any] | None, self_ref: str = "self._parent"
 def render_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> str:
     if expr is None:
         return "None"
+    if not isinstance(expr, dict):
+        return render_simple_value(expr)
     kind = expr.get("kind")
     if kind == "string":
         return render_simple_value(expr.get("value"))
@@ -1128,15 +811,15 @@ def render_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> 
             for item in expr.get("items", [])
         ) + "}"
     if kind == "sequence":
-        return " + ".join(render_expr(item, self_ref=self_ref) for item in expr.get("items", []))
+        return " + ".join(render_text_expr(item, self_ref=self_ref) for item in expr.get("items", []))
     if kind == "merge":
         parts = expr.get("parts", [])
         inline = next((part for part in parts if part.get("kind") == "inline_table"), None)
         if inline is not None:
             other_parts = [part for part in parts if part is not inline]
-            rendered = [render_expr(inline, self_ref=self_ref)] + [render_expr(part, self_ref=self_ref) for part in other_parts]
+            rendered = [render_expr(inline, self_ref=self_ref)] + [render_text_expr(part, self_ref=self_ref) for part in other_parts]
             return " | ".join(rendered)
-        return " + ".join(render_expr(item, self_ref=self_ref) for item in parts)
+        return " + ".join(render_text_expr(item, self_ref=self_ref) for item in parts)
     if kind == "call":
         callee = render_expr(expr.get("callee"), self_ref=self_ref)
         args = ", ".join(f"{arg['name']}={render_expr(arg['value'], self_ref=self_ref)}" for arg in expr.get("args", []))
@@ -1144,6 +827,36 @@ def render_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> 
     if kind == "index":
         return f"{render_expr(expr.get('value'), self_ref=self_ref)}[{render_expr(expr.get('index'), self_ref=self_ref)}]"
     return "None"
+
+
+def render_text_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> str:
+    if expr is None:
+        return "None"
+    if not isinstance(expr, dict):
+        return render_simple_value(expr)
+    kind = expr.get("kind")
+    if kind == "ref":
+        parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
+        if not parts:
+            return "None"
+        root = parts[0]
+        if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "PREFIXES":
+            return f"str({self_ref}.{parts[2]})"
+        if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "REGEXES":
+            return f"abstraction.{parts[2]}"
+        if root == "VARIABLES" and len(parts) >= 2:
+            return f"str({self_ref}.{parts[1]})"
+        if root == "INPUT" and len(parts) >= 2:
+            return f"str({parts[1]})"
+        if root == "UNSTANDART_HEADERS":
+            if len(parts) == 1:
+                return f"str({self_ref}.unstandard_headers)"
+            if len(parts) >= 3 and parts[1] == "REQUEST":
+                return f"str({self_ref}.unstandard_headers.get({render_simple_value(parts[2])}))"
+            return f"str({self_ref}.unstandard_headers)"
+    if kind in {"string", "number", "bool", "null"}:
+        return render_expr(expr, self_ref=self_ref)
+    return render_expr(expr, self_ref=self_ref)
 
 
 def get_plain_value(expr: dict[str, Any] | None) -> Any:
@@ -1293,10 +1006,6 @@ def render_request_headers(headers_spec: dict[str, Any] | None) -> str:
     return f"{base} | (self.unstandard_headers if add_unstandard_headers else {{}})"
 
 
-def render_variable_getter_return(variable: dict[str, Any]) -> str:
-    return type_annotation_from_types(variable_type_names(variable))
-
-
 def variable_revalue_pattern(variable: dict[str, Any]) -> str | None:
     revalue = variable.get("revalue")
     return revalue_to_pattern(revalue)
@@ -1357,16 +1066,9 @@ def collect_postprocess_scripts(project: dict[str, Any]) -> list[str]:
     return scripts
 
 
-def find_group(project: dict[str, Any], path: list[str]) -> dict[str, Any] | None:
-    for group in project.get("groups", []):
-        if group.get("path") == path:
-            return group
-    return None
-
-
 def header_names_from_wait_sniffer(step: dict[str, Any]) -> list[str]:
     what = step.get("what")
-    if what and what.get("kind") == "ref":
+    if isinstance(what, dict) and what.get("kind") == "ref":
         parts = [part["value"] for part in what.get("parts", []) if part.get("kind") == "name"]
         if len(parts) >= 3:
             return [parts[-1]]
@@ -1376,3 +1078,53 @@ def header_names_from_wait_sniffer(step: dict[str, Any]) -> list[str]:
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def render_return_annotation(func: dict[str, Any]) -> str:
+    transport = str(func.get("transport", "fetch"))
+    if transport == "goto":
+        return "PWResponse"
+    if transport == "direct":
+        return "BytesIO"
+    return "FetchResponse"
+
+
+def render_input_annotation(input_spec: dict[str, Any]) -> str:
+    type_names = type_names_from_expr(input_spec.get("type"))
+    base = type_annotation_from_types(type_names)
+    values = get_plain_value(input_spec.get("values"))
+    if isinstance(values, list) and values and all(not isinstance(item, dict) for item in values):
+        literal_values = ", ".join(render_simple_value(item) for item in values)
+        base = f"Literal[{literal_values}]"
+    default_expr = input_spec.get("default")
+    has_explicit_default = default_expr is not None and get_plain_value(default_expr) is not None
+    if not input_spec.get("required", False) and not has_explicit_default and "| None" not in base:
+        base = f"{base} | None"
+    return base
+
+
+def render_input_default(input_spec: dict[str, Any]) -> str | None:
+    if "default" in input_spec and input_spec["default"] is not None:
+        return render_expr(input_spec["default"], self_ref="self._parent")
+    if not input_spec.get("required", False):
+        return "None"
+    return None
+
+
+def normalize_name(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+def type_names_from_expr(expr: dict[str, Any] | None) -> set[str]:
+    plain = get_plain_value(expr)
+    if isinstance(plain, str):
+        return {plain}
+    if isinstance(plain, list):
+        result = set()
+        for item in plain:
+            if isinstance(item, dict) and item.get("type"):
+                result.add(str(item["type"]))
+        return result
+    if isinstance(plain, dict) and plain.get("type"):
+        return {str(plain["type"])}
+    return set()
