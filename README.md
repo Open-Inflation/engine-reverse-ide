@@ -7,6 +7,13 @@ MSRA is a TOML-like language for describing browser automation and related runti
 - A VS Code extension for syntax highlighting, diagnostics, completion, hover, definitions, and semantic tokens.
 - A shared Node-based parser, analyzer, and CLI entrypoint used by the editor integration and terminal checks.
 
+## Documentation
+
+MkDocs documentation lives under `docs/` and explains the current MSRA path semantics, including when quoted and unquoted segments describe the same table and when they split into different paths.
+
+- Main page: [`docs/index.md`](docs/index.md)
+- Path rules: [`docs/msra-paths.md`](docs/msra-paths.md)
+
 ## CLI
 
 The canonical installable CLI entrypoint is `msra-lsp`.

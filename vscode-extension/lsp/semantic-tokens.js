@@ -22,36 +22,60 @@ const SEMANTIC_TOKEN_MODIFIERS = [
   "msra",
 ];
 
-const SYSTEM_SEGMENT_VALUES = new Set([
+const TABLE_ROOT_SEGMENTS = new Set([
   "app",
   "misklerreverseapi",
+]);
+
+const APP_CHILD_SEGMENTS = new Set([
   "warmup",
   "variables",
   "prefixes",
   "regexes",
   "groups",
   "func",
+]);
+
+const FUNC_CHILD_SEGMENTS = new Set([
   "input",
   "body",
   "headers",
   "url",
   "params",
   "examples",
-  "DOCUMENT",
+  "postprocess",
+]);
+
+const DOCUMENT_CHILD_SEGMENTS = new Set([
   "PREFIXES",
-  "REGEX",
   "REGEXES",
+]);
+
+const HEADER_CHILD_SEGMENTS = new Set([
+  "REQUEST",
+  "RESPONSE",
+]);
+
+const COOKIE_FIELD_SEGMENTS = new Set([
+  "VALUE",
+  "DOMAIN",
+  "PATH",
+  "EXPIRES",
+  "HTTP_ONLY",
+  "SECURE",
+  "SAME_SITE",
+]);
+
+const REFERENCE_ROOT_SEGMENTS = new Set([
+  "DOCUMENT",
   "VARIABLES",
   "INPUT",
-  "WARMUP",
+  "GROUPS",
   "UNSTANDARD_HEADERS",
   "CAPTURED_URLS",
   "COOKIES",
   "LOCAL_STORAGE",
   "SESSION_STORAGE",
-  "REQUEST",
-  "RESPONSE",
-  "SNIFF_RESPONSE",
 ]);
 
 function collectSemanticTokens(document) {
@@ -61,7 +85,7 @@ function collectSemanticTokens(document) {
   for (const table of tables) {
     for (let index = 0; index < (table.pathSegments || []).length; index += 1) {
       const segment = table.pathSegments[index];
-      addToken(tokens, segment.range, classifyTableSegment(segment, index, table.path), segment.quoted);
+      addToken(tokens, segment.range, classifyTableSegment(segment, index, table.pathSegments), segment.quoted);
     }
   }
 
@@ -149,31 +173,133 @@ function walkExpressions(expr, visitor) {
   }
 }
 
-function classifySegment(segment) {
+function classifyTableSegment(segment, index, pathSegments) {
   if (!segment) {
     return null;
   }
   if (segment.quoted) {
     return "parameter";
   }
-  return SYSTEM_SEGMENT_VALUES.has(String(segment.value)) ? "namespace" : "parameter";
+
+  const value = String(segment.value);
+  if (index === 0) {
+    return TABLE_ROOT_SEGMENTS.has(value) ? "namespace" : "parameter";
+  }
+
+  const root = String(pathSegments[0] && pathSegments[0].value !== undefined ? pathSegments[0].value : "");
+  if (root !== "app") {
+    return "parameter";
+  }
+
+  if (index === 1) {
+    return APP_CHILD_SEGMENTS.has(value) ? "namespace" : "parameter";
+  }
+
+  const appChild = String(pathSegments[1] && pathSegments[1].value !== undefined ? pathSegments[1].value : "");
+  if (appChild === "func") {
+    if (index === 2) {
+      return "parameter";
+    }
+    if (index === 3) {
+      return FUNC_CHILD_SEGMENTS.has(value) ? "namespace" : "parameter";
+    }
+
+    const funcChild = String(pathSegments[3] && pathSegments[3].value !== undefined ? pathSegments[3].value : "");
+    if (funcChild === "body") {
+      return classifyBodySegment(pathSegments, index);
+    }
+    if (funcChild === "url") {
+      return classifyUrlParamsSegment(pathSegments, 3, index);
+    }
+    if (funcChild === "input" || funcChild === "headers" || funcChild === "examples" || funcChild === "postprocess") {
+      return "parameter";
+    }
+    return "parameter";
+  }
+
+  if (appChild === "groups" || appChild === "variables" || appChild === "prefixes" || appChild === "regexes" || appChild === "warmup") {
+    return "parameter";
+  }
+
+  return "parameter";
 }
 
-function classifyTableSegment(segment, index, tablePath) {
-  if (isCustomPrefixPath(tablePath) && index === 2) {
-    return "variable";
+function classifyBodySegment(pathSegments, index) {
+  const urlIndex = findUnquotedSegmentIndex(pathSegments, 4, index, "url");
+  if (urlIndex === -1) {
+    return "parameter";
   }
-  return classifySegment(segment);
+  if (index === urlIndex) {
+    return "namespace";
+  }
+  return classifyUrlParamsSegment(pathSegments, urlIndex, index);
+}
+
+function classifyUrlParamsSegment(pathSegments, urlIndex, index) {
+  const segment = pathSegments[index];
+  if (!segment) {
+    return null;
+  }
+  if (segment.quoted) {
+    return "parameter";
+  }
+  const value = String(segment.value);
+  const offset = index - urlIndex;
+  if (offset === 1) {
+    return value === "params" ? "namespace" : "parameter";
+  }
+  if (offset > 1 && offset % 2 === 1) {
+    return value === "params" ? "namespace" : "parameter";
+  }
+  return "parameter";
 }
 
 function classifyReferenceSegment(segment, index, parts) {
   if (!segment) {
     return null;
   }
-  if (index >= 2 && parts && parts[0] && parts[1] && parts[0].value === "DOCUMENT" && parts[1].value === "PREFIXES") {
-    return "variable";
+  if (segment.quoted) {
+    return "parameter";
   }
-  return classifySegment(segment);
+
+  const value = String(segment.value);
+  const root = String(parts[0] && parts[0].value !== undefined ? parts[0].value : "");
+
+  if (root === "DOCUMENT") {
+    if (index === 0) {
+      return "namespace";
+    }
+    if (index === 1 && DOCUMENT_CHILD_SEGMENTS.has(value)) {
+      return "namespace";
+    }
+    return "parameter";
+  }
+
+  if (root === "UNSTANDARD_HEADERS" || root === "CAPTURED_URLS") {
+    if (index === 0) {
+      return "namespace";
+    }
+    if (index === 1 && HEADER_CHILD_SEGMENTS.has(value)) {
+      return "namespace";
+    }
+    return "parameter";
+  }
+
+  if (root === "COOKIES") {
+    if (index === 0) {
+      return "namespace";
+    }
+    if (index === 2 && COOKIE_FIELD_SEGMENTS.has(value)) {
+      return "namespace";
+    }
+    return "parameter";
+  }
+
+  if (REFERENCE_ROOT_SEGMENTS.has(root)) {
+    return index === 0 ? "namespace" : "parameter";
+  }
+
+  return "parameter";
 }
 
 function classifyAssignmentKey(assignment) {
@@ -190,8 +316,21 @@ function isCustomPrefixAssignment(tablePath) {
   return Array.isArray(tablePath) && tablePath.length === 2 && tablePath[0] === "app" && tablePath[1] === "prefixes";
 }
 
-function isCustomPrefixPath(tablePath) {
-  return Array.isArray(tablePath) && tablePath.length === 3 && tablePath[0] === "app" && tablePath[1] === "prefixes";
+function findUnquotedSegmentIndex(segments, startIndex, endIndex, targetValue) {
+  if (!Array.isArray(segments)) {
+    return -1;
+  }
+  const normalizedTarget = String(targetValue);
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const segment = segments[index];
+    if (!segment || segment.quoted) {
+      continue;
+    }
+    if (String(segment.value) === normalizedTarget) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function addToken(tokens, range, tokenType, quoted = false) {
@@ -296,7 +435,7 @@ module.exports = {
   SEMANTIC_TOKEN_MODIFIERS,
   collectSemanticTokens,
   collectInlineTableTokens,
-  classifySegment,
+  classifyTableSegment,
   classifyReferenceSegment,
   classifyAssignmentKey,
   compareRanges,

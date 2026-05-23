@@ -1,5 +1,5 @@
-const { Diagnostic, pathKey } = require("./model");
-const { renderPath } = require("./path-schema");
+const { Diagnostic } = require("./model");
+const { normalizePathSegments, pathIdentityKey, renderPath } = require("./path-schema");
 
 function validateTableRelations(tableIndex) {
   const diagnostics = [];
@@ -10,62 +10,62 @@ function validateTableRelations(tableIndex) {
 }
 
 function validateTableRelationsForTable(table, tableIndex) {
-  const path = table.path || [];
-  if (path.length <= 1) {
+  const segments = table.pathSegments || normalizePathSegments(table.path);
+  if (segments.length <= 1) {
     return [];
   }
 
   const diagnostics = [];
-  if (path[0] === "app" && !hasTable(tableIndex, ["app"])) {
-    diagnostics.push(missingParentDiagnostic(table, ["app"], 0));
+  if (segments[0].value === "app" && !segments[0].quoted && !hasTable(tableIndex, segments.slice(0, 1))) {
+    diagnostics.push(missingParentDiagnostic(table, segments.slice(0, 1), 0));
     return diagnostics;
   }
 
-  if (path[0] !== "app") {
+  if (segments[0].value !== "app" || segments[0].quoted) {
     return diagnostics;
   }
 
-  if (path[1] === "groups") {
-    if (path.length > 3) {
-      const parentPath = path.slice(0, path.length - 1);
+  if (segments[1].value === "groups" && !segments[1].quoted) {
+    if (segments.length > 3) {
+      const parentPath = segments.slice(0, segments.length - 1);
       if (!hasTable(tableIndex, parentPath)) {
-        diagnostics.push(missingParentDiagnostic(table, parentPath, path.length - 2));
+        diagnostics.push(missingParentDiagnostic(table, parentPath, segments.length - 2));
       }
     }
     return diagnostics;
   }
 
-  if (path[1] !== "func") {
+  if (segments[1].value !== "func" || segments[1].quoted) {
     return diagnostics;
   }
 
-  if (path.length > 3 && !hasTable(tableIndex, path.slice(0, 3))) {
-    diagnostics.push(missingParentDiagnostic(table, path.slice(0, 3), 2));
+  if (segments.length > 3 && !hasTable(tableIndex, segments.slice(0, 3))) {
+    diagnostics.push(missingParentDiagnostic(table, segments.slice(0, 3), 2));
     return diagnostics;
   }
 
-  if (path[3] === "body") {
-    if (path.length > 4 && !hasTable(tableIndex, path.slice(0, 4))) {
-      diagnostics.push(missingParentDiagnostic(table, path.slice(0, 4), 3));
+  if (segments[3] && segments[3].value === "body" && !segments[3].quoted) {
+    if (segments.length > 4 && !hasTable(tableIndex, segments.slice(0, 4))) {
+      diagnostics.push(missingParentDiagnostic(table, segments.slice(0, 4), 3));
       return diagnostics;
     }
-    if (path.length > 5) {
-      const parentPath = path.slice(0, path.length - 1);
+    if (segments.length > 5) {
+      const parentPath = segments.slice(0, segments.length - 1);
       if (!hasTable(tableIndex, parentPath)) {
-        diagnostics.push(missingParentDiagnostic(table, parentPath, path.length - 2));
+        diagnostics.push(missingParentDiagnostic(table, parentPath, segments.length - 2));
       }
     }
     return diagnostics;
   }
 
-  if (path[3] === "url") {
-    if (path.length > 4 && !hasTable(tableIndex, path.slice(0, 4))) {
-      diagnostics.push(missingParentDiagnostic(table, path.slice(0, 4), 3));
+  if (segments[3] && segments[3].value === "url" && !segments[3].quoted) {
+    if (segments.length > 4 && !hasTable(tableIndex, segments.slice(0, 4))) {
+      diagnostics.push(missingParentDiagnostic(table, segments.slice(0, 4), 3));
       return diagnostics;
     }
-    for (let index = 6; index < path.length; index += 1) {
-      if (path[index] === "params") {
-        const parentPath = path.slice(0, index);
+    for (let index = 6; index < segments.length; index += 1) {
+      if (segments[index].value === "params" && !segments[index].quoted) {
+        const parentPath = segments.slice(0, index);
         if (!hasTable(tableIndex, parentPath)) {
           diagnostics.push(missingParentDiagnostic(table, parentPath, index - 1));
           return diagnostics;
@@ -78,7 +78,7 @@ function validateTableRelationsForTable(table, tableIndex) {
 }
 
 function hasTable(tableIndex, path) {
-  return tableIndex.has(pathKey(path));
+  return tableIndex.has(pathIdentityKey(path));
 }
 
 function missingParentDiagnostic(table, parentPath, segmentIndex) {

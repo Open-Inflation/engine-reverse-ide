@@ -1,0 +1,13 @@
+site_name: MSRA Documentation
+site_description: MSRA path semantics and tooling notes
+docs_dir: docs
+theme:
+  name: readthedocs
+nav:
+  - Home: index.md
+  - Пути: msra-paths.md
+markdown_extensions:
+  - tables
+  - admonition
+  - toc:
+      permalink: true

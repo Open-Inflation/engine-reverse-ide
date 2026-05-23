@@ -21,7 +21,9 @@ const {
   StringExpr,
   TableDef,
   Token,
+  pathLabel,
 } = require("./model");
+const { pathIdentityKey } = require("./path-schema");
 
 const ATOM_STARTS = new Set([
   "STRING",
@@ -346,6 +348,8 @@ class Parser {
     this.assignments = new Map();
     this.references = [];
     this.currentTable = [];
+    this.currentTableSegments = [];
+    this.currentTableIdentityKey = pathIdentityKey([]);
   }
 
   parse() {
@@ -418,17 +422,19 @@ class Parser {
       return;
     }
     const tablePath = pathSegments.map((segment) => segment.value);
-    const tableKey = JSON.stringify(tablePath);
+    const tableKey = pathIdentityKey(pathSegments);
     if (this.tables.has(tableKey)) {
       this._error(
-        `Duplicate table declaration for ${tablePath.join(".")}`,
+        `Duplicate table declaration for ${pathLabel(pathSegments)}`,
         tableRange,
         "duplicate-table",
       );
     } else {
-      this.tables.set(tableKey, new TableDef(tablePath, tableRange, pathSegments));
+      this.tables.set(tableKey, new TableDef(tablePath, tableRange, pathSegments, tableKey));
     }
     this.currentTable = tablePath;
+    this.currentTableSegments = pathSegments;
+    this.currentTableIdentityKey = tableKey;
     if (!this._match("NEWLINE", "EOF")) {
       this._error("Expected end of line after table header", this._current().range, "trailing-table-header");
       this._syncToNextStatement();
@@ -452,6 +458,9 @@ class Parser {
     const assignmentRange = new Range(keyToken.range.start, value ? value.range.end : this._previous().range.end);
     const key = keyToken.value;
     const fullPath = [...this.currentTable, key];
+    const tablePathSegments = this.currentTableSegments.slice();
+    const tableIdentityKey = this.currentTableIdentityKey;
+    const assignmentIdentityKey = JSON.stringify([tableIdentityKey, key]);
     const assignment = new AssignmentDef(
       [...this.currentTable],
       key,
@@ -460,20 +469,22 @@ class Parser {
       value.range,
       fullPath,
       keyToken.type === "STRING",
+      tablePathSegments,
+      tableIdentityKey,
+      assignmentIdentityKey,
     );
-    const fullPathKey = JSON.stringify(fullPath);
-    if (this.assignments.has(fullPathKey)) {
+    if (this.assignments.has(assignmentIdentityKey)) {
       this._error(
-        `Duplicate assignment for ${fullPath.join(".")}`,
+        `Duplicate assignment for ${pathLabel([...tablePathSegments, { value: key, quoted: keyToken.type === "STRING" }])}`,
         assignmentRange,
         "duplicate-assignment",
       );
     } else {
-      this.assignments.set(fullPathKey, assignment);
+      this.assignments.set(assignmentIdentityKey, assignment);
     }
-    const currentTableKey = JSON.stringify(this.currentTable);
+    const currentTableKey = tableIdentityKey;
     if (!this.tables.has(currentTableKey)) {
-      this.tables.set(currentTableKey, new TableDef([...this.currentTable], keyToken.range));
+      this.tables.set(currentTableKey, new TableDef([...this.currentTable], keyToken.range, tablePathSegments, tableIdentityKey));
     }
     this.tables.get(currentTableKey).assignments.push(assignment);
     if (this._check("NEWLINE")) {
@@ -734,7 +745,7 @@ class Parser {
     const end = this._expect("GT", "Expected '>' to close reference") || this._previous();
     const expr = new RefExpr(new Range(start.range.start, end.range.end), parts);
     this.references.push(
-      new ReferenceOccurrence(expr, expr.range, [...this.currentTable]),
+      new ReferenceOccurrence(expr, expr.range, [...this.currentTable], null, null, this.currentTableSegments.slice(), this.currentTableIdentityKey),
     );
     return expr;
   }

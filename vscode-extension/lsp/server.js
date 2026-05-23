@@ -236,10 +236,13 @@ class MsraLanguageServer {
       ["SESSION_STORAGE", "Runtime session storage"],
     ];
     const tablePaths = [...analyzed.tableIndex.values()]
-      .map((table) => table.path)
+      .map((table) => table.pathSegments || table.path)
       .sort(comparePaths);
     const assignmentPaths = [...analyzed.assignmentIndex.values()]
-      .map((assignment) => assignment.fullPath)
+      .map((assignment) => [
+        ...(assignment.tablePathSegments || []),
+        { value: assignment.key, quoted: Boolean(assignment.quoted) },
+      ])
       .sort(comparePaths);
     for (const path of tablePaths) {
       suggestions.push([pathLabel(path), "Defined table"]);
@@ -269,7 +272,7 @@ class MsraLanguageServer {
       ["from_global", "Shared input binding"],
     ];
     const tablePaths = [...analyzed.tableIndex.values()]
-      .map((table) => table.path)
+      .map((table) => table.pathSegments || table.path)
       .sort(comparePaths);
     for (const path of tablePaths) {
       suggestions.push([pathLabel(path), "Existing table"]);
@@ -322,14 +325,19 @@ class MsraLanguageServer {
       if (this._contains(ref.range, position)) {
         const rendered = renderRef(ref.expr);
         if (ref.resolvedPath) {
-          return `**Reference** \`${rendered}\`\n\nResolves to \`${ref.resolvedPath.join(".")}\` as ${ref.resolvedKind}.`;
+          const targetLabel = pathLabel(ref.resolvedPathSegments || ref.resolvedPath);
+          return `**Reference** \`${rendered}\`\n\nResolves to \`${targetLabel}\` as ${ref.resolvedKind}.`;
         }
         return `**Reference** \`${rendered}\``;
       }
     }
     for (const assignment of document.parsed.assignments.values()) {
       if (this._contains(assignment.keyRange, position)) {
-        return `**Assignment** \`${assignment.fullPath.join(".")}\``;
+        const assignmentLabel = pathLabel([
+          ...(assignment.tablePathSegments || []),
+          { value: assignment.key, quoted: Boolean(assignment.quoted) },
+        ]);
+        return `**Assignment** \`${assignmentLabel}\``;
       }
     }
     return null;
@@ -346,7 +354,7 @@ class MsraLanguageServer {
     const locations = collectDefinitionLocations(document.analyzed);
     for (const ref of document.parsed.references) {
       if (this._contains(ref.range, position) && ref.resolvedPath) {
-        const targetRange = locations.get(pathKey(ref.resolvedPath));
+        const targetRange = locations.get(ref.resolvedPathKey || pathKey(ref.resolvedPath));
         if (targetRange !== undefined) {
           return [
             {
@@ -372,7 +380,7 @@ class MsraLanguageServer {
     const assignments = [...document.analyzed.assignmentIndex.values()].sort((left, right) => comparePaths(left.fullPath, right.fullPath));
     for (const table of tables) {
       items.push({
-        name: pathLabel(table.path),
+        name: pathLabel(table.pathSegments || table.path),
         kind: 5,
         range: this._rangeToLsp(table.headerRange),
         selectionRange: this._rangeToLsp(table.headerRange),
@@ -380,8 +388,12 @@ class MsraLanguageServer {
     }
     for (const assignment of assignments) {
       const fullRange = this._rangeCover([assignment.keyRange, assignment.valueRange]);
+      const assignmentLabel = pathLabel([
+        ...(assignment.tablePathSegments || []),
+        { value: assignment.key, quoted: Boolean(assignment.quoted) },
+      ]);
       items.push({
-        name: assignment.key,
+        name: assignmentLabel,
         kind: 13,
         range: this._rangeToLsp(fullRange),
         selectionRange: this._rangeToLsp(assignment.keyRange),
@@ -396,7 +408,10 @@ class MsraLanguageServer {
     for (const [uri, document] of this.documents.entries()) {
       const assignments = [...document.analyzed.assignmentIndex.values()].sort((left, right) => comparePaths(left.fullPath, right.fullPath));
       for (const assignment of assignments) {
-        const label = pathLabel(assignment.fullPath);
+        const label = pathLabel([
+          ...(assignment.tablePathSegments || []),
+          { value: assignment.key, quoted: Boolean(assignment.quoted) },
+        ]);
         if (query && !label.toLowerCase().includes(query)) {
           continue;
         }

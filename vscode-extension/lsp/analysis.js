@@ -1,7 +1,6 @@
 const {
   Diagnostic,
   comparePaths,
-  pathKey,
   pathLabel,
 } = require("./model");
 const { validateAssignmentRelations } = require("./assignment-relations");
@@ -9,6 +8,7 @@ const { validateAssignment } = require("./assignment-schema");
 const { validateGroupAssignments } = require("./group-relations");
 const { validateTableRelations } = require("./table-relations");
 const { validateTablePath } = require("./path-schema");
+const { pathIdentityKey, normalizePathSegments } = require("./path-schema");
 
 const KNOWN_DYNAMIC_ROOTS = new Set([
   "UNSTANDARD_HEADERS",
@@ -35,7 +35,7 @@ function analyzeDocument(document) {
   const rootTableIndex = new Map();
   for (const table of tableIndex.values()) {
     if (table.path.length) {
-      rootTableIndex.set(pathLabel(table.path), table.path);
+      rootTableIndex.set(pathLabel(table.pathSegments || table.path), table.path);
       const validation = validateTablePath(table.pathSegments || table.path);
       if (!validation.valid) {
         diagnostics.push(
@@ -66,8 +66,10 @@ function analyzeDocument(document) {
 
   for (const ref of document.references) {
     const resolved = resolveReference(ref, result);
-    ref.resolvedPath = resolved ? resolved[0] : null;
-    ref.resolvedKind = resolved ? resolved[1] : null;
+    ref.resolvedPath = resolved ? resolved.path : null;
+    ref.resolvedPathSegments = resolved ? resolved.pathSegments : null;
+    ref.resolvedPathKey = resolved ? resolved.key : null;
+    ref.resolvedKind = resolved ? resolved.kind : null;
     if (resolved === null && ref.expr.parts.length) {
       const root = ref.expr.parts[0].value;
       if (!KNOWN_DYNAMIC_ROOTS.has(root)) {
@@ -128,9 +130,14 @@ function resolveReference(ref, result) {
   if (resolved !== null) {
     return resolved;
   }
-  const root = path[0];
+  const root = path[0] && path[0].value;
   if (KNOWN_DYNAMIC_ROOTS.has(root)) {
-    return [path, "dynamic-root"];
+    return {
+      path: path.map((segment) => String(segment && segment.value !== undefined ? segment.value : segment)),
+      pathSegments: path,
+      key: pathIdentityKey(path),
+      kind: "dynamic-root",
+    };
   }
   return null;
 }
@@ -141,7 +148,11 @@ function refPathSegments(ref) {
     if (part.kind !== "name") {
       break;
     }
-    path.push(String(part.value));
+    path.push({
+      value: String(part.value),
+      quoted: Boolean(part.quoted),
+      range: part.range || null,
+    });
   }
   return path;
 }
@@ -150,28 +161,34 @@ function expandVirtualPath(path, currentTable) {
   if (!path.length) {
     return null;
   }
-  const root = path[0];
+  const root = path[0] && path[0].value;
   if (root === "DOCUMENT") {
-    if (path.length >= 2 && path[1] === "PREFIXES") {
-      return ["app", "prefixes", ...path.slice(2)];
+    if (path.length >= 2 && path[1] && path[1].value === "PREFIXES") {
+      return [makePathSegment("app"), makePathSegment("prefixes"), ...path.slice(2)];
     }
-    if (path.length >= 2 && path[1] === "REGEXES") {
-      return ["app", "regexes", ...path.slice(2)];
+    if (path.length >= 2 && path[1] && path[1].value === "REGEXES") {
+      return [makePathSegment("app"), makePathSegment("regexes"), ...path.slice(2)];
     }
-    if (path.length >= 2 && path[1] === "WARMUP") {
-      return ["app", "warmup", ...path.slice(2)];
+    if (path.length >= 2 && path[1] && path[1].value === "WARMUP") {
+      return [makePathSegment("app"), makePathSegment("warmup"), ...path.slice(2)];
     }
   }
   if (root === "VARIABLES") {
-    return ["app", "variables", ...path.slice(1)];
+    return [makePathSegment("app"), makePathSegment("variables"), ...path.slice(1)];
   }
   if (root === "GROUPS") {
-    return ["app", "groups", ...path.slice(1)];
+    return [makePathSegment("app"), makePathSegment("groups"), ...path.slice(1)];
   }
   if (root === "INPUT") {
     const functionId = currentFunctionId(currentTable);
     if (functionId) {
-      return ["app", "func", functionId, "input", ...path.slice(1)];
+      return [
+        makePathSegment("app"),
+        makePathSegment("func"),
+        makePathSegment(functionId),
+        makePathSegment("input"),
+        ...path.slice(1),
+      ];
     }
   }
   return null;
@@ -188,27 +205,22 @@ function currentFunctionId(tablePath) {
 }
 
 function resolveStaticPath(path, result) {
-  const key = pathKey(path);
-  if (result.assignmentIndex.has(key)) {
-    return [path, "assignment"];
-  }
-  if (result.tableIndex.has(key)) {
-    return [path, "table"];
-  }
-  if (!path.length) {
-    return null;
-  }
   if (path.length > 1) {
-    for (let index = path.length - 1; index > 0; index -= 1) {
-      const prefix = path.slice(0, index);
-      const suffix = path.slice(index);
-      if (result.tableIndex.has(pathKey(prefix)) && suffix.length === 1) {
-        const candidate = prefix.concat(suffix);
-        if (result.assignmentIndex.has(pathKey(candidate))) {
-          return [candidate, "assignment"];
-        }
+    const prefix = path.slice(0, -1);
+    const prefixKey = pathIdentityKey(prefix);
+    if (result.tableIndex.has(prefixKey)) {
+      const last = path[path.length - 1];
+      const candidateKey = assignmentIdentityKey(prefixKey, last && last.value);
+      if (result.assignmentIndex.has(candidateKey)) {
+        const assignment = result.assignmentIndex.get(candidateKey);
+        return buildResolvedAssignment(prefix, last, assignment, candidateKey);
       }
     }
+  }
+  const key = pathIdentityKey(path);
+  if (result.tableIndex.has(key)) {
+    const table = result.tableIndex.get(key);
+    return buildResolvedTable(table, key);
   }
   return null;
 }
@@ -226,8 +238,11 @@ function collectDefinitionLocations(result) {
 
 function tableChildren(result, tablePath) {
   const children = [];
+  const parentSegments = normalizePathSegments(tablePath);
+  const parentKey = pathIdentityKey(parentSegments);
   for (const table of result.tableIndex.values()) {
-    if (table.path.length === tablePath.length + 1 && table.path.slice(0, tablePath.length).every((segment, index) => segment === tablePath[index])) {
+    const childSegments = table.pathSegments || normalizePathSegments(table.path);
+    if (childSegments.length === parentSegments.length + 1 && pathIdentityKey(childSegments.slice(0, parentSegments.length)) === parentKey) {
       children.push(table.path);
     }
   }
@@ -254,3 +269,39 @@ module.exports = {
   resolveReference,
   tableChildren,
 };
+
+function makePathSegment(value, quoted = false) {
+  return {
+    value: String(value),
+    quoted: Boolean(quoted),
+    range: null,
+  };
+}
+
+function assignmentIdentityKey(tableKey, key) {
+  return JSON.stringify([tableKey, String(key)]);
+}
+
+function buildResolvedTable(table, key) {
+  const pathSegments = table.pathSegments || normalizePathSegments(table.path);
+  return {
+    path: table.path,
+    pathSegments,
+    key,
+    kind: "table",
+  };
+}
+
+function buildResolvedAssignment(prefix, last, assignment, key) {
+  const pathSegments = [...prefix, {
+    value: String(last && last.value !== undefined ? last.value : ""),
+    quoted: Boolean(last && last.quoted),
+    range: last && last.range ? last.range : null,
+  }];
+  return {
+    path: assignment.fullPath,
+    pathSegments,
+    key,
+    kind: "assignment",
+  };
+}

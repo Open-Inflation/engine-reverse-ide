@@ -10,9 +10,9 @@ const {
   RefExpr,
   SequenceExpr,
   StringExpr,
-  pathKey,
   pathLabel,
 } = require("./model");
+const { pathIdentityKey } = require("./path-schema");
 const {
   ARRAY,
   BOOLEAN,
@@ -43,7 +43,7 @@ function validateAssignmentRelations(tableIndex, assignmentIndex) {
 function collectAssignmentsByTable(assignmentIndex) {
   const assignmentsByTable = new Map();
   for (const assignment of assignmentIndex.values()) {
-    const key = pathKey(assignment.tablePath);
+    const key = assignment.tableIdentityKey || pathIdentityKey(assignment.tablePathSegments || assignment.tablePath);
     if (!assignmentsByTable.has(key)) {
       assignmentsByTable.set(key, []);
     }
@@ -231,7 +231,8 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
 
     const boundaryAssignment = getAssignment(assignmentIndex, tablePath, "boundary");
     const dataAssignment = getAssignment(assignmentIndex, tablePath, "data");
-    const hasUrlChild = hasUnquotedChildTable(tableIndex, tablePath, "url");
+    const parentBodyNamespace = tablePath.slice(0, -1);
+    const hasUrlChild = hasUnquotedChildTable(tableIndex, parentBodyNamespace, "url");
     const isMultipart = type === "multipart/form-data";
     const isFormEncoded = type === "application/x-www-form-urlencoded";
 
@@ -267,18 +268,6 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
           "error",
           "msra",
           "missing-body-payload",
-        ),
-      );
-    }
-
-    if (hasUrlChild && !isFormEncoded) {
-      diagnostics.push(
-        new Diagnostic(
-          `Body item [${pathLabel(tablePath)}] only allows a nested "url" table when type="application/x-www-form-urlencoded".`,
-          table.headerRange,
-          "error",
-          "msra",
-          "unexpected-body-url-table",
         ),
       );
     }
@@ -665,7 +654,7 @@ function currentFunctionId(tablePath) {
 }
 
 function getTableAssignment(assignmentsByTable, tablePath, key) {
-  const assignments = assignmentsByTable.get(pathKey(tablePath));
+  const assignments = assignmentsByTable.get(pathIdentityKey(tablePath));
   if (!assignments) {
     return null;
   }
@@ -698,7 +687,8 @@ function isPrimitiveInputTypeName(typeName) {
 }
 
 function getAssignment(assignmentIndex, tablePath, key) {
-  return assignmentIndex.get(pathKey([...tablePath, key])) || null;
+  const tableKey = pathIdentityKey(tablePath);
+  return assignmentIndex.get(JSON.stringify([tableKey, String(key)])) || null;
 }
 
 function getStringAssignmentValue(assignmentIndex, tablePath, key) {

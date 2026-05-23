@@ -146,16 +146,28 @@ class InlineTableExpr extends Expr {
 }
 
 class TableDef {
-  constructor(path, headerRange, pathSegments = []) {
+  constructor(path, headerRange, pathSegments = [], identityKey = null) {
     this.path = path;
     this.headerRange = headerRange;
     this.pathSegments = pathSegments;
+    this.identityKey = identityKey;
     this.assignments = [];
   }
 }
 
 class AssignmentDef {
-  constructor(tablePath, key, keyRange, value, valueRange, fullPath, quoted = false) {
+  constructor(
+    tablePath,
+    key,
+    keyRange,
+    value,
+    valueRange,
+    fullPath,
+    quoted = false,
+    tablePathSegments = [],
+    tableIdentityKey = null,
+    identityKey = null,
+  ) {
     this.tablePath = tablePath;
     this.key = key;
     this.keyRange = keyRange;
@@ -163,16 +175,31 @@ class AssignmentDef {
     this.valueRange = valueRange;
     this.fullPath = fullPath;
     this.quoted = quoted;
+    this.tablePathSegments = tablePathSegments;
+    this.tableIdentityKey = tableIdentityKey;
+    this.identityKey = identityKey;
   }
 }
 
 class ReferenceOccurrence {
-  constructor(expr, range, tablePath, resolvedPath = null, resolvedKind = null) {
+  constructor(
+    expr,
+    range,
+    tablePath,
+    resolvedPath = null,
+    resolvedKind = null,
+    tablePathSegments = [],
+    tableIdentityKey = null,
+  ) {
     this.expr = expr;
     this.range = range;
     this.tablePath = tablePath;
     this.resolvedPath = resolvedPath;
     this.resolvedKind = resolvedKind;
+    this.tablePathSegments = tablePathSegments;
+    this.tableIdentityKey = tableIdentityKey;
+    this.resolvedPathSegments = null;
+    this.resolvedPathKey = null;
   }
 }
 
@@ -244,11 +271,18 @@ class ParsedDocument {
 }
 
 function pathKey(path) {
-  return JSON.stringify(path);
+  return JSON.stringify((path || []).map((segment) => segmentValue(segment)));
 }
 
 function pathLabel(path) {
-  return path.join(".");
+  return (path || [])
+    .map((segment) => {
+      if (segment && typeof segment === "object" && Object.prototype.hasOwnProperty.call(segment, "value")) {
+        return segment.quoted ? JSON.stringify(segment.value) : String(segment.value);
+      }
+      return String(segment);
+    })
+    .join(".");
 }
 
 function comparePaths(left, right) {
@@ -260,12 +294,19 @@ function comparePaths(left, right) {
     if (index >= right.length) {
       return 1;
     }
-    const comparison = String(left[index]).localeCompare(String(right[index]));
+    const comparison = String(segmentValue(left[index])).localeCompare(String(segmentValue(right[index])));
     if (comparison !== 0) {
       return comparison;
     }
   }
   return 0;
+}
+
+function segmentValue(segment) {
+  if (segment && typeof segment === "object" && Object.prototype.hasOwnProperty.call(segment, "value")) {
+    return segment.value;
+  }
+  return segment;
 }
 
 module.exports = {

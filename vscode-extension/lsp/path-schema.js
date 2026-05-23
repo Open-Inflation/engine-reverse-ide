@@ -1,5 +1,28 @@
 const SIMPLE_SEGMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
+const TABLE_ROOT_SEGMENTS = new Set([
+  "app",
+  "misklerreverseapi",
+]);
+
+const APP_CHILD_SEGMENTS = new Set([
+  "warmup",
+  "variables",
+  "prefixes",
+  "regexes",
+  "groups",
+  "func",
+]);
+
+const FUNC_CHILD_SEGMENTS = new Set([
+  "input",
+  "body",
+  "headers",
+  "url",
+  "examples",
+  "postprocess",
+]);
+
 function normalizePathSegments(pathSegments) {
   if (!Array.isArray(pathSegments)) {
     return [];
@@ -34,6 +57,160 @@ function renderPath(pathSegments, endIndex = pathSegments.length) {
     .join(".");
 }
 
+function pathIdentityKey(pathSegments) {
+  const segments = normalizePathSegments(pathSegments);
+  const tokens = [];
+  if (!segments.length) {
+    return JSON.stringify(tokens);
+  }
+
+  const root = segments[0];
+  if (segmentValue(root) === "app" && !segmentQuoted(root)) {
+    pushIdentityToken(tokens, "system", root);
+    if (segments.length === 1) {
+      return JSON.stringify(tokens);
+    }
+    const child = segments[1];
+    if (!segmentQuoted(child) && APP_CHILD_SEGMENTS.has(String(segmentValue(child)))) {
+      pushIdentityToken(tokens, "system", child);
+      appendAppBranchIdentity(tokens, segments, 2, String(segmentValue(child)));
+      return JSON.stringify(tokens);
+    }
+    pushIdentityToken(tokens, "custom", child);
+    appendRemainingCustomIdentity(tokens, segments, 2);
+    return JSON.stringify(tokens);
+  }
+
+  if (segmentValue(root) === "misklerreverseapi" && !segmentQuoted(root)) {
+    pushIdentityToken(tokens, "system", root);
+    appendRemainingCustomIdentity(tokens, segments, 1);
+    return JSON.stringify(tokens);
+  }
+
+  pushIdentityToken(tokens, "custom", root);
+  appendRemainingCustomIdentity(tokens, segments, 1);
+  return JSON.stringify(tokens);
+}
+
+function appendAppBranchIdentity(tokens, segments, index, branchName) {
+  if (branchName === "groups") {
+    appendRemainingCustomIdentity(tokens, segments, index);
+    return;
+  }
+
+  if (branchName === "variables" || branchName === "regexes") {
+    if (index >= segments.length) {
+      return;
+    }
+    pushIdentityToken(tokens, "custom", segments[index]);
+    appendRemainingCustomIdentity(tokens, segments, index + 1);
+    return;
+  }
+
+  if (branchName === "prefixes" || branchName === "warmup") {
+    appendRemainingCustomIdentity(tokens, segments, index);
+    return;
+  }
+
+  if (branchName === "func") {
+    appendFuncIdentity(tokens, segments, index);
+    return;
+  }
+
+  appendRemainingCustomIdentity(tokens, segments, index);
+}
+
+function appendFuncIdentity(tokens, segments, index) {
+  if (index >= segments.length) {
+    return;
+  }
+
+  const functionId = segments[index];
+  pushIdentityToken(tokens, "custom", functionId);
+  if (index + 1 >= segments.length) {
+    return;
+  }
+
+  const child = segments[index + 1];
+  if (!segmentQuoted(child) && FUNC_CHILD_SEGMENTS.has(String(segmentValue(child)))) {
+    pushIdentityToken(tokens, "system", child);
+    appendFuncChildIdentity(tokens, segments, index + 2, String(segmentValue(child)));
+    return;
+  }
+
+  pushIdentityToken(tokens, "custom", child);
+  appendRemainingCustomIdentity(tokens, segments, index + 2);
+}
+
+function appendFuncChildIdentity(tokens, segments, index, branchName) {
+  if (branchName === "body") {
+    appendBodyIdentity(tokens, segments, index);
+    return;
+  }
+
+  if (branchName === "url") {
+    appendUrlParamsIdentity(tokens, segments, index);
+    return;
+  }
+
+  appendRemainingCustomIdentity(tokens, segments, index);
+}
+
+function appendBodyIdentity(tokens, segments, index) {
+  let seenBodyItem = false;
+  let currentIndex = index;
+  while (currentIndex < segments.length) {
+    const segment = segments[currentIndex];
+    if (!segmentQuoted(segment) && segmentValue(segment) === "url" && seenBodyItem) {
+      pushIdentityToken(tokens, "system", segment);
+      appendUrlParamsIdentity(tokens, segments, currentIndex + 1);
+      return;
+    }
+    pushIdentityToken(tokens, "custom", segment);
+    seenBodyItem = true;
+    currentIndex += 1;
+  }
+}
+
+function appendUrlParamsIdentity(tokens, segments, index) {
+  let position = 0;
+  let currentIndex = index;
+  while (currentIndex < segments.length) {
+    const segment = segments[currentIndex];
+    if (position % 2 === 0 && !segmentQuoted(segment) && segmentValue(segment) === "params") {
+      pushIdentityToken(tokens, "system", segment);
+    } else {
+      pushIdentityToken(tokens, "custom", segment);
+    }
+    position += 1;
+    currentIndex += 1;
+  }
+}
+
+function appendRemainingCustomIdentity(tokens, segments, index) {
+  for (let currentIndex = index; currentIndex < segments.length; currentIndex += 1) {
+    pushIdentityToken(tokens, "custom", segments[currentIndex]);
+  }
+}
+
+function pushIdentityToken(tokens, kind, segment) {
+  tokens.push(`${kind}:${String(segmentValue(segment))}`);
+}
+
+function segmentValue(segment) {
+  if (segment && typeof segment === "object" && Object.prototype.hasOwnProperty.call(segment, "value")) {
+    return segment.value;
+  }
+  return segment;
+}
+
+function segmentQuoted(segment) {
+  if (segment && typeof segment === "object" && Object.prototype.hasOwnProperty.call(segment, "quoted")) {
+    return Boolean(segment.quoted);
+  }
+  return false;
+}
+
 function validateTablePath(pathSegments) {
   const segments = normalizePathSegments(pathSegments);
   if (!segments.length) {
@@ -44,13 +221,13 @@ function validateTablePath(pathSegments) {
 
 function validateRootPath(segments) {
   const root = segments[0];
-  if (root.value === "misklerreverseapi") {
+  if (root.value === "misklerreverseapi" && !root.quoted) {
     if (segments.length === 1) {
       return { valid: true };
     }
     return invalidPath(segments, 1, `Table path "${renderPath(segments)}" cannot declare child tables under "misklerreverseapi".`);
   }
-  if (root.value !== "app") {
+  if (root.value !== "app" || root.quoted) {
     return invalidPath(
       segments,
       0,
@@ -69,22 +246,22 @@ function validateAppPath(segments, index) {
     return { valid: true };
   }
   const segment = segments[index];
-  if (segment.value === "warmup") {
+  if (segment.value === "warmup" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
-  if (segment.value === "variables") {
+  if (segment.value === "variables" && !segment.quoted) {
     return validateDynamicLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`, "variable");
   }
-  if (segment.value === "prefixes") {
+  if (segment.value === "prefixes" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
-  if (segment.value === "regexes") {
+  if (segment.value === "regexes" && !segment.quoted) {
     return validateDynamicLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`, "regex");
   }
-  if (segment.value === "groups") {
+  if (segment.value === "groups" && !segment.quoted) {
     return validateGroupNamespace(segments, index + 1);
   }
-  if (segment.value === "func") {
+  if (segment.value === "func" && !segment.quoted) {
     return validateFuncNamespace(segments, index + 1);
   }
   return invalidPath(
@@ -136,22 +313,22 @@ function validateFuncTable(segments, index) {
     return { valid: true };
   }
   const segment = segments[index];
-  if (segment.value === "input") {
+  if (segment.value === "input" && !segment.quoted) {
     return validateDynamicLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`, "input");
   }
-  if (segment.value === "body") {
+  if (segment.value === "body" && !segment.quoted) {
     return validateBodyNamespace(segments, index + 1, false);
   }
-  if (segment.value === "headers") {
+  if (segment.value === "headers" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
-  if (segment.value === "url") {
+  if (segment.value === "url" && !segment.quoted) {
     return validateUrlNamespace(segments, index + 1);
   }
-  if (segment.value === "examples") {
+  if (segment.value === "examples" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
-  if (segment.value === "postprocess") {
+  if (segment.value === "postprocess" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
   return invalidPath(
@@ -240,5 +417,6 @@ module.exports = {
   normalizePathSegments,
   renderPath,
   renderSegment,
+  pathIdentityKey,
   validateTablePath,
 };

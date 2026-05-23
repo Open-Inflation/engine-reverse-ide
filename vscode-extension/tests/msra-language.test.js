@@ -13,6 +13,18 @@ const { collectSemanticTokens } = require("../lsp/semantic-tokens");
 const languageConfiguration = require("../language-configuration.json");
 const grammar = require("../syntaxes/msra.tmLanguage.json");
 
+function hasTablePath(document, path) {
+  for (const table of document.tables.values()) {
+    if (table.path.length !== path.length) {
+      continue;
+    }
+    if (table.path.every((segment, index) => segment === path[index])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 test("example document stays valid and keeps the documented path", () => {
   const examplePath = path.resolve(__dirname, "..", "..", "example.msra");
   const text = readFileSync(examplePath, "utf8");
@@ -21,7 +33,7 @@ test("example document stays valid and keeps the documented path", () => {
 
   assert.deepStrictEqual(analysis.diagnostics, []);
   assert.ok(
-    document.tables.has(JSON.stringify(["app", "func", "A3A417", "url", "params", "from_global", "params", "text"])),
+    hasTablePath(document, ["app", "func", "A3A417", "url", "params", "from_global", "params", "text"]),
     "expected the nested url params table from the example file to be indexed",
   );
 });
@@ -47,6 +59,22 @@ test("quoted reserved body names remain valid", () => {
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("quoted and unquoted table headers resolve to the same path", () => {
+  const text = [
+    "[app.func.A3A417]",
+    '[app.func."A3A417"]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///quoted-vs-unquoted-path.msra");
+  const duplicateTableDiagnostic = document.diagnostics.find((diagnostic) => diagnostic.code === "duplicate-table");
+
+  assert.ok(duplicateTableDiagnostic, "expected quoted and unquoted headers to map to the same path");
+  assert.ok(
+    hasTablePath(document, ["app", "func", "A3A417"]),
+    "expected the table path to be indexed once regardless of quoting",
+  );
 });
 
 test("nested params tables reject extra children", () => {
@@ -1106,7 +1134,32 @@ test("semantic tokens separate path segments, assignment keys, and inline table 
   assert.ok(tokens.every((token) => token.tokenModifiers.includes("msra")), "expected all semantic tokens to carry the msra modifier");
 });
 
-test("semantic tokens color app prefixes keys differently from fixed assignment keys", () => {
+test("semantic tokens classify reserved names by slot rather than literal text", () => {
+  const text = [
+    "[app.func.url]",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///slot-sensitive-paths.msra");
+  const tokens = collectSemanticTokens(document);
+
+  const findTokenOnLine = (line, needle, tokenType) => tokens.find((token) => {
+    if (token.line !== line || token.tokenType !== tokenType) {
+      return false;
+    }
+    const start = document.offsetAt({ line: token.line, character: token.character });
+    const end = start + token.length;
+    return text.slice(start, end) === needle;
+  });
+
+  assert.ok(findTokenOnLine(0, "url", "parameter"), "expected the function id slot to treat url as a custom name");
+  assert.ok(findTokenOnLine(1, "url", "namespace"), "expected the child table slot to treat url as a system keyword");
+  assert.ok(findTokenOnLine(2, "params", "namespace"), "expected params to stay system inside the url namespace");
+  assert.ok(findTokenOnLine(2, "url", "parameter"), "expected the parameter-name slot to treat url as a custom name");
+});
+
+test("semantic tokens keep prefix definitions custom without parent-dependent reference coloring", () => {
   const text = [
     "[app.prefixes]",
     'BASE_API="https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2"',
@@ -1138,9 +1191,9 @@ test("semantic tokens color app prefixes keys differently from fixed assignment 
     return text.slice(start, end) === needle;
   });
 
-  assert.ok(findToken("BASE_API", "variable"), "expected BASE_API to be classified as a custom prefix variable");
-  assert.ok(findToken("ORIGIN", "variable"), "expected ORIGIN to be classified as a custom prefix variable");
-  assert.ok(findTokens("BASE_API", "variable").length >= 2, "expected the prefix reference to keep the same variable coloring");
+  assert.strictEqual(findTokens("BASE_API", "variable").length, 1, "expected the prefix assignment key to stay custom");
+  assert.ok(findToken("BASE_API", "parameter"), "expected the prefix reference to behave like a normal path segment");
+  assert.strictEqual(findTokens("ORIGIN", "variable").length, 1, "expected ORIGIN to be classified as a custom prefix variable");
   assert.ok(findToken("timeout_ms", "property"), "expected timeout_ms to remain a fixed assignment key");
 });
 
