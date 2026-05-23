@@ -9,6 +9,7 @@
     { "include": "#refs" },
     { "include": "#keywords" },
     { "include": "#numbers" },
+    { "include": "#bare-values" },
     { "include": "#inline-tables" },
     { "include": "#strings" }
   ],
@@ -88,6 +89,9 @@
               "include": "#numbers"
             },
             {
+              "include": "#bare-values"
+            },
+            {
               "include": "#inline-tables"
             },
             {
@@ -142,12 +146,27 @@
               "include": "#numbers"
             },
             {
+              "include": "#bare-values"
+            },
+            {
               "include": "#inline-tables"
             },
             {
               "include": "#strings"
             }
           ]
+        }
+      ]
+    },
+    "bare-values": {
+      "patterns": [
+        {
+          "match": "([:=,\\[]\\s*)([A-Za-z_][A-Za-z0-9_-]*)\\b(?!\\s*[:=])",
+          "captures": {
+            "2": {
+              "name": "constant.other.bare-value.msra"
+            }
+          }
         }
       ]
     },

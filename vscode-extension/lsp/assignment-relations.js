@@ -24,6 +24,7 @@ function validateAssignmentRelations(tableIndex, assignmentIndex) {
   diagnostics.push(...validateWarmupRelations(assignmentIndex));
   diagnostics.push(...validateBodyRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateUrlParamValueRelations(assignmentsByTable));
+  diagnostics.push(...validateExampleInputRelations(tableIndex, assignmentIndex));
 
   return diagnostics;
 }
@@ -352,6 +353,91 @@ function validateUrlParamValueRelations(assignmentsByTable) {
   return diagnostics;
 }
 
+function validateExampleInputRelations(tableIndex, assignmentIndex) {
+  const diagnostics = [];
+  const availableInputsByFunction = collectInputsByFunction(tableIndex);
+
+  for (const assignment of assignmentIndex.values()) {
+    if (!isFunctionExamplesAssignment(assignment)) {
+      continue;
+    }
+
+    const functionPath = assignment.tablePath.slice(0, 3);
+    const availableInputs = availableInputsByFunction.get(functionPath[2]) || new Map();
+    if (!(assignment.value instanceof ArrayExpr)) {
+      continue;
+    }
+
+    for (const item of assignment.value.items) {
+      if (!(item instanceof InlineTableExpr)) {
+        continue;
+      }
+      const inputsEntry = item.items.find((entry) => entry.key === "inputs");
+      if (!inputsEntry || !(inputsEntry.value instanceof InlineTableExpr)) {
+        continue;
+      }
+
+      for (const inputEntry of inputsEntry.value.items) {
+        if (availableInputs.has(inputEntry.key)) {
+          continue;
+        }
+
+        diagnostics.push(
+          new Diagnostic(
+            buildMissingExampleInputMessage(functionPath, inputEntry.key, availableInputs),
+            inputEntry.keyRange,
+            "error",
+            "msra",
+            "missing-example-input",
+          ),
+        );
+      }
+    }
+  }
+
+  return diagnostics;
+}
+
+function collectInputsByFunction(tableIndex) {
+  const inputsByFunction = new Map();
+  for (const table of tableIndex.values()) {
+    const path = table.path || [];
+    if (path.length !== 5 || path[0] !== "app" || path[1] !== "func" || path[3] !== "input") {
+      continue;
+    }
+
+    const functionId = path[2];
+    if (!inputsByFunction.has(functionId)) {
+      inputsByFunction.set(functionId, new Map());
+    }
+    inputsByFunction.get(functionId).set(path[4], table);
+  }
+  return inputsByFunction;
+}
+
+function isFunctionExamplesAssignment(assignment) {
+  return (
+    assignment.key === "examples"
+    && assignment.tablePath.length === 4
+    && assignment.tablePath[0] === "app"
+    && assignment.tablePath[1] === "func"
+    && assignment.tablePath[3] === "examples"
+  );
+}
+
+function buildMissingExampleInputMessage(functionPath, inputName, availableInputs) {
+  const examplesPath = [...functionPath, "examples"];
+  const functionLabel = pathLabel(functionPath);
+  const exampleLabel = pathLabel(examplesPath);
+  const inputNames = [...availableInputs.keys()].sort();
+
+  if (!inputNames.length) {
+    return `Input "${inputName}" in table [${exampleLabel}] does not exist. Function [${functionLabel}] does not define any inputs.`;
+  }
+
+  return `Input "${inputName}" in table [${exampleLabel}] does not exist. Expected one of: ${inputNames.join(", ")}.`;
+}
+
 function validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAssignment) {
   const diagnostics = [];
   const functionId = currentFunctionId(tablePath);
@@ -479,17 +565,28 @@ function getTableAssignment(assignmentsByTable, tablePath, key) {
 }
 
 function isListInputType(value) {
-  if (value instanceof StringExpr) {
-    return isListTypeName(value.value);
+  if (!(value instanceof SequenceExpr) || value.items.length !== 2) {
+    return false;
   }
-  if (value instanceof ArrayExpr) {
-    return value.items.some((item) => item instanceof StringExpr && isListTypeName(item.value));
+  const [prefix, suffix] = value.items;
+  if (!(prefix instanceof StringExpr) || prefix.quoted !== false || prefix.value !== "list") {
+    return false;
+  }
+  if (!(suffix instanceof ArrayExpr) || suffix.items.length !== 1) {
+    return false;
+  }
+  const inner = suffix.items[0];
+  if (inner instanceof StringExpr) {
+    return inner.quoted === false && isPrimitiveInputTypeName(inner.value);
+  }
+  if (inner instanceof IdentExpr) {
+    return isPrimitiveInputTypeName(inner.name);
   }
   return false;
 }
 
-function isListTypeName(typeName) {
-  return typeof typeName === "string" && /^list\[(?:string|integer|boolean|null|array|object)\]$/.test(typeName.trim());
+function isPrimitiveInputTypeName(typeName) {
+  return typeof typeName === "string" && ["string", "integer", "boolean", "null", "array", "object"].includes(typeName.trim());
 }
 
 function getAssignment(assignmentIndex, tablePath, key) {

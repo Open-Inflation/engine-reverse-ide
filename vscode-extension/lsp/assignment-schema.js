@@ -204,10 +204,12 @@ function makeDynamicSchema(match, valueSpec, options = {}) {
   };
 }
 
+const INPUT_TYPE_VALUE_SPEC = enumOf(["string", "integer", "boolean", "null", "array", "object"]);
+const INPUT_LIST_TYPE_SPEC = { kind: "input-list-type", valueSpec: INPUT_TYPE_VALUE_SPEC };
 const INPUT_TYPE_SPEC = oneOf(
-  enumOf(["string", "integer", "boolean", "null", "array", "object"]),
-  patternOf(/^list\[(?:string|integer|boolean|null|array|object)\]$/, "list[type]"),
-  arrayOf(enumOf(["string", "integer", "boolean", "null", "array", "object"])),
+  INPUT_TYPE_VALUE_SPEC,
+  INPUT_LIST_TYPE_SPEC,
+  arrayOf(INPUT_TYPE_VALUE_SPEC),
 );
 
 const EXAMPLE_INPUTS_SPEC = recordOf(ANY, {
@@ -307,6 +309,14 @@ const GROUP_REFERENCE_SPEC = referenceOf(["GROUPS"]);
 const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
 const CREDENTIALS_SPEC = enumOf(["omit", "same-origin", "include"]);
 const APP_NAME_SPEC = patternOf(/^\S+$/, "string without spaces");
+const AUTHOR_EMAIL_SPEC = patternOf(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "email address");
+const LICENSE_SPEC = patternOf(/^[A-Za-z0-9][A-Za-z0-9.+-]*$/, "license abbreviation");
+const AUTHOR_ITEM_SPEC = objectShape(
+  {
+    name: STRING,
+    email: AUTHOR_EMAIL_SPEC,
+  },
+);
 const HUMANIZE_SPEC = oneOf(BOOLEAN, numberGreaterThan(0));
 const REGEX_ACTION_ITEM_SPEC = objectShape(
   {
@@ -440,7 +450,9 @@ const TABLE_SCHEMAS = [
   }),
   makeFixedSchema(exactPath(["app"]), {
     name: APP_NAME_SPEC,
-    description: STRINGISH,
+    authors: arrayOf(AUTHOR_ITEM_SPEC),
+    description: STRING,
+    license: LICENSE_SPEC,
     version: STRINGISH,
     timeout_ms: integerAtLeast(0),
     class_name_pattern: CLASS_NAME_PATTERN_SPEC,
@@ -581,6 +593,12 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
       }
     }
     return [typeDiagnostic(fallbackRange || value.range, `Expected one of: ${spec.options.map(describeSpec).join(", ")}`, "invalid-assignment-value-type")];
+  }
+  if (spec.kind === "input-list-type") {
+    if (isBareListTypeValue(value, spec.valueSpec)) {
+      return [];
+    }
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "arrayOf") {
     if (!(value instanceof ArrayExpr)) {
@@ -852,6 +870,30 @@ function getNumericLiteral(value) {
   return null;
 }
 
+function isBareListTypeValue(value, itemSpec) {
+  if (!(value instanceof SequenceExpr) || value.items.length !== 2) {
+    return false;
+  }
+  const [prefix, suffix] = value.items;
+  if (!isBareListTypePrefix(prefix)) {
+    return false;
+  }
+  if (!(suffix instanceof ArrayExpr) || suffix.items.length !== 1) {
+    return false;
+  }
+  return collectValueDiagnostics(suffix.items[0], itemSpec, suffix.items[0].range).length === 0;
+}
+
+function isBareListTypePrefix(value) {
+  if (value instanceof StringExpr) {
+    return value.quoted === false && value.value === "list";
+  }
+  if (value instanceof IdentExpr) {
+    return value.name === "list";
+  }
+  return false;
+}
+
 function describeSpec(spec) {
   if (spec.kind === "integer") {
     if (spec.min != null && spec.max != null) {
@@ -893,6 +935,9 @@ function describeSpec(spec) {
   }
   if (spec.kind === "oneOf") {
     return spec.options.map(describeSpec).join(" or ");
+  }
+  if (spec.kind === "input-list-type") {
+    return "list[type]";
   }
   if (spec.kind === "arrayOf") {
     return `array of ${describeSpec(spec.item)}`;

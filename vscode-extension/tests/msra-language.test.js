@@ -92,6 +92,39 @@ test("app name must not contain spaces", () => {
   assert.match(diagnostic.message, /without spaces/);
 });
 
+test("app metadata accepts authors description and license", () => {
+  const text = [
+    "[app]",
+    'name="OzonAPI"',
+    'authors=[{name="Miskler", email="miskler@gmail.com"}, {name="Another Author", email="author@example.com"}]',
+    'description="Ozon API integration for catalog browsing and cart flows"',
+    'license="GPL-3.0-or-later"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///app-metadata.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("app metadata rejects malformed authors and license values", () => {
+  const text = [
+    "[app]",
+    'authors=[{name="Miskler"}]',
+    'license="GNU General Public License"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-app-metadata.msra");
+  const analysis = analyzeDocument(document);
+  const missingEmail = analysis.diagnostics.find((item) => item.code === "missing-inline-table-key");
+  const invalidLicense = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(missingEmail, "expected authors entries to require an email");
+  assert.match(missingEmail.message, /email/);
+  assert.ok(invalidLicense, "expected app.license to require a short license identifier");
+  assert.match(invalidLicense.message, /license abbreviation/);
+});
+
 test("timeout_ms must be a non-negative integer", () => {
   const text = [
     "[app]",
@@ -249,6 +282,10 @@ test("nested example, values, list_style, and types structures are validated str
     "[app.func.A3A417.url.params.url]",
     'list_style={style=repeat, delimiter=1, indexed=false, extra=true}',
     'values=[{"foo"=1}]',
+    "",
+    "[app.func.A3A417.input.query]",
+    'type=string',
+    "",
     "[app.func.A3A417.examples]",
     'examples=[{"inputs"={"query"="example"}, "test"=false}]',
     "",
@@ -267,6 +304,22 @@ test("nested example, values, list_style, and types structures are validated str
   assert.ok(unknownListStyleKey, "expected unexpected list_style keys to be rejected");
   assert.ok(unknownValuesKey, "expected unexpected values keys to be rejected");
   assert.ok(missingExampleFile, "expected examples items to require file");
+});
+
+test("examples inputs must reference declared function inputs", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.examples]",
+    'examples=[{"inputs"={"query"="example"}, "file"="local1.json"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///missing-example-input.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "missing-example-input");
+
+  assert.ok(diagnostic, "expected example inputs to reject undeclared function inputs");
+  assert.match(diagnostic.message, /query/);
 });
 
 test("variable type items reject value and revalue together", () => {
@@ -449,7 +502,7 @@ test("list url params accept list-typed inputs in data", () => {
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
-    'type="list[string]"',
+    "type=list[string]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     "list=true",
@@ -460,6 +513,22 @@ test("list url params accept list-typed inputs in data", () => {
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("quoted list types are rejected for inputs", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    'type="list[string]"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///quoted-list-type.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(diagnostic, "expected quoted list types to be rejected");
+  assert.match(diagnostic.message, /list\[type\]/i);
 });
 
 test("numeric revalue ranges accept integer and float bounds", () => {
@@ -884,11 +953,20 @@ test("grammar distinguishes path segments, assignment keys, and inline table key
     "#refs",
     "#keywords",
     "#numbers",
+    "#bare-values",
     "#inline-tables",
     "#strings",
   ]);
   assert.strictEqual(inlineKeyPatterns[0].name, "support.type.property-name.msra");
   assert.strictEqual(inlineKeyPatterns[1].name, "support.type.property-name.msra");
+});
+
+test("grammar highlights bare field values", () => {
+  const bareValuePattern = grammar.repository["bare-values"].patterns[0];
+
+  assert.strictEqual(bareValuePattern.name, undefined);
+  assert.strictEqual(bareValuePattern.captures[2].name, "constant.other.bare-value.msra");
+  assert.match(bareValuePattern.match, /[=,:\\[]/);
 });
 
 test("grammar treats prefixes as a dedicated visual section", () => {
@@ -913,9 +991,11 @@ test("package contributes a stable MSRA palette", () => {
   assert.strictEqual(semanticRules["parameter.msra"].foreground, "#61AFEF");
   assert.strictEqual(semanticRules["property.msra"].foreground, "#E5C07B");
   assert.strictEqual(semanticRules["enumMember.msra"].foreground, "#98C379");
+  assert.strictEqual(semanticRules["literal.msra"].foreground, "#D19A66");
   assert.strictEqual(scopeToColor.get("keyword.other.attribute-name.msra"), "#E5C07B");
   assert.strictEqual(scopeToColor.get("entity.name.variable.prefix.msra"), "#C678DD");
   assert.strictEqual(scopeToColor.get("support.type.property-name.msra"), "#98C379");
+  assert.strictEqual(scopeToColor.get("constant.other.bare-value.msra"), "#D19A66");
   assert.strictEqual(scopeToColor.get("keyword.other.namespace.msra"), "#56B6C2");
   assert.strictEqual(scopeToColor.get("variable.other.readwrite.msra"), "#61AFEF");
   assert.strictEqual(scopeToColor.get("string.quoted.double.msra"), "#CE9178");
@@ -993,6 +1073,35 @@ test("semantic tokens color app prefixes keys differently from fixed assignment 
   assert.ok(findToken("ORIGIN", "variable"), "expected ORIGIN to be classified as a custom prefix variable");
   assert.ok(findTokens("BASE_API", "variable").length >= 2, "expected the prefix reference to keep the same variable coloring");
   assert.ok(findToken("timeout_ms", "property"), "expected timeout_ms to remain a fixed assignment key");
+});
+
+test("semantic tokens color bare field values as literals", () => {
+  const text = [
+    "[app]",
+    "browser=camoufox",
+    "[app.func.A3A417]",
+    "transport=fetch",
+    "method=GET",
+    "[app.func.A3A417.input.query]",
+    "type=list[string]",
+    "values=[foo, bar]",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///bare-field-values.msra");
+  const tokens = collectSemanticTokens(document);
+
+  const findToken = (needle, tokenType) => tokens.find((token) => {
+    if (token.tokenType !== tokenType) {
+      return false;
+    }
+    const start = document.offsetAt({ line: token.line, character: token.character });
+    const end = start + token.length;
+    return text.slice(start, end) === needle;
+  });
+
+  for (const needle of ["camoufox", "fetch", "GET", "list", "string", "foo", "bar"]) {
+    assert.ok(findToken(needle, "literal"), `expected ${needle} to be classified as a bare field value`);
+  }
 });
 
 test("language configuration keeps brackets out of comments and strings", () => {

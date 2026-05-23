@@ -1,3 +1,4 @@
+# Сделано
 1. authors в [app]
 authors = [
     { name = "Miskler", email = "miskler@gmail.com" },
@@ -5,14 +6,6 @@ authors = [
 ]
 2. license в [app]
 3. description в [app]
-5. examples=[{"inputs"={"query"="example"}}] не проверяет существование input'а
-7. enum параметры не должны оборачиваться в "", а кастомные поля по типу name = оборачиваем в ""
-[app.func.A3A417]
-name="feed"
-transport=fetch
-method=GET
-
-В кейсе group - это кастомное поле-ссылка так что обращение должно происходить через <GROUPS.Catalog.Product>
 
 # Кодогенерация
 1. учитывать списки в кодогенерации 

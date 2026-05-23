@@ -102,6 +102,9 @@
           "enumMember.msra": {
             "foreground": "#98C379"
           },
+          "literal.msra": {
+            "foreground": "#D19A66"
+          },
           "variable.msra": {
             "foreground": "#C678DD"
           }
@@ -132,6 +135,12 @@
             "scope": "support.type.property-name.msra",
             "settings": {
               "foreground": "#98C379"
+            }
+          },
+          {
+            "scope": "constant.other.bare-value.msra",
+            "settings": {
+              "foreground": "#D19A66"
             }
           },
           {

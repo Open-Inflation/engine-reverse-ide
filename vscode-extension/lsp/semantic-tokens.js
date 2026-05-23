@@ -1,10 +1,12 @@
 const {
   ArrayExpr,
   CallExpr,
+  IdentExpr,
   InlineTableExpr,
   MergeExpr,
   RefExpr,
   SequenceExpr,
+  StringExpr,
 } = require("./model");
 
 const SEMANTIC_TOKEN_TYPES = [
@@ -12,6 +14,7 @@ const SEMANTIC_TOKEN_TYPES = [
   "parameter",
   "property",
   "enumMember",
+  "literal",
   "variable",
 ];
 
@@ -65,6 +68,7 @@ function collectSemanticTokens(document) {
   const assignments = [...document.assignments.values()].sort(compareByStart);
   for (const assignment of assignments) {
     addToken(tokens, assignment.keyRange, classifyAssignmentKey(assignment), assignment.quoted);
+    collectBareValueTokens(assignment.value, tokens);
     collectInlineTableTokens(assignment.value, tokens);
   }
 
@@ -92,6 +96,18 @@ function collectInlineTableTokens(expr, tokens) {
         addToken(tokens, entry.keyRange, "enumMember", entry.quoted);
         collectInlineTableTokens(entry.value, tokens);
       }
+    }
+  });
+}
+
+function collectBareValueTokens(expr, tokens) {
+  walkExpressions(expr, (node) => {
+    if (node instanceof StringExpr && node.quoted === false) {
+      addToken(tokens, node.range, "literal", false);
+      return;
+    }
+    if (node instanceof IdentExpr) {
+      addToken(tokens, node.range, "literal", false);
     }
   });
 }
