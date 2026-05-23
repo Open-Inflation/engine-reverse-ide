@@ -17,7 +17,7 @@
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.number-sign.msra",
+          "name": "meta.comment.line.number-sign.msra",
           "begin": "#",
           "beginCaptures": {
             "0": {
@@ -25,6 +25,7 @@
             }
           },
           "end": "$",
+          "contentName": "comment.line.number-sign.msra",
           "patterns": []
         }
       ]

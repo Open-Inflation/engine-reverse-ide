@@ -8,6 +8,7 @@ const test = require("node:test");
 
 const { analyzeDocument } = require("../lsp/analysis");
 const { parseDocument } = require("../lsp/parser");
+const { MsraLanguageServer } = require("../lsp/server");
 const { collectSemanticTokens } = require("../lsp/semantic-tokens");
 const languageConfiguration = require("../language-configuration.json");
 const grammar = require("../syntaxes/msra.tmLanguage.json");
@@ -880,9 +881,10 @@ test("grammar highlights boolean and null keywords", () => {
 test("grammar treats number-sign comments as a full-line scope", () => {
   const commentPattern = grammar.repository.comments.patterns[0];
 
-  assert.strictEqual(commentPattern.name, "comment.line.number-sign.msra");
+  assert.strictEqual(commentPattern.name, "meta.comment.line.number-sign.msra");
   assert.strictEqual(commentPattern.begin, "#");
   assert.strictEqual(commentPattern.end, "$");
+  assert.strictEqual(commentPattern.contentName, "comment.line.number-sign.msra");
   assert.deepStrictEqual(commentPattern.patterns, []);
 });
 
@@ -982,6 +984,7 @@ test("grammar treats prefixes as a dedicated visual section", () => {
 
 test("package contributes a stable MSRA palette", () => {
   const defaults = require("../package.json").contributes.configurationDefaults;
+  const grammarContribution = require("../package.json").contributes.grammars[0];
   const semanticRules = defaults["editor.semanticTokenColorCustomizations"].rules;
   const tokenRules = defaults["editor.tokenColorCustomizations"].textMateRules;
   const scopeToColor = new Map(tokenRules.map((rule) => [rule.scope, rule.settings.foreground]));
@@ -1001,6 +1004,10 @@ test("package contributes a stable MSRA palette", () => {
   assert.strictEqual(scopeToColor.get("string.quoted.double.msra"), "#CE9178");
   assert.strictEqual(scopeToColor.get("constant.numeric.msra"), "#D19A66");
   assert.strictEqual(semanticRules["variable.msra"].foreground, "#C678DD");
+  assert.strictEqual(grammarContribution.tokenTypes["comment.line.number-sign.msra"], "comment");
+  assert.strictEqual(grammarContribution.tokenTypes["meta.comment.line.number-sign.msra"], "comment");
+  assert.strictEqual(grammarContribution.tokenTypes["string.quoted.double.msra"], "string");
+  assert.strictEqual(grammarContribution.tokenTypes["meta.path.segment.quoted.msra"], "string");
 });
 
 test("semantic tokens separate path segments, assignment keys, and inline table keys", () => {
@@ -1104,11 +1111,61 @@ test("semantic tokens color bare field values as literals", () => {
   }
 });
 
+test("completion replaces typed reference prefixes instead of duplicating them", () => {
+  const getCompletionItem = (lineText, label) => {
+    const server = new MsraLanguageServer({
+      onRequest() {},
+      onNotification() {},
+      listen() {},
+      sendNotification() {},
+    });
+    const uri = `file:///completion-${label.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}.msra`;
+    const text = ["[app]", "", lineText, ""].join("\n");
+    server._updateDocument({ textDocument: { uri, text } }, false);
+
+    const response = server._completion({
+      textDocument: { uri },
+      position: {
+        line: 2,
+        character: lineText.length,
+      },
+    });
+    const item = response.items.find((candidate) => candidate.label === label);
+    assert.ok(item, `expected completion item ${label}`);
+    return item;
+  };
+
+  const prefixItem = getCompletionItem("url=<DOCUMENT.PREFIXE", "DOCUMENT.PREFIXES");
+  assert.deepStrictEqual(prefixItem.textEdit, {
+    range: {
+      start: { line: 2, character: 5 },
+      end: { line: 2, character: "url=<DOCUMENT.PREFIXE".length },
+    },
+    newText: "DOCUMENT.PREFIXES",
+  });
+
+  const dottedItem = getCompletionItem("url=<DOCUMENT.PREFIXES.", "DOCUMENT.PREFIXES.BASE_API");
+  assert.deepStrictEqual(dottedItem.textEdit, {
+    range: {
+      start: { line: 2, character: 5 },
+      end: { line: 2, character: "url=<DOCUMENT.PREFIXES.".length },
+    },
+    newText: "DOCUMENT.PREFIXES.BASE_API",
+  });
+});
+
 test("language configuration keeps brackets out of comments and strings", () => {
+  const brackets = languageConfiguration.brackets;
   const bracketPairs = languageConfiguration.autoClosingPairs.filter((pair) => ["{", "[", "(", "<"].includes(pair.open));
   const quotePair = languageConfiguration.autoClosingPairs.find((pair) => pair.open === "\"");
   const unbalancedScopes = new Set(require("../package.json").contributes.grammars[0].unbalancedBracketScopes || []);
 
+  assert.deepStrictEqual(brackets, [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["<", ">"],
+  ]);
   assert.ok(bracketPairs.every((pair) => Array.isArray(pair.notIn) && pair.notIn.includes("comment") && pair.notIn.includes("string")));
   assert.ok(Array.isArray(quotePair?.notIn) && quotePair.notIn.includes("comment") && quotePair.notIn.includes("string"));
   assert.ok(unbalancedScopes.has("comment"));

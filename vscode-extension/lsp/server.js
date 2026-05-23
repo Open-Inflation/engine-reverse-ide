@@ -162,8 +162,8 @@ class MsraLanguageServer {
       return { isIncomplete: false, items: [] };
     }
     const position = this._positionFromLsp(params.position || {});
-    const [prefix, context] = this._completionContext(document.parsed, position);
-    const items = this._completionItems(document.analyzed, prefix, context);
+    const completionContext = this._completionContext(document.parsed, position);
+    const items = this._completionItems(document.analyzed, completionContext);
     return { isIncomplete: false, items };
   }
 
@@ -171,29 +171,31 @@ class MsraLanguageServer {
     const offset = document.offsetAt(position);
     const text = document.text;
     let start = offset;
-    while (start > 0 && !" \t\r\n=,+{}[]<>".includes(text[start - 1])) {
+    while (start > 0 && !" \t\r\n=,+{}[]<>\"".includes(text[start - 1])) {
       start -= 1;
     }
     const prefix = text.slice(start, offset);
+    const range = this._rangeToLsp(document.rangeFromOffsets(start, offset));
     const lineStart = position.line < document.lineStarts.length ? document.lineStarts[position.line] : 0;
     const linePrefix = text.slice(lineStart, offset);
     if (linePrefix.includes("<") && linePrefix.lastIndexOf("<") > linePrefix.lastIndexOf(">")) {
-      return [prefix, "reference"];
+      return { prefix, context: "reference", range };
     }
     if (linePrefix.includes("[") && linePrefix.lastIndexOf("[") > linePrefix.lastIndexOf("]")) {
-      return [prefix, "table"];
+      return { prefix, context: "table", range };
     }
-    return [prefix, "value"];
+    return { prefix, context: "value", range };
   }
 
-  _completionItems(analyzed, prefix, context) {
+  _completionItems(analyzed, completionContext) {
+    const { prefix, context, range } = completionContext;
     const items = [];
     if (context === "reference") {
       for (const [label, detail] of this._referenceCompletions(analyzed)) {
         if (prefix && !label.startsWith(prefix)) {
           continue;
         }
-        items.push(this._completionItem(label, detail, 21));
+        items.push(this._completionItem(label, detail, 21, range));
       }
       return items;
     }
@@ -202,7 +204,7 @@ class MsraLanguageServer {
         if (prefix && !label.startsWith(prefix)) {
           continue;
         }
-        items.push(this._completionItem(label, detail, 21));
+        items.push(this._completionItem(label, detail, 21, range));
       }
       return items;
     }
@@ -210,7 +212,7 @@ class MsraLanguageServer {
       if (prefix && !label.startsWith(prefix)) {
         continue;
       }
-      items.push(this._completionItem(label, detail, 12));
+      items.push(this._completionItem(label, detail, 12, range));
     }
     return items;
   }
@@ -290,12 +292,15 @@ class MsraLanguageServer {
     ];
   }
 
-  _completionItem(label, detail, kind) {
+  _completionItem(label, detail, kind, range) {
     return {
       label,
       kind,
       detail,
-      insertText: label,
+      textEdit: {
+        range,
+        newText: label,
+      },
     };
   }
 

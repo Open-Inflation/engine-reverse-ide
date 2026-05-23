@@ -54,7 +54,13 @@
           "string.quoted.double.msra",
           "meta.path.segment.quoted",
           "meta.path.segment.quoted.msra"
-        ]
+        ],
+        "tokenTypes": {
+          "meta.comment.line.number-sign.msra": "comment",
+          "comment.line.number-sign.msra": "comment",
+          "string.quoted.double.msra": "string",
+          "meta.path.segment.quoted.msra": "string"
+        }
       }
     ],
     "configuration": {
