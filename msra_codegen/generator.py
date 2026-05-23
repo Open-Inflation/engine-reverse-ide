@@ -79,22 +79,62 @@ def top_level_groups(tree: dict[str, Any]) -> list[dict[str, Any]]:
     return list(tree.get("children", {}).values())
 
 
-def module_name_for_group(path: list[str]) -> str:
-    return snake_case(path[0]) if path else "generated"
+def module_file_name_for_group(path: list[str]) -> str:
+    if not path:
+        return "generated.py"
+    return f"{snake_case(path[-1])}.py"
 
 
-def class_name_for_group(path: list[str]) -> str:
+def package_dir_for_group(path: list[str]) -> Path:
+    return Path(*[snake_case(segment) for segment in path]) if path else Path()
+
+
+def module_import_name_for_group(group_node: dict[str, Any]) -> str:
+    path = group_node.get("path", [])
+    if not path:
+        return "generated"
+    if group_node.get("children"):
+        return snake_case(path[-1])
+    return module_file_name_for_group(path)[:-3]
+
+
+def module_package_depth_for_group(group_node: dict[str, Any]) -> int:
+    path = group_node.get("path", [])
+    return len(path) + (1 if group_node.get("children") else 0)
+
+
+def module_output_dir_for_group(group_node: dict[str, Any], endpoints_root: Path) -> Path:
+    path = group_node.get("path", [])
+    if group_node.get("children"):
+        return endpoints_root / package_dir_for_group(path)
+    if path:
+        return endpoints_root / package_dir_for_group(path[:-1])
+    return endpoints_root
+
+
+def base_class_name_for_group(path: list[str]) -> str:
     if not path:
         return "GeneratedGroup"
-    if len(path) == 1:
-        return f"Class{pascal_case(path[0])}"
-    return f"{singularize(pascal_case(path[-1]))}Service"
+    return pascal_case(path[-1])
+
+
+def apply_class_name_pattern(class_name_pattern: str, class_name: str) -> str:
+    pattern = str(class_name_pattern or "").strip()
+    if not pattern:
+        return class_name
+    if "{class_name}" in pattern:
+        return pattern.format(class_name=class_name)
+    return f"{pattern}{class_name}"
+
+
+def class_name_for_group(path: list[str], class_name_pattern: str = "Class{class_name}") -> str:
+    return apply_class_name_pattern(class_name_pattern, base_class_name_for_group(path))
 
 
 def field_name_for_group(path: list[str]) -> str:
     if not path:
         return "Group"
-    return singularize(path[-1])
+    return snake_case(path[-1])
 
 
 def snake_case(text: str) -> str:
@@ -118,17 +158,6 @@ def root_client_class_name(project: dict[str, Any]) -> str:
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
         return name
     return pascal_case(name)
-
-
-def singularize(text: str) -> str:
-    lowered = text.lower()
-    if lowered.endswith("ies") and len(text) > 3:
-        return text[:-3] + "y"
-    if lowered.endswith("ses") and len(text) > 3:
-        return text[:-2]
-    if lowered.endswith("s") and not lowered.endswith("ss") and len(text) > 1:
-        return text[:-1]
-    return text
 
 
 def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
@@ -360,7 +389,6 @@ def generate_project(
     postprocess_root = package_root / "postprocess"
     package_root.mkdir(parents=True, exist_ok=True)
     abstraction_root.mkdir(parents=True, exist_ok=True)
-    endpoints_root.mkdir(parents=True, exist_ok=True)
     postprocess_root.mkdir(parents=True, exist_ok=True)
 
     write_text(
@@ -386,12 +414,12 @@ def generate_project(
             render_template("abstraction/catalog_sort.py.tpl", abstraction_context),
         )
     write_text(package_root / "manager.py", render_manager_template(project, package_name, group_tree))
+    if endpoints_root.exists():
+        shutil.rmtree(endpoints_root)
+    endpoints_root.mkdir(parents=True, exist_ok=True)
+    write_text(endpoints_root / "__init__.py", render_endpoints_init(project, package_name, group_tree))
     for group_node in top_level_groups(group_tree):
-        module_name = module_name_for_group(group_node["path"])
-        write_text(
-            endpoints_root / f"{module_name}.py",
-            render_group_template(group_node, project, package_name),
-        )
+        write_group_package(group_node, project, package_name, endpoints_root)
 
     for script in collect_postprocess_scripts(project):
         source = source_root / script
@@ -685,8 +713,8 @@ def build_manager_context(
         "top_groups": [
             {
                 "field_name": field_name_for_group(group["path"]),
-                "class_name": class_name_for_group(group["path"]),
-                "module_name": module_name_for_group(group["path"]),
+                "class_name": class_name_for_group(group["path"], app["class_name_pattern"]),
+                "module_name": module_import_name_for_group(group),
                 "description": escape_docstring(group.get("description") or group["name"]),
             }
             for group in top_groups
@@ -730,36 +758,47 @@ def build_group_context(
     group_node: dict[str, Any],
     project: dict[str, Any],
     package_name: str,
-    *,
-    emit_header: bool,
 ) -> dict[str, Any]:
     root_client_name = root_client_class_name(project)
+    class_name_pattern = project["app"]["class_name_pattern"]
+    child_nodes = list(group_node.get("children", {}).values())
+    module_depth = module_package_depth_for_group(group_node)
     return {
         "package_name": package_name,
         "root_client_name": root_client_name,
-        "emit_header": emit_header,
+        "root_import_prefix": "." * (module_depth + 1),
         "group_name": ".".join(group_node["path"]) or "MSRA",
-        "class_name": class_name_for_group(group_node["path"]),
+        "class_name": class_name_for_group(group_node["path"], class_name_pattern),
+        "module_name": module_file_name_for_group(group_node["path"]),
+        "module_stem": module_file_name_for_group(group_node["path"])[:-3],
         "description": escape_docstring(group_node.get("description") or "Generated API group."),
+        "child_imports": [
+            {
+                "package_name": module_import_name_for_group(child),
+                "class_name": class_name_for_group(child["path"], class_name_pattern),
+                "description": escape_docstring(
+                    child.get("description")
+                    or class_name_for_group(child["path"], class_name_pattern)
+                ),
+            }
+            for child in child_nodes
+        ],
         "children": [
             {
                 "field_name": field_name_for_group(child["path"]),
-                "class_name": class_name_for_group(child["path"]),
-                "description": escape_docstring(child.get("description") or class_name_for_group(child["path"])),
+                "class_name": class_name_for_group(child["path"], class_name_pattern),
+                "description": escape_docstring(
+                    child.get("description")
+                    or class_name_for_group(child["path"], class_name_pattern)
+                ),
             }
-            for child in group_node.get("children", {}).values()
+            for child in child_nodes
         ],
         "functions": [
             {
                 "code": render_function_block(func, root_client_name),
             }
             for func in sorted(group_node.get("functions", []), key=lambda item: item["name"])
-        ],
-        "nested_groups": [
-            {
-                "code": render_group_block(child, project, package_name, emit_header=False),
-            }
-            for child in group_node.get("children", {}).values()
         ],
     }
 
@@ -768,12 +807,10 @@ def render_group_block(
     group_node: dict[str, Any],
     project: dict[str, Any],
     package_name: str,
-    *,
-    emit_header: bool,
 ) -> str:
     return render_template(
         "group.py.tpl",
-        build_group_context(group_node, project, package_name, emit_header=emit_header),
+        build_group_context(group_node, project, package_name),
     )
 
 
@@ -789,7 +826,58 @@ def render_group_template(
     project: dict[str, Any],
     package_name: str,
 ) -> str:
-    return render_group_block(group_node, project, package_name, emit_header=True)
+    return render_group_block(group_node, project, package_name)
+
+
+def render_group_init_template(
+    group_node: dict[str, Any],
+    project: dict[str, Any],
+    package_name: str,
+) -> str:
+    return render_template(
+        "group_init.py.tpl",
+        build_group_context(group_node, project, package_name),
+    )
+
+
+def render_endpoints_init(project: dict[str, Any], package_name: str, group_tree: dict[str, Any]) -> str:
+    return render_template(
+        "endpoints_init.py.tpl",
+        {
+            "package_name": package_name,
+            "top_groups": [
+                {
+                    "package_name": module_import_name_for_group(group),
+                    "class_name": class_name_for_group(group["path"], project["app"]["class_name_pattern"]),
+                    "description": escape_docstring(group.get("description") or group["name"]),
+                }
+                for group in top_level_groups(group_tree)
+            ],
+        },
+    )
+
+
+def write_group_package(
+    group_node: dict[str, Any],
+    project: dict[str, Any],
+    package_name: str,
+    endpoints_root: Path,
+) -> None:
+    package_dir = module_output_dir_for_group(group_node, endpoints_root)
+    if group_node.get("children"):
+        package_dir.mkdir(parents=True, exist_ok=True)
+    context = build_group_context(group_node, project, package_name)
+    if group_node.get("children"):
+        write_text(
+            package_dir / "__init__.py",
+            render_template("group_init.py.tpl", context),
+        )
+    write_text(
+        package_dir / module_file_name_for_group(group_node["path"]),
+        render_template("group.py.tpl", context),
+    )
+    for child in group_node.get("children", {}).values():
+        write_group_package(child, project, package_name, endpoints_root)
 
 
 def should_render_setter(variable: dict[str, Any]) -> bool:

@@ -60,11 +60,6 @@
         if query_params:
             url += "?" + urlencode(query_params, doseq=True)
 
-{% if body_expr is not none %}
-        json_body = {{ body_expr }}
-{% else %}
-        json_body = None
-{% endif %}
 {% if transport == "direct" %}
         return await self._parent._direct_request(url, {{ direct_args | join(", ") }})
 {% elif transport == "goto" %}
@@ -82,16 +77,32 @@
 {% if postprocess.evaluate_path_expr %}
             evaluate_script = (Path(__file__).resolve().parent / {{ postprocess.evaluate_path_expr }}).read_text(encoding="utf-8")
             evaluate_result = await page.evaluate(evaluate_script)
-            if isinstance(evaluate_result, dict) and evaluate_result.get("type") == "json":
-                payload = json.loads(evaluate_result.get("data", "null"))
-                def _json(self):
-                    return payload
-                resp.json = MethodType(_json, resp)
+            if isinstance(evaluate_result, dict):
+                result_type = str(evaluate_result.get("type", "")).lower()
+                if result_type in {"json", "text/json"}:
+                    payload = json.loads(evaluate_result.get("data", "null"))
+
+                    def _json(self):
+                        return payload
+
+                    resp.json = MethodType(_json, resp)
+                elif result_type in {"text", "text/plain"}:
+                    payload = str(evaluate_result.get("data", ""))
+
+                    def _text(self):
+                        return payload
+
+                    resp.text = MethodType(_text, resp)
 {% endif %}
             return resp
         finally:
             await page.close()
 {% else %}
+{% if body_expr is not none %}
+        json_body = {{ body_expr }}
+{% else %}
+        json_body = None
+{% endif %}
         return await self._parent._request(
             HttpMethod.{{ method }},
             url=url,

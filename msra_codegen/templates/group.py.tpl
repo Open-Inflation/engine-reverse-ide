@@ -1,4 +1,3 @@
-{% if emit_header %}
 """Generated endpoints for {{ group_name }}."""
 
 from __future__ import annotations
@@ -16,11 +15,13 @@ from human_requests.network_analyzer.anomaly_sniffer import WaitHeader, WaitSour
 from playwright.async_api import Response as PWResponse
 from urllib.parse import urlencode
 
-from .. import abstraction
+from {{ root_import_prefix }} import abstraction
+{% for child in child_imports %}
+from .{{ child.package_name }} import {{ child.class_name }}
+{% endfor %}
 
 if TYPE_CHECKING:
-    from {{ package_name }}.manager import {{ root_client_name }}
-{% endif %}
+    from {{ root_import_prefix }}manager import {{ root_client_name }}
 
 
 @dataclass(init=False)
@@ -40,9 +41,5 @@ class {{ class_name }}(ApiChild["{{ root_client_name }}"], ApiParent):
 
 {% for func in functions %}
 {{ func.code }}
-
-{% endfor %}
-{% for nested_group in nested_groups %}
-{{ nested_group.code }}
 
 {% endfor %}
