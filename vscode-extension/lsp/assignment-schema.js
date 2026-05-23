@@ -341,7 +341,7 @@ const REGEX_ACTION_ITEM_SPEC = objectShape(
 );
 
 const PIPELINE_WAIT_ELEMENT_STATE_SPEC = enumOf(["visible", "hidden", "attached", "detached"]);
-const PIPELINE_WAIT_NETWORK_STATE_SPEC = enumOf(["load", "idle", "commit"]);
+const PIPELINE_WAIT_NETWORK_STATE_SPEC = enumOf(["load", "domcontentloaded", "networkidle", "commit"]);
 const PIPELINE_THEN_ACTION_SPEC = enumOf(["click", "commit"]);
 const PIPELINE_THEN_OBJECT_SPEC = objectShape(
   {

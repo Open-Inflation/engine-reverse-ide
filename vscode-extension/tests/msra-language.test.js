@@ -26,6 +26,15 @@ test("example document stays valid and keeps the documented path", () => {
   );
 });
 
+test("fixprice document stays valid", () => {
+  const fixpricePath = path.resolve(__dirname, "..", "..", "fixprice.msra");
+  const text = readFileSync(fixpricePath, "utf8");
+  const document = parseDocument(text, fixpricePath);
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
 test("quoted reserved body names remain valid", () => {
   const text = [
     "[app]",
@@ -222,7 +231,7 @@ test("function postprocess validates goto_pipeline and evaluate context", () => 
     'transport=fetch',
     "[app.func.A3A417.postprocess]",
     "render_html=false",
-    'goto_pipeline=[{action=wait_network, state=idle}]',
+    'goto_pipeline=[{action=wait_network, state=networkidle}]',
     'evaluate="script.js"',
     "",
   ].join("\n");
@@ -323,6 +332,26 @@ test("examples inputs must reference declared function inputs", () => {
   assert.match(diagnostic.message, /query/);
 });
 
+test("examples inputs must match declared function input types", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "type=string",
+    "[app.func.A3A417.examples]",
+    'examples=[{"inputs"={"query"=1}, "file"="local1.json"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-example-input-type.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-example-input-type");
+
+  assert.ok(diagnostic, "expected example inputs to reject values that do not match the declared input type");
+  assert.match(diagnostic.message, /query/);
+  assert.match(diagnostic.message, /string/);
+  assert.match(diagnostic.message, /integer/);
+});
+
 test("variable type items reject value and revalue together", () => {
   const text = [
     "[app]",
@@ -414,6 +443,25 @@ test("reference revalue syntax is accepted", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
+test("legacy DOCUMENT.REGEX alias is no longer resolved", () => {
+  const text = [
+    "[app]",
+    "[app.regexes.TEXT_REQUEST]",
+    'regex="^[a-z]+$"',
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    'type=string',
+    'revalue=<DOCUMENT.REGEX.TEXT_REQUEST>',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///legacy-document-regex-alias.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "unresolved-reference");
+
+  assert.ok(diagnostic, "expected the legacy DOCUMENT.REGEX alias to be rejected");
+  assert.match(diagnostic.message, /DOCUMENT\.REGEX\.TEXT_REQUEST/);
+});
+
 test("inline regex object revalue syntax is rejected in favor of reference or numeric range form", () => {
   const text = [
     "[app]",
@@ -435,13 +483,27 @@ test("pipeline state is validated in the context of action", () => {
   const text = [
     "[app]",
     "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, what=<UNSTANDART_HEADERS.REQUEST.X-key>}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=idle}]',
+    'pipeline=[{action=wait_sniffer, what=<UNSTANDART_HEADERS.REQUEST.X-key>}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=domcontentloaded}, {action=wait_network, state=networkidle}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-pipeline-state.msra");
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("pipeline state rejects legacy idle for wait_network", () => {
+  const text = [
+    "[app]",
+    "[app.warmup]",
+    'pipeline=[{action=wait_network, state=idle}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///legacy-idle-pipeline-state.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(diagnostic, "expected legacy idle to be rejected in pipeline wait_network state");
 });
 
 test("pipeline state rejects values that do not match the action context", () => {
@@ -648,7 +710,7 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     "",
     "[app.warmup]",
     'url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>',
-    'pipeline=[{for_tests=true, action=wait_network, state=load}, {for_tests=true, action=wait_element, state=visible, what="div.one", then=click}, {action=wait_network, state=idle}]',
+    'pipeline=[{for_tests=true, action=wait_network, state=load}, {for_tests=true, action=wait_element, state=visible, what="div.one", then=click}, {action=wait_network, state=networkidle}]',
     "",
   ].join("\n");
 

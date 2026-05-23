@@ -6,7 +6,7 @@ name="FixPriceAPI"
 version="0.2.4.1"
 timeout_ms=35000
 class_name_pattern="Class{class_name}"
-browser="camoufox"
+browser=camoufox
 
 # Warmup mirrors FixPriceAPI._warmup():
 # MAIN_SITE_URL -> sniffer for X-Key -> optional test_mode clicks -> CATALOG_URL -> body > pre.
@@ -17,45 +17,45 @@ block_images=true
 url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>
 # Actual flow in code: MAIN_SITE_URL -> sniffer wait for X-Key -> optional test_mode clicks -> CATALOG_URL -> body > pre.
 pipeline=[
-    {action="wait_network", state="idle"},
-    {action="wait_sniffer", what=<UNSTANDART_HEADERS.REQUEST.X-Key>},
-    {for_tests=true, action="wait_element", state="visible", what="div.selected-city > div.buttons > button.button.normal", then="click"},
-    {for_tests=true, action="wait_element", state="visible", what="a.link.product-category", then="click"},
-    {for_tests=true, action="wait_element", state="visible", what="div.page-content"},
-    {for_tests=true, action="wait_network", state="load"},
-    {action="wait_element", state="visible", what="body > pre"}
+    {action=wait_network, state=networkidle},
+    {action=wait_sniffer, what=<UNSTANDART_HEADERS.REQUEST.X-Key>},
+    {for_tests=true, action=wait_element, state=visible, what="div.selected-city > div.buttons > button.button.normal", then=click},
+    {for_tests=true, action=wait_element, state=visible, what="a.link.product-category", then=click},
+    {for_tests=true, action=wait_element, state=visible, what="div.page-content"},
+    {for_tests=true, action=wait_network, state=load},
+    {action=wait_element, state=visible, what="body > pre"}
 ]
 headers_sniffer=true
 on_error_screenshot_path="screenshot.png"
 
 [app.variables.city_id]
-types=[{"type"="integer", "revalue"="^[1-9]\\d*$"}, {"type"="null", "value"=null}]
+types=[{"type"=integer, "revalue"={from=1, to=2147483647}}, {"type"=null, "value"=null}]
 description="Current city id used by catalog and balance requests."
 read_only=false
 from=<UNSTANDART_HEADERS.REQUEST.x-city>
 
 [app.variables.language]
-types=[{"type"="string", "revalue"="^[a-z]{2}(?:-[A-Z]{2})?$"}, {"type"="null", "value"=null}]
+types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.LANGUAGE_TAG>}, {"type"=null, "value"=null}]
 description="Current language header value."
 from=<UNSTANDART_HEADERS.REQUEST.x-language>
 
 [app.variables.token]
-types=[{"type"="string", "value"=null}]
+types=[{"type"=string, "value"=null}]
 description="Access token captured by the warmup sniffer."
 from=<UNSTANDART_HEADERS.REQUEST.x-key>
 
 [app.variables.delivery_type]
-types=[{"type"="string", "revalue"="^(store|pickup|courier)$"}, {"type"="null", "value"=null}]
+types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.DELIVERY_TYPE>}, {"type"=null, "value"=null}]
 description="Delivery mode used by the catalog."
 from=<UNSTANDART_HEADERS.REQUEST.x-delivery-type>
 
 [app.variables.store_id]
-types=[{"type"="string", "revalue"="^[A-Za-z]\\d{3}$"}, {"type"="null", "value"=null}]
+types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.STORE_ID>}, {"type"=null, "value"=null}]
 description="Store or PFM identifier."
 from=<UNSTANDART_HEADERS.REQUEST.x-pfm>
 
 [app.variables.client_route]
-types=[{"type"="string", "value"=null}]
+types=[{"type"=string, "value"=null}]
 description="Route path used for the X-Client-Route header."
 from=<UNSTANDART_HEADERS.REQUEST.x-client-route>
 
@@ -67,6 +67,18 @@ CATALOG_URL="https://api.fix-price.com/buyer"
 [app.regexes.COUNTRY_ALIAS]
 regex="^[A-Za-z]{2}$"
 raise="Alias страны должен состоять ровно из двух латинских букв"
+
+[app.regexes.LANGUAGE_TAG]
+regex="^[a-z]{2}(?:-[A-Z]{2})?$"
+description="Language header value."
+
+[app.regexes.DELIVERY_TYPE]
+regex="^(store|pickup|courier)$"
+description="Delivery mode used by the catalog."
+
+[app.regexes.STORE_ID]
+regex="^[A-Za-z]\\d{3}$"
+description="Store or PFM identifier."
 
 [app.groups.Catalog]
 description="Catalog tree, listing, and category-level API methods."
@@ -85,14 +97,14 @@ description="General helpers that are not browser-backed API methods."
 
 [app.func.headers]
 referrer=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>
-cors_mode="cors"
-credentials="include"
+cors_mode=cors
+credentials=include
 headers={Accept="application/json, text/plain, */*"}+<UNSTANDART_HEADERS.REQUEST>
 
 [app.func.CATALOG_TREE]
 name="tree"
-method="GET"
-group="Catalog"
+method=GET
+group=<GROUPS.Catalog>
 color="#D9A441"
 description="Fetches the catalog tree from /v1/category."
 
@@ -101,35 +113,35 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/category"
 
 [app.func.CATALOG_PRODUCTS_LIST]
 name="products_list"
-method="POST"
-group="Catalog"
+method=POST
+group=<GROUPS.Catalog>
 color="#D9A441"
 description="Fetches products inside a category or subcategory; the JSON body mirrors the request built in products_list()."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.category_alias]
-type="string"
+type=string
 required=true
 description="Category alias used in the request path and JSON body."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.subcategory_alias]
-type="string"
+type=string
 required=false
 description="Optional subcategory alias appended to the request path and body category."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.page]
-type="integer"
+type=integer
 default=1
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Page number for the listing."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.limit]
-type="integer"
+type=integer
 default=24
 revalue={from=1, to=27}
 description="Page size for the listing; the Python code rejects values outside 1..27."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.sort]
-type="string"
+type=string
 default="sold"
 values=["sold", "abc", "min", "max"]
 description="Catalog sort order."
@@ -164,24 +176,24 @@ data={category=<INPUT.category_alias>, brand=[], price=[], isDividedPrice=false,
 
 [app.func.CATALOG_PRODUCT_BALANCE]
 name="balance"
-method="GET"
-group="Catalog.Products"
+method=GET
+group=<GROUPS.Catalog.Products>
 color="#E08A1E"
 description="Checks store balance for a product in the current city."
 
 [app.func.CATALOG_PRODUCT_BALANCE.input.product_id]
-type="integer"
+type=integer
 required=true
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Product id used in the balance path."
 
 [app.func.CATALOG_PRODUCT_BALANCE.input.in_stock]
-type="boolean"
+type=boolean
 default=true
 description="When false the request omits the inStock query flag."
 
 [app.func.CATALOG_PRODUCT_BALANCE.input.search]
-type="string"
+type=string
 required=false
 description="Optional address filter for store search."
 
@@ -211,30 +223,30 @@ description="Present only when in_stock is true."
 
 [app.func.CATALOG_PRODUCT_INFO]
 name="info"
-transport="goto"
-group="Catalog.Products"
+transport=goto
+group=<GROUPS.Catalog.Products>
 color="#E08A1E"
 description="Loads the product page, extracts window.__NUXT__, and overrides resp.json to return the product payload."
 
 # Either url or (category, product_id, slug) must be provided; MSRA cannot encode the Python overload exactly.
 [app.func.CATALOG_PRODUCT_INFO.input.url]
-type="string"
+type=string
 required=false
 description="Relative catalog URL appended after /catalog/."
 
 [app.func.CATALOG_PRODUCT_INFO.input.category]
-type="string"
+type=string
 required=false
 description="Category slug for the structured overload."
 
 [app.func.CATALOG_PRODUCT_INFO.input.product_id]
-type="integer"
+type=integer
 required=false
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Product id for the structured overload."
 
 [app.func.CATALOG_PRODUCT_INFO.input.slug]
-type="string"
+type=string
 required=false
 description="Slug for the structured overload."
 
@@ -247,13 +259,13 @@ evaluate="postprocess/catalog-product-info.evaluate.js"
 
 [app.func.GEOLOCATION_COUNTRIES_LIST]
 name="countries_list"
-method="GET"
-group="Geolocation"
+method=GET
+group=<GROUPS.Geolocation>
 color="#2AA198"
 description="Lists countries and supports an optional ISO-2 alias filter."
 
 [app.func.GEOLOCATION_COUNTRIES_LIST.input.alias]
-type="string"
+type=string
 required=false
 revalue=<DOCUMENT.REGEXES.COUNTRY_ALIAS>
 description="Optional ISO-2 country alias, uppercased by the code."
@@ -270,15 +282,15 @@ description="Optional alias query parameter."
 
 [app.func.GEOLOCATION_REGIONS_LIST]
 name="regions_list"
-method="GET"
-group="Geolocation"
+method=GET
+group=<GROUPS.Geolocation>
 color="#2AA198"
 description="Lists regions and can optionally filter by country id."
 
 [app.func.GEOLOCATION_REGIONS_LIST.input.country_id]
-type="integer"
+type=integer
 required=false
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Optional country id filter."
 
 [app.func.GEOLOCATION_REGIONS_LIST.url]
@@ -293,15 +305,15 @@ description="Optional countryId query parameter."
 
 [app.func.GEOLOCATION_CITIES_LIST]
 name="cities_list"
-method="GET"
-group="Geolocation"
+method=GET
+group=<GROUPS.Geolocation>
 color="#2AA198"
 description="Lists cities for a country."
 
 [app.func.GEOLOCATION_CITIES_LIST.input.country_id]
-type="integer"
+type=integer
 required=true
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Country id used by the cities endpoint."
 
 [app.func.GEOLOCATION_CITIES_LIST.url]
@@ -316,15 +328,15 @@ description="CountryId query parameter."
 
 [app.func.GEOLOCATION_CITY_INFO]
 name="city_info"
-method="GET"
-group="Geolocation"
+method=GET
+group=<GROUPS.Geolocation>
 color="#2AA198"
 description="Returns a single city by id."
 
 [app.func.GEOLOCATION_CITY_INFO.input.city_id]
-type="integer"
+type=integer
 required=true
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="City id used in the path."
 
 [app.func.GEOLOCATION_CITY_INFO.url]
@@ -332,31 +344,31 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city/"<INPUT.city_id>
 
 [app.func.GEOLOCATION_SHOP_SEARCH]
 name="search"
-method="GET"
-group="Geolocation"
+method=GET
+group=<GROUPS.Geolocation>
 color="#2AA198"
 description="Searches stores by country, region, city, and address filters."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.country_id]
-type="integer"
+type=integer
 required=false
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Optional country id filter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.region_id]
-type="integer"
+type=integer
 required=false
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Optional region id filter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.city_id]
-type="integer"
+type=integer
 required=false
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Optional city id filter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.search]
-type="string"
+type=string
 required=false
 description="Optional address search filter."
 
@@ -414,8 +426,8 @@ description="Optional addressPart query parameter."
 
 [app.func.ADVERTISING_HOME_BRANDS_LIST]
 name="home_brands_list"
-method="GET"
-group="Advertising"
+method=GET
+group=<GROUPS.Advertising>
 color="#3A87C6"
 description="Returns the brand list used on the homepage."
 
@@ -424,24 +436,24 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
 
 [app.func.GENERAL_DOWNLOAD_IMAGE]
 name="download_image"
-method="GET"
-group="General"
+method=GET
+group=<GROUPS.General>
 color="#6C7A89"
 description="Direct HTTP retry helper for images; bypasses the browser request pipeline and returns BytesIO."
 
 [app.func.GENERAL_DOWNLOAD_IMAGE.input.url]
-type="string"
+type=string
 required=true
 description="Direct image URL."
 
 [app.func.GENERAL_DOWNLOAD_IMAGE.input.retry_attempts]
-type="integer"
+type=integer
 default=3
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Retry attempts for the direct HTTP client."
 
 [app.func.GENERAL_DOWNLOAD_IMAGE.input.timeout]
-type="integer"
+type=integer
 default=10
-revalue="^[1-9]\\d*$"
+revalue={from=1, to=2147483647}
 description="Timeout in seconds; the Python code accepts float seconds, but the public contract keeps integer seconds."

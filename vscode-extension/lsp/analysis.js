@@ -155,7 +155,7 @@ function expandVirtualPath(path, currentTable) {
     if (path.length >= 2 && path[1] === "PREFIXES") {
       return ["app", "prefixes", ...path.slice(2)];
     }
-    if (path.length >= 2 && (path[1] === "REGEX" || path[1] === "REGEXES")) {
+    if (path.length >= 2 && path[1] === "REGEXES") {
       return ["app", "regexes", ...path.slice(2)];
     }
     if (path.length >= 2 && path[1] === "WARMUP") {

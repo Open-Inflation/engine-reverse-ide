@@ -13,6 +13,17 @@ const {
   pathKey,
   pathLabel,
 } = require("./model");
+const {
+  ARRAY,
+  BOOLEAN,
+  INTEGER,
+  NULL,
+  OBJECT,
+  STRING,
+  arrayOf,
+  oneOf,
+  validateValueSpec,
+} = require("./assignment-schema");
 
 function validateAssignmentRelations(tableIndex, assignmentIndex) {
   const diagnostics = [];
@@ -24,7 +35,7 @@ function validateAssignmentRelations(tableIndex, assignmentIndex) {
   diagnostics.push(...validateWarmupRelations(assignmentIndex));
   diagnostics.push(...validateBodyRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateUrlParamValueRelations(assignmentsByTable));
-  diagnostics.push(...validateExampleInputRelations(tableIndex, assignmentIndex));
+  diagnostics.push(...validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsByTable));
 
   return diagnostics;
 }
@@ -353,7 +364,7 @@ function validateUrlParamValueRelations(assignmentsByTable) {
   return diagnostics;
 }
 
-function validateExampleInputRelations(tableIndex, assignmentIndex) {
+function validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsByTable) {
   const diagnostics = [];
   const availableInputsByFunction = collectInputsByFunction(tableIndex);
 
@@ -378,19 +389,37 @@ function validateExampleInputRelations(tableIndex, assignmentIndex) {
       }
 
       for (const inputEntry of inputsEntry.value.items) {
-        if (availableInputs.has(inputEntry.key)) {
+        if (!availableInputs.has(inputEntry.key)) {
+          diagnostics.push(
+            new Diagnostic(
+              buildMissingExampleInputMessage(functionPath, inputEntry.key, availableInputs),
+              inputEntry.keyRange,
+              "error",
+              "msra",
+              "missing-example-input",
+            ),
+          );
           continue;
         }
 
-        diagnostics.push(
-          new Diagnostic(
-            buildMissingExampleInputMessage(functionPath, inputEntry.key, availableInputs),
-            inputEntry.keyRange,
-            "error",
-            "msra",
-            "missing-example-input",
-          ),
-        );
+        const typeAssignment = getTableAssignment(assignmentsByTable, [...functionPath, "input", inputEntry.key], "type");
+        const expectedSpec = getExampleInputValueSpec(typeAssignment && typeAssignment.value);
+        if (!expectedSpec) {
+          continue;
+        }
+
+        const message = validateValueSpec(inputEntry.value, expectedSpec, { range: inputEntry.value.range });
+        if (message) {
+          diagnostics.push(
+            new Diagnostic(
+              `Input "${inputEntry.key}" in table [${pathLabel([...functionPath, "examples"])}] must match the declared type: ${message}.`,
+              inputEntry.value.range || inputEntry.keyRange,
+              "error",
+              "msra",
+              "invalid-example-input-type",
+            ),
+          );
+        }
       }
     }
   }
@@ -436,6 +465,85 @@ function buildMissingExampleInputMessage(functionPath, inputName, availableInput
   }
 
   return `Input "${inputName}" in table [${exampleLabel}] does not exist. Expected one of: ${inputNames.join(", ")}.`;
+}
+
+function getExampleInputValueSpec(typeValue) {
+  if (typeValue instanceof StringExpr && typeValue.quoted === false) {
+    return primitiveInputTypeSpec(typeValue.value);
+  }
+  if (typeValue instanceof IdentExpr) {
+    return primitiveInputTypeSpec(typeValue.name);
+  }
+  if (typeValue instanceof SequenceExpr && isBareListInputType(typeValue)) {
+    const innerValue = typeValue.items[1].items[0];
+    const innerSpec = getExampleInputValueSpec(innerValue);
+    return innerSpec ? arrayOf(innerSpec) : null;
+  }
+  if (typeValue instanceof ArrayExpr) {
+    if (!typeValue.items.length) {
+      return ARRAY;
+    }
+    const itemSpecs = [];
+    for (const item of typeValue.items) {
+      const itemSpec = getExampleInputValueSpec(item);
+      if (!itemSpec) {
+        return null;
+      }
+      itemSpecs.push(itemSpec);
+    }
+    return arrayOf(itemSpecs.length === 1 ? itemSpecs[0] : oneOf(...itemSpecs));
+  }
+  return null;
+}
+
+function primitiveInputTypeSpec(typeName) {
+  switch (typeName) {
+    case "string":
+      return STRING;
+    case "integer":
+      return INTEGER;
+    case "boolean":
+      return BOOLEAN;
+    case "null":
+      return NULL;
+    case "array":
+      return ARRAY;
+    case "object":
+      return OBJECT;
+    default:
+      return null;
+  }
+}
+
+function isBareListInputType(value) {
+  if (!(value instanceof SequenceExpr) || value.items.length !== 2) {
+    return false;
+  }
+  const [prefix, suffix] = value.items;
+  if (!isBareListPrefix(prefix)) {
+    return false;
+  }
+  if (!(suffix instanceof ArrayExpr) || suffix.items.length !== 1) {
+    return false;
+  }
+  return primitiveInputTypeSpec(getBareTypeName(suffix.items[0])) !== null;
+}
+
+function isBareListPrefix(value) {
+  return (
+    (value instanceof StringExpr && value.quoted === false && value.value === "list")
+    || (value instanceof IdentExpr && value.name === "list")
+  );
+}
+
+function getBareTypeName(value) {
+  if (value instanceof StringExpr && value.quoted === false) {
+    return value.value;
+  }
+  if (value instanceof IdentExpr) {
+    return value.name;
+  }
+  return null;
 }
 
 function validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAssignment) {

@@ -1,11 +1,3 @@
-# Сделано
-1. authors в [app]
-authors = [
-    { name = "Miskler", email = "miskler@gmail.com" },
-    { name = "Another Author", email = "author@example.com" },
-]
-2. license в [app]
-3. description в [app]
 
 # Кодогенерация
 1. учитывать списки в кодогенерации 
