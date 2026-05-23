@@ -45,6 +45,25 @@ node ..\bin\msra.js check ..\example.msra
 - `msra-lsp check -` reads MSRA content from stdin.
 - `msra-lsp serve` starts the language server over stdio for editors and external clients.
 
+## Python Codegen
+
+This repo also includes a Python generator that turns an `.msra` document into an async Python client package.
+
+```powershell
+python -m msra_codegen .\fixprice.msra -o .\generated
+```
+
+The generator writes:
+
+- `pyproject.toml`
+- `<package-name>/__init__.py`
+- `<package-name>/manager.py`
+- `<package-name>/abstraction.py`
+- `<package-name>/endpoints/*.py`
+- referenced `postprocess/*.js` assets
+
+For the current FixPrice project, the default package name is `fixprice_api`.
+
 ## Language overview
 
 MSRA is TOML-like and supports object references such as `<OBJECT>` or `<OBJECT.value>`.
