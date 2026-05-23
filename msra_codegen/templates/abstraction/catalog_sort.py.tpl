@@ -1,13 +1,6 @@
-"""Shared generated constants and enums."""
+"""Generated sort helpers."""
 
-{% for regex in regexes %}
-{{ regex.name }} = r"{{ regex.pattern }}"
-{% if regex.raise %}
-# {{ regex.raise }}
-{% endif %}
 
-{% endfor %}
-{% if has_catalog_sort %}
 class CatalogSort:
     """Sort order helper generated from MSRA values."""
 
@@ -24,4 +17,3 @@ class CatalogSort:
 
         DESC = "max"
         """Most expensive first."""
-{% endif %}

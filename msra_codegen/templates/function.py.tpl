@@ -26,7 +26,11 @@
 {% endif %}
 {% if item.revalue_pattern %}
 {{ indent }}if re.fullmatch({{ item.revalue_pattern }}, str({{ item.name }})) is None:
+{% if item.revalue_error %}
+{{ indent }}    raise ValueError({{ item.revalue_error }})
+{% else %}
 {{ indent }}    raise ValueError("`{{ item.name }}` does not match the expected format")
+{% endif %}
 {% elif item.revalue_range %}
 {{ indent }}if float({{ item.name }}) < {{ item.revalue_range[0] }} or float({{ item.name }}) > {{ item.revalue_range[1] }}:
 {{ indent }}    raise ValueError("`{{ item.name }}` must be between {{ item.revalue_range[0] }} and {{ item.revalue_range[1] }}")

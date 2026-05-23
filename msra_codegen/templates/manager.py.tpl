@@ -55,6 +55,11 @@ class {{ client_class_name }}(ApiParent):
     unstandard_urls: dict[str, list[str]] = field(init=False, repr=False)
     """Collected request urls grouped by header/anomaly name."""
 
+{% for variable in variables %}
+    {{ variable.backing_name }}: {{ variable.getter_return }} = field(init=False, default=None, repr=False)
+    """Captured value for {{ variable.name }}."""
+{% endfor %}
+
 {% for group in top_groups %}
     {{ group.field_name }}: {{ group.class_name }} = api_child_field({{ group.class_name }})
     """API for {{ group.description }}"""
@@ -110,6 +115,16 @@ class {{ client_class_name }}(ApiParent):
                 result[header].update(values)
 
         self.unstandard_headers = {k: list(v)[0] for k, v in result.items()}
+{% for variable in variables %}
+        self.{{ variable.backing_name }} = self._coerce_variable_value(
+            {{ variable.capture_expr }},
+            label={{ variable.name | tojson }},
+            kind={{ variable.capture_kind | tojson }},
+            pattern={{ variable.revalue_pattern if variable.revalue_pattern is not none else none }},
+            error_message={{ variable.revalue_error if variable.revalue_error is not none else none }},
+            range_value={{ variable.revalue_range if variable.revalue_range is not none else none }},
+        )
+{% endfor %}
         self.unstandard_urls = result_sniffer.get("request", {})
 
     async def __aexit__(self, *exc):
@@ -117,6 +132,48 @@ class {{ client_class_name }}(ApiParent):
 
     async def close(self):
         await self.session.close()
+
+    @staticmethod
+    def _coerce_variable_value(
+        raw: Any,
+        *,
+        label: str,
+        kind: str,
+        pattern: str | None = None,
+        error_message: str | None = None,
+        range_value: tuple[int, int] | None = None,
+    ) -> Any | None:
+        if raw is None:
+            return None
+        if kind == "integer":
+            value = raw if isinstance(raw, int) and not isinstance(raw, bool) else int(raw)
+        elif kind == "number":
+            value = raw if isinstance(raw, (int, float)) and not isinstance(raw, bool) else float(raw)
+        elif kind == "boolean":
+            if isinstance(raw, bool):
+                value = raw
+            elif isinstance(raw, str):
+                lowered = raw.strip().lower()
+                if lowered in {"true", "1", "yes", "on"}:
+                    value = True
+                elif lowered in {"false", "0", "no", "off"}:
+                    value = False
+                else:
+                    raise ValueError(f"`{label}` must be boolean-like")
+            else:
+                value = bool(raw)
+        elif kind == "null":
+            return None
+        else:
+            value = raw if isinstance(raw, str) else str(raw)
+        if pattern is not None and re.fullmatch(pattern, str(value)) is None:
+            if error_message is not None:
+                raise ValueError(error_message)
+            raise ValueError(f"`{label}` does not match the expected format")
+        if range_value is not None:
+            if float(value) < range_value[0] or float(value) > range_value[1]:
+                raise ValueError(f"`{label}` must be between {range_value[0]} and {range_value[1]}")
+        return value
 
 {% for variable in variables %}
 {{ variable.code }}

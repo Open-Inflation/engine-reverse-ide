@@ -1,21 +1,14 @@
     @property
     def {{ name }}(self) -> {{ getter_return }}:
         """{{ description }}"""
-        raw = self.unstandard_headers.get({{ header_expr }}, None)
-{% if has_integer %}
-        if raw is None:
-            return None
-        return int(raw)
-{% else %}
-        return raw
-{% endif %}
+        return self.{{ backing_name }}
 
 {% if setter_enabled %}
     @{{ name }}.setter
     def {{ name }}(self, value) -> None:
 {% if has_null %}
         if value is None:
-            self.unstandard_headers.pop({{ header_expr }}, None)
+            self.{{ backing_name }} = None
             return
 
 {% endif %}
@@ -34,10 +27,14 @@
 {% endif %}
 {% if revalue_pattern %}
         if re.fullmatch({{ revalue_pattern }}, str(value)) is None:
+{% if revalue_error %}
+            raise ValueError({{ revalue_error }})
+{% else %}
             raise ValueError("`{{ name }}` does not match the expected format")
+{% endif %}
 {% elif revalue_range %}
         if float(value) < {{ revalue_range[0] }} or float(value) > {{ revalue_range[1] }}:
             raise ValueError("`{{ name }}` must be between {{ revalue_range[0] }} and {{ revalue_range[1] }}")
 {% endif %}
-        self.unstandard_headers.update({{ "{" }}{{ header_expr }}: str(value){{ "}" }})
+        self.{{ backing_name }} = value
 {% endif %}

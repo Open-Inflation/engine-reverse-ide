@@ -104,12 +104,12 @@ def snake_case(text: str) -> str:
 
 
 def pascal_case(text: str) -> str:
-    parts = re.split(r"[^A-Za-z0-9]+", text)
+    parts = re.split(r"[^A-Za-z0-9]+|_", text)
     cleaned = []
     for part in parts:
         if not part:
             continue
-        cleaned.append(part[:1].upper() + part[1:])
+        cleaned.append(part[:1].upper() + part[1:].lower())
     return "".join(cleaned) or "Generated"
 
 
@@ -355,9 +355,11 @@ def generate_project(
     group_tree = build_group_tree(project)
 
     package_root = output_dir / package_name
+    abstraction_root = package_root / "abstraction"
     endpoints_root = package_root / "endpoints"
     postprocess_root = package_root / "postprocess"
     package_root.mkdir(parents=True, exist_ok=True)
+    abstraction_root.mkdir(parents=True, exist_ok=True)
     endpoints_root.mkdir(parents=True, exist_ok=True)
     postprocess_root.mkdir(parents=True, exist_ok=True)
 
@@ -366,10 +368,23 @@ def generate_project(
         render_pyproject(project, package_name),
     )
     write_text(package_root / "__init__.py", render_init(project, package_name))
+    stale_abstraction_file = package_root / "abstraction.py"
+    if stale_abstraction_file.exists():
+        stale_abstraction_file.unlink()
+    abstraction_context = build_abstraction_package_context(project)
     write_text(
-        package_root / "abstraction.py",
-        render_template("abstraction.py.tpl", build_abstraction_context(project)),
+        abstraction_root / "__init__.py",
+        render_template("abstraction/__init__.py.tpl", abstraction_context),
     )
+    write_text(
+        abstraction_root / "regexes.py",
+        render_template("abstraction/regexes.py.tpl", abstraction_context),
+    )
+    if abstraction_context["has_catalog_sort"]:
+        write_text(
+            abstraction_root / "catalog_sort.py",
+            render_template("abstraction/catalog_sort.py.tpl", abstraction_context),
+        )
     write_text(package_root / "manager.py", render_manager_template(project, package_name, group_tree))
     for group_node in top_level_groups(group_tree):
         module_name = module_name_for_group(group_node["path"])
@@ -415,33 +430,38 @@ def render_init(project: dict[str, Any], package_name: str) -> str:
 
 def abstraction_exports(project: dict[str, Any]) -> list[str]:
     exports = []
+    if project["regexes"]:
+        exports.extend(regex_class_name(regex["name"]) for regex in project["regexes"])
     if any(is_catalog_sort_function(func) for func in project["functions"]):
         exports.append("CatalogSort")
     return exports
 
 
-def build_abstraction_context(project: dict[str, Any]) -> dict[str, Any]:
+def build_abstraction_package_context(project: dict[str, Any]) -> dict[str, Any]:
     return {
         "regexes": [
             {
                 "name": regex["name"],
+                "class_name": regex_class_name(regex["name"]),
                 "pattern": escape_regex_literal(str(regex["regex"])),
-                "raise": regex["raise"],
+                "raise_message": render_simple_value(regex["raise"]) if regex["raise"] else None,
                 "description": regex["description"],
             }
             for regex in project["regexes"]
         ],
         "has_catalog_sort": any(is_catalog_sort_function(func) for func in project["functions"]),
+        "has_regexes": bool(project["regexes"]),
     }
 
 
 def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
     type_names = variable_type_names(variable)
-    header = variable_header_name(variable)
     return {
         "name": variable["name"],
         "description": escape_docstring(variable["description"] or variable["name"]),
-        "header_expr": render_simple_value(header),
+        "backing_name": f"_{variable['name']}",
+        "capture_expr": render_expr(variable.get("from"), self_ref="self"),
+        "capture_kind": primary_type_name(type_names) or "string",
         "getter_return": type_annotation_from_types(type_names) if "| None" in type_annotation_from_types(type_names) else f"{type_annotation_from_types(type_names)} | None",
         "has_integer": "integer" in type_names,
         "has_boolean": "boolean" in type_names,
@@ -449,11 +469,8 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
         "has_string": "string" in type_names or not type_names,
         "has_null": "null" in type_names,
         "setter_enabled": should_render_setter(variable),
-        "revalue_pattern": (
-            render_simple_value(pattern)
-            if (pattern := revalue_to_pattern(variable.get("revalue"))) is not None
-            else None
-        ),
+        "revalue_pattern": revalue_to_pattern(variable.get("revalue")),
+        "revalue_error": revalue_to_error(variable.get("revalue")),
         "revalue_range": revalue_to_range(variable.get("revalue")),
     }
 
@@ -583,10 +600,9 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
                 "required": bool(input_spec.get("required", False)),
                 "type_names": sorted(type_names),
                 "revalue_pattern": (
-                    render_simple_value(pattern)
-                    if (pattern := revalue_to_pattern(input_spec.get("revalue"))) is not None
-                    else None
+                    revalue_to_pattern(input_spec.get("revalue"))
                 ),
+                "revalue_error": revalue_to_error(input_spec.get("revalue")),
                 "revalue_range": revalue_to_range(input_spec.get("revalue")),
                 "values_expr": render_simple_value(values) if isinstance(values, list) and values and all(not isinstance(item, dict) for item in values) else None,
             }
@@ -677,6 +693,7 @@ def build_manager_context(
         ],
         "variables": [
             {
+                **build_variable_context(variable),
                 "code": render_variable_block(variable),
             }
             for variable in project["variables"]
@@ -713,11 +730,14 @@ def build_group_context(
     group_node: dict[str, Any],
     project: dict[str, Any],
     package_name: str,
+    *,
+    emit_header: bool,
 ) -> dict[str, Any]:
     root_client_name = root_client_class_name(project)
     return {
         "package_name": package_name,
         "root_client_name": root_client_name,
+        "emit_header": emit_header,
         "group_name": ".".join(group_node["path"]) or "MSRA",
         "class_name": class_name_for_group(group_node["path"]),
         "description": escape_docstring(group_node.get("description") or "Generated API group."),
@@ -735,7 +755,26 @@ def build_group_context(
             }
             for func in sorted(group_node.get("functions", []), key=lambda item: item["name"])
         ],
+        "nested_groups": [
+            {
+                "code": render_group_block(child, project, package_name, emit_header=False),
+            }
+            for child in group_node.get("children", {}).values()
+        ],
     }
+
+
+def render_group_block(
+    group_node: dict[str, Any],
+    project: dict[str, Any],
+    package_name: str,
+    *,
+    emit_header: bool,
+) -> str:
+    return render_template(
+        "group.py.tpl",
+        build_group_context(group_node, project, package_name, emit_header=emit_header),
+    )
 
 
 def render_manager_template(project: dict[str, Any], package_name: str, group_tree: dict[str, Any]) -> str:
@@ -750,10 +789,7 @@ def render_group_template(
     project: dict[str, Any],
     package_name: str,
 ) -> str:
-    return render_template(
-        "group.py.tpl",
-        build_group_context(group_node, project, package_name),
-    )
+    return render_group_block(group_node, project, package_name, emit_header=True)
 
 
 def should_render_setter(variable: dict[str, Any]) -> bool:
@@ -773,7 +809,7 @@ def render_ref_value(expr: dict[str, Any] | None, self_ref: str = "self._parent"
         if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "PREFIXES":
             return f"{self_ref}.{parts[2]}"
         if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "REGEXES":
-            return f"abstraction.{parts[2]}"
+            return f"abstraction.{regex_class_name(parts[2])}.REGEX"
         if root == "VARIABLES" and len(parts) >= 2:
             return f"{self_ref}.{parts[1]}"
         if root == "INPUT" and len(parts) >= 2:
@@ -843,7 +879,7 @@ def render_text_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent"
         if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "PREFIXES":
             return f"str({self_ref}.{parts[2]})"
         if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "REGEXES":
-            return f"abstraction.{parts[2]}"
+            return f"abstraction.{regex_class_name(parts[2])}.REGEX"
         if root == "VARIABLES" and len(parts) >= 2:
             return f"str({self_ref}.{parts[1]})"
         if root == "INPUT" and len(parts) >= 2:
@@ -884,15 +920,6 @@ def get_plain_value(expr: dict[str, Any] | None) -> Any:
     if kind == "merge":
         return "".join(str(get_plain_value(item)) for item in expr.get("parts", []))
     return expr
-
-
-def variable_header_name(variable: dict[str, Any]) -> str:
-    from_expr = variable.get("from")
-    if from_expr and from_expr.get("kind") == "ref":
-        parts = [part["value"] for part in from_expr.get("parts", []) if part.get("kind") == "name"]
-        if len(parts) >= 3 and parts[0] == "UNSTANDART_HEADERS" and parts[1] == "REQUEST":
-            return str(parts[2])
-    return variable["name"]
 
 
 def variable_type_names(variable: dict[str, Any]) -> set[str]:
@@ -959,6 +986,17 @@ def type_annotation_from_types(type_names: set[str]) -> str:
     return annotation
 
 
+def primary_type_name(type_names: set[str]) -> str | None:
+    for candidate in ("integer", "number", "boolean", "string", "array", "object", "null"):
+        if candidate in type_names:
+            return candidate
+    return None
+
+
+def regex_class_name(name: str) -> str:
+    return f"Regex{pascal_case(name)}"
+
+
 def inline_array_to_list(expr: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not expr or expr.get("kind") != "array":
         return []
@@ -1015,11 +1053,20 @@ def revalue_to_pattern(expr: dict[str, Any] | None) -> str | None:
     if not expr:
         return None
     if expr.get("kind") == "string":
-        return str(expr.get("value"))
+        return render_simple_value(expr.get("value"))
     if expr.get("kind") == "ref":
         parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
         if len(parts) >= 3 and parts[0] == "DOCUMENT" and parts[1] == "REGEXES":
-            return f"abstraction.{parts[2]}"
+            return f"abstraction.{regex_class_name(parts[2])}.REGEX"
+    return None
+
+
+def revalue_to_error(expr: dict[str, Any] | None) -> str | None:
+    if not expr or expr.get("kind") != "ref":
+        return None
+    parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
+    if len(parts) >= 3 and parts[0] == "DOCUMENT" and parts[1] == "REGEXES":
+        return f"abstraction.{regex_class_name(parts[2])}.ERROR"
     return None
 
 

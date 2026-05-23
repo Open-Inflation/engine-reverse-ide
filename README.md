@@ -64,7 +64,8 @@ The generator writes:
 - `pyproject.toml`
 - `<package-name>/__init__.py`
 - `<package-name>/manager.py`
-- `<package-name>/abstraction.py`
+- `<package-name>/abstraction/__init__.py`
+- `<package-name>/abstraction/regexes.py`
 - `<package-name>/endpoints/*.py`
 - referenced `postprocess/*.js` assets
 

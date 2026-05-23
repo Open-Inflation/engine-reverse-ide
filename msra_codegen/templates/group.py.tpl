@@ -1,3 +1,4 @@
+{% if emit_header %}
 """Generated endpoints for {{ group_name }}."""
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from .. import abstraction
 
 if TYPE_CHECKING:
     from {{ package_name }}.manager import {{ root_client_name }}
+{% endif %}
 
 
 @dataclass(init=False)
@@ -38,5 +40,9 @@ class {{ class_name }}(ApiChild["{{ root_client_name }}"], ApiParent):
 
 {% for func in functions %}
 {{ func.code }}
+
+{% endfor %}
+{% for nested_group in nested_groups %}
+{{ nested_group.code }}
 
 {% endfor %}
