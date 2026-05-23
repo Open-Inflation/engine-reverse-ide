@@ -5,7 +5,14 @@
 {% endmacro %}
 
 {% macro render_pipeline_step(step, indent, page_ref, sniffer_ref=None, test_mode_ref=None) %}
-{% if step.for_tests and test_mode_ref %}
+{% if step.kind == "test_block" %}
+{% if test_mode_ref %}
+{{ indent }}if {{ test_mode_ref }}:
+{{ render_pipeline_steps(step.steps, indent + "    ", page_ref, sniffer_ref, none) }}
+{% else %}
+{{ render_pipeline_steps(step.steps, indent, page_ref, sniffer_ref, test_mode_ref) }}
+{% endif %}
+{% elif step.for_tests and test_mode_ref %}
 {{ indent }}if {{ test_mode_ref }}:
 {{ render_pipeline_step(step, indent + "    ", page_ref, sniffer_ref, None) }}
 {% else %}

@@ -198,6 +198,7 @@ function makeDynamicSchema(match, valueSpec, options = {}) {
 
 const INPUT_TYPE_SPEC = oneOf(
   enumOf(["string", "integer", "boolean", "null", "array", "object"]),
+  patternOf(/^list\[(?:string|integer|boolean|null|array|object)\]$/, "list[type]"),
   arrayOf(enumOf(["string", "integer", "boolean", "null", "array", "object"])),
 );
 
@@ -430,6 +431,7 @@ const TABLE_SCHEMAS = [
   }),
   makeFixedSchema(exactPath(["app"]), {
     name: APP_NAME_SPEC,
+    description: STRINGISH,
     version: STRINGISH,
     timeout_ms: integerAtLeast(0),
     class_name_pattern: CLASS_NAME_PATTERN_SPEC,

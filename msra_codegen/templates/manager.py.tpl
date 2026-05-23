@@ -37,7 +37,7 @@ class {{ client_class_name }}(ApiParent):
     """Additional options passed to Camoufox."""
 
 {% for prefix in prefixes %}
-    {{ prefix.name }}: str = {{ prefix.value }}
+    {{ prefix.attr_name }}: str = {{ prefix.value }}
 {% endfor %}
 {% if prefixes %}
 
@@ -185,19 +185,22 @@ class {{ client_class_name }}(ApiParent):
         url: str,
         *,
         json_body: Any | None = None,
-        add_unstandard_headers: bool = True,
-        credentials: bool = True,
+        mode: str | None = None,
+        credentials: str | None = None,
+        referrer: str | None = None,
+        headers: dict[str, Any] | None = None,
     ) -> FetchResponse:
         """Perform an HTTP request through the browser session."""
+        request_headers = headers if headers is not None else {{ request.headers_expr }}
         return await self.page.fetch(
             url=url,
             method=method,
             body=json_body,
-            mode={{ headers.cors_mode }},
-            credentials="include" if credentials else "omit",
+            mode=mode if mode is not None else {{ request.cors_mode_expr }},
+            credentials=credentials if credentials is not None else {{ request.credentials_expr }},
             timeout_ms=self.timeout_ms,
-            referrer={{ headers.referrer }},
-            headers={{ headers.headers_expr }},
+            referrer=referrer if referrer is not None else {{ request.referrer_expr }},
+            headers=request_headers,
         )
 
     async def _direct_request(

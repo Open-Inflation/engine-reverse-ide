@@ -12,6 +12,21 @@ except ImportError as exc:  # pragma: no cover - helpful runtime error
         "msra_codegen requires Jinja2. Install it with `pip install jinja2`."
     ) from exc
 
+from .python_render import (
+    escape_regex_literal,
+    get_plain_value,
+    regex_class_name,
+    render_expr,
+    render_headers_expr,
+    render_headers_value,
+    render_request_cors_mode,
+    render_request_credentials,
+    render_request_headers,
+    render_request_referrer,
+    render_simple_value,
+    render_text_expr,
+)
+
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
 TEMPLATE_ENV = Environment(
@@ -134,7 +149,7 @@ def class_name_for_group(path: list[str], class_name_pattern: str = "Class{class
 def field_name_for_group(path: list[str]) -> str:
     if not path:
         return "Group"
-    return snake_case(path[-1])
+    return str(path[-1])
 
 
 def snake_case(text: str) -> str:
@@ -180,6 +195,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     app_table = get_table(["app"])
     app = {
         "name": str(get_plain_value(get_assignment(app_table, "name", "GeneratedAPI"))),
+        "description": str(get_plain_value(get_assignment(app_table, "description", ""))),
         "version": str(get_plain_value(get_assignment(app_table, "version", "0.1.0"))),
         "timeout_ms": int(get_plain_value(get_assignment(app_table, "timeout_ms", 35000))),
         "class_name_pattern": str(get_plain_value(get_assignment(app_table, "class_name_pattern", "Class{class_name}"))),
@@ -224,14 +240,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         )
 
     headers_table = get_table(["app", "func", "headers"])
-    headers_spec = None
-    if headers_table:
-        headers_spec = {
-            "referrer": get_assignment(headers_table, "referrer"),
-            "cors_mode": get_plain_value(get_assignment(headers_table, "cors_mode", "cors")),
-            "credentials": get_plain_value(get_assignment(headers_table, "credentials", "include")),
-            "headers": get_assignment(headers_table, "headers"),
-        }
+    headers_spec = build_headers_spec(headers_table, get_assignment)
 
     warmup_table = get_table(["app", "warmup"])
     warmup_spec = None
@@ -290,6 +299,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
                 "inputs": [],
                 "url": None,
                 "body": None,
+                "headers": None,
                 "postprocess": None,
             }
         )
@@ -325,6 +335,10 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
                 "data": get_assignment(body_table, "data"),
             }
 
+        func_headers_table = get_table(prefix + ["headers"])
+        if func_headers_table:
+            func["headers"] = build_headers_spec(func_headers_table, get_assignment)
+
         postprocess_table = get_table(prefix + ["postprocess"])
         if postprocess_table:
             func["postprocess"] = {
@@ -357,6 +371,17 @@ def build_input_spec(table: dict[str, Any], get_assignment) -> dict[str, Any]:
         "read_only": bool(get_plain_value(get_assignment(table, "read_only", False))),
         "from": get_assignment(table, "from"),
         "description": str(get_plain_value(get_assignment(table, "description", ""))),
+    }
+
+
+def build_headers_spec(table: dict[str, Any] | None, get_assignment) -> dict[str, Any] | None:
+    if not table:
+        return None
+    return {
+        "referrer": get_assignment(table, "referrer"),
+        "cors_mode": get_assignment(table, "cors_mode"),
+        "credentials": get_assignment(table, "credentials"),
+        "headers": get_assignment(table, "headers"),
     }
 
 
@@ -514,6 +539,7 @@ def build_pipeline_step_context(step_expr: dict[str, Any], *, page_ref: str, sni
         then_step = build_pipeline_step_context(nested_then, page_ref=page_ref, sniffer_ref=sniffer_ref, test_mode_ref=test_mode_ref)
     elif isinstance(nested_then, str):
         then_step = {
+            "kind": "step",
             "action": nested_then,
             "for_tests": bool(step.get("for_tests", False)),
             "state": step.get("state", "load"),
@@ -524,6 +550,7 @@ def build_pipeline_step_context(step_expr: dict[str, Any], *, page_ref: str, sni
             "then": None,
         }
     return {
+        "kind": "step",
         "action": action,
         "for_tests": bool(step.get("for_tests", False)),
         "state": step.get("state", "load"),
@@ -539,6 +566,24 @@ def build_pipeline_step_context(step_expr: dict[str, Any], *, page_ref: str, sni
     }
 
 
+def group_consecutive_test_pipeline_steps(steps: list[dict[str, Any]], *, enabled: bool) -> list[dict[str, Any]]:
+    if not enabled:
+        return steps
+    grouped: list[dict[str, Any]] = []
+    buffer: list[dict[str, Any]] = []
+    for step in steps:
+        if step.get("for_tests"):
+            buffer.append(step)
+            continue
+        if buffer:
+            grouped.append({"kind": "test_block", "steps": buffer})
+            buffer = []
+        grouped.append(step)
+    if buffer:
+        grouped.append({"kind": "test_block", "steps": buffer})
+    return grouped
+
+
 def build_pipeline_steps_context(
     pipeline_expr: dict[str, Any] | None,
     *,
@@ -547,13 +592,17 @@ def build_pipeline_steps_context(
     test_mode_ref: str | None,
 ) -> list[dict[str, Any]]:
     steps = inline_array_to_list(pipeline_expr)
-    return [
+    built_steps = [
         build_pipeline_step_context(step, page_ref=page_ref, sniffer_ref=sniffer_ref, test_mode_ref=test_mode_ref)
         for step in steps
     ]
+    return group_consecutive_test_pipeline_steps(built_steps, enabled=test_mode_ref is not None)
 
 
-def build_function_context(func: dict[str, Any], root_client_name: str) -> dict[str, Any]:
+def build_function_context(
+    func: dict[str, Any],
+    root_client_name: str,
+) -> dict[str, Any]:
     transport = str(func.get("transport", "fetch"))
     method = str(func.get("method", "GET"))
     method_name = str(func.get("name", func["id"]))
@@ -578,6 +627,7 @@ def build_function_context(func: dict[str, Any], root_client_name: str) -> dict[
 
     url_spec = func.get("url") or {}
     body = func.get("body")
+    headers_spec = func.get("headers")
     postprocess = func.get("postprocess") or {}
     direct_args: list[str] = []
     if any(input_spec["name"] == "retry_attempts" for input_spec in inputs):
@@ -595,6 +645,12 @@ def build_function_context(func: dict[str, Any], root_client_name: str) -> dict[
         "transport": transport,
         "method": method,
         "url_expr": render_expr(url_spec.get("base"), self_ref="self._parent"),
+        "request": {
+            "referrer_expr": render_request_referrer(headers_spec, default_if_missing=False),
+            "cors_mode_expr": render_request_cors_mode(headers_spec, default_if_missing=False),
+            "credentials_expr": render_request_credentials(headers_spec, default_if_missing=False),
+            "headers_expr": render_request_headers(headers_spec, default_if_missing=False),
+        },
         "body_expr": render_expr(body.get("data"), self_ref="self._parent") if body else None,
         "body_type": body.get("type") if body else None,
         "validation": build_input_validation_context(func),
@@ -685,7 +741,10 @@ def render_variable_block(variable: dict[str, Any]) -> str:
     return render_template("variable.py.tpl", build_variable_context(variable))
 
 
-def render_function_block(func: dict[str, Any], root_client_name: str) -> str:
+def render_function_block(
+    func: dict[str, Any],
+    root_client_name: str,
+) -> str:
     return render_template("function.py.tpl", build_function_context(func, root_client_name))
 
 
@@ -706,6 +765,7 @@ def build_manager_context(
         "prefixes": [
             {
                 "name": prefix_name,
+                "attr_name": f"_{prefix_name}",
                 "value": render_simple_value(prefix_value),
             }
             for prefix_name, prefix_value in project["prefixes"].items()
@@ -741,15 +801,11 @@ def build_manager_context(
                 test_mode_ref="self.test_mode",
             ),
         },
-        "headers": {
-            "referrer": (
-                render_ref_value(headers_spec.get("referrer"), self_ref="self")
-                if headers_spec and headers_spec.get("referrer") is not None
-                else "self.MAIN_SITE_ORIGIN"
-            ),
-            "cors_mode": render_simple_value((headers_spec or {}).get("cors_mode", "cors")),
-            "credentials": render_simple_value((headers_spec or {}).get("credentials", "include")),
-            "headers_expr": render_request_headers(headers_spec),
+        "request": {
+            "referrer_expr": render_request_referrer(headers_spec, default_if_missing=True),
+            "cors_mode_expr": render_request_cors_mode(headers_spec, default_if_missing=True),
+            "credentials_expr": render_request_credentials(headers_spec, default_if_missing=True),
+            "headers_expr": render_request_headers(headers_spec, default_if_missing=True),
         },
     }
 
@@ -886,130 +942,6 @@ def should_render_setter(variable: dict[str, Any]) -> bool:
     return not bool(variable.get("read_only", False))
 
 
-def render_ref_value(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> str:
-    if expr is None:
-        return "None"
-    if expr.get("kind") == "ref":
-        parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
-        if not parts:
-            return "None"
-        root = parts[0]
-        if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "PREFIXES":
-            return f"{self_ref}.{parts[2]}"
-        if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "REGEXES":
-            return f"abstraction.{regex_class_name(parts[2])}.REGEX"
-        if root == "VARIABLES" and len(parts) >= 2:
-            return f"{self_ref}.{parts[1]}"
-        if root == "INPUT" and len(parts) >= 2:
-            return parts[1]
-        if root == "UNSTANDART_HEADERS":
-            if len(parts) == 1:
-                return f"{self_ref}.unstandard_headers"
-            if len(parts) >= 3 and parts[1] == "REQUEST":
-                return f"{self_ref}.unstandard_headers.get({render_simple_value(parts[2])})"
-            return f"{self_ref}.unstandard_headers"
-    return render_expr(expr, self_ref=self_ref)
-
-
-def render_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> str:
-    if expr is None:
-        return "None"
-    if not isinstance(expr, dict):
-        return render_simple_value(expr)
-    kind = expr.get("kind")
-    if kind == "string":
-        return render_simple_value(expr.get("value"))
-    if kind == "number":
-        return repr(expr.get("value"))
-    if kind == "bool":
-        return "True" if expr.get("value") else "False"
-    if kind == "null":
-        return "None"
-    if kind == "ref":
-        return render_ref_value(expr, self_ref=self_ref)
-    if kind == "array":
-        return "[" + ", ".join(render_expr(item, self_ref=self_ref) for item in expr.get("items", [])) + "]"
-    if kind == "inline_table":
-        return "{" + ", ".join(
-            f"{render_simple_value(item['key'])}: {render_expr(item['value'], self_ref=self_ref)}"
-            for item in expr.get("items", [])
-        ) + "}"
-    if kind == "sequence":
-        return " + ".join(render_text_expr(item, self_ref=self_ref) for item in expr.get("items", []))
-    if kind == "merge":
-        parts = expr.get("parts", [])
-        inline = next((part for part in parts if part.get("kind") == "inline_table"), None)
-        if inline is not None:
-            other_parts = [part for part in parts if part is not inline]
-            rendered = [render_expr(inline, self_ref=self_ref)] + [render_text_expr(part, self_ref=self_ref) for part in other_parts]
-            return " | ".join(rendered)
-        return " + ".join(render_text_expr(item, self_ref=self_ref) for item in parts)
-    if kind == "call":
-        callee = render_expr(expr.get("callee"), self_ref=self_ref)
-        args = ", ".join(f"{arg['name']}={render_expr(arg['value'], self_ref=self_ref)}" for arg in expr.get("args", []))
-        return f"{callee}({args})"
-    if kind == "index":
-        return f"{render_expr(expr.get('value'), self_ref=self_ref)}[{render_expr(expr.get('index'), self_ref=self_ref)}]"
-    return "None"
-
-
-def render_text_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> str:
-    if expr is None:
-        return "None"
-    if not isinstance(expr, dict):
-        return render_simple_value(expr)
-    kind = expr.get("kind")
-    if kind == "ref":
-        parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
-        if not parts:
-            return "None"
-        root = parts[0]
-        if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "PREFIXES":
-            return f"str({self_ref}.{parts[2]})"
-        if root == "DOCUMENT" and len(parts) >= 3 and parts[1] == "REGEXES":
-            return f"abstraction.{regex_class_name(parts[2])}.REGEX"
-        if root == "VARIABLES" and len(parts) >= 2:
-            return f"str({self_ref}.{parts[1]})"
-        if root == "INPUT" and len(parts) >= 2:
-            return f"str({parts[1]})"
-        if root == "UNSTANDART_HEADERS":
-            if len(parts) == 1:
-                return f"str({self_ref}.unstandard_headers)"
-            if len(parts) >= 3 and parts[1] == "REQUEST":
-                return f"str({self_ref}.unstandard_headers.get({render_simple_value(parts[2])}))"
-            return f"str({self_ref}.unstandard_headers)"
-    if kind in {"string", "number", "bool", "null"}:
-        return render_expr(expr, self_ref=self_ref)
-    return render_expr(expr, self_ref=self_ref)
-
-
-def get_plain_value(expr: dict[str, Any] | None) -> Any:
-    if expr is None:
-        return None
-    if not isinstance(expr, dict):
-        return expr
-    kind = expr.get("kind")
-    if kind == "string":
-        return expr.get("value")
-    if kind == "number":
-        return expr.get("value")
-    if kind == "bool":
-        return expr.get("value")
-    if kind == "null":
-        return None
-    if kind == "ref":
-        return expr
-    if kind == "array":
-        return [get_plain_value(item) for item in expr.get("items", [])]
-    if kind == "inline_table":
-        return {item["key"]: get_plain_value(item["value"]) for item in expr.get("items", [])}
-    if kind == "sequence":
-        return "".join(str(get_plain_value(item)) for item in expr.get("items", []))
-    if kind == "merge":
-        return "".join(str(get_plain_value(item)) for item in expr.get("parts", []))
-    return expr
-
-
 def variable_type_names(variable: dict[str, Any]) -> set[str]:
     types = variable.get("types")
     if isinstance(types, dict):
@@ -1102,34 +1034,8 @@ def inline_table_to_dict(expr: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def render_simple_value(value: Any) -> str:
-    if isinstance(value, str):
-        return repr(value)
-    if value is None:
-        return "None"
-    return repr(value)
-
-
 def escape_docstring(text: str) -> str:
     return text.replace('"""', '\\"\\"\\"')
-
-
-def escape_regex_literal(text: str) -> str:
-    return text.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def render_request_headers(headers_spec: dict[str, Any] | None) -> str:
-    base = '{"Accept": "application/json, text/plain, */*"}'
-    if not headers_spec:
-        return f"{base} | (self.unstandard_headers if add_unstandard_headers else {{}})"
-    headers_expr = headers_spec.get("headers")
-    if headers_expr and headers_expr.get("kind") == "merge":
-        inline = next((part for part in headers_expr.get("parts", []) if part.get("kind") == "inline_table"), None)
-        if inline is not None:
-            return f"{render_expr(inline, self_ref='self')} | (self.unstandard_headers if add_unstandard_headers else {{}})"
-    if headers_expr and headers_expr.get("kind") == "inline_table":
-        return f"{render_expr(headers_expr, self_ref='self')} | (self.unstandard_headers if add_unstandard_headers else {{}})"
-    return f"{base} | (self.unstandard_headers if add_unstandard_headers else {{}})"
 
 
 def variable_revalue_pattern(variable: dict[str, Any]) -> str | None:

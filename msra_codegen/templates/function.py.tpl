@@ -107,5 +107,17 @@
             HttpMethod.{{ method }},
             url=url,
             json_body=json_body,
+{% if request.referrer_expr is not none %}
+            referrer={{ request.referrer_expr }},
+{% endif %}
+{% if request.cors_mode_expr is not none %}
+            mode={{ request.cors_mode_expr }},
+{% endif %}
+{% if request.credentials_expr is not none %}
+            credentials={{ request.credentials_expr }},
+{% endif %}
+{% if request.headers_expr is not none %}
+            headers={{ request.headers_expr }},
+{% endif %}
         )
 {% endif %}

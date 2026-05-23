@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
-const { mkdtempSync, writeFileSync } = require("node:fs");
+const { mkdtempSync, rmSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
 const { readFileSync } = require("node:fs");
 const path = require("node:path");
@@ -466,6 +466,52 @@ test("warmup rejects unsupported keys like wait_url", () => {
 
   assert.ok(diagnostic, "expected wait_url to be rejected as an unsupported warmup key");
   assert.match(diagnostic.message, /wait_url/);
+});
+
+test("generator merges consecutive warmup test steps into a single test_mode guard", () => {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-pipeline-"));
+  const inputPath = path.join(workDir, "pipeline.msra");
+  const outputDir = path.join(workDir, "generated");
+  const packageName = "testpkg";
+  const text = [
+    "[app]",
+    'name="PipelineApp"',
+    'version="0.1.0"',
+    "timeout_ms=1000",
+    'browser="camoufox"',
+    'class_name_pattern="Class{class_name}"',
+    'description=""',
+    "",
+    "[app.prefixes]",
+    'MAIN_SITE_URL="https://example.com/"',
+    "",
+    "[app.warmup]",
+    'url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>',
+    'pipeline=[{for_tests=true, action="wait_network", state="load"}, {for_tests=true, action="wait_element", state="visible", what="div.one", then="click"}, {action="wait_network", state="idle"}]',
+    "",
+  ].join("\n");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir, "-p", packageName], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const managerText = readFileSync(path.join(outputDir, packageName, "manager.py"), "utf8");
+    const guardCount = (managerText.match(/if self\.test_mode:/g) || []).length;
+    assert.strictEqual(guardCount, 1, "expected consecutive test-only steps to share a single test_mode guard");
+    assert.match(managerText, /_MAIN_SITE_URL: str = 'https:\/\/example\.com\/'/);
+    assert.match(managerText, /self\._MAIN_SITE_URL/);
+    assert.match(managerText, /wait_for_load_state\('load'\)/);
+    assert.match(managerText, /wait_for_selector\(/);
+    assert.match(managerText, /locator = self\.page\.locator\('div\.one'\)\.first/);
+    assert.match(managerText, /await locator\.click\(timeout=self\.timeout_ms\)/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
 });
 
 test("body type must be a browser-supported MIME type", () => {
