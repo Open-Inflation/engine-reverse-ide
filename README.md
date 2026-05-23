@@ -79,7 +79,7 @@ MSRA is TOML-like and supports object references such as `<OBJECT>` or `<OBJECT.
 
 Available OBJECTS:
 
-- `UNSTANDART_HEADERS` (`.RESPONSE` or `.REQUEST` -> `{key: value}`)
+- `UNSTANDARD_HEADERS` (`.RESPONSE` or `.REQUEST` -> `{key: value}`)
 - `CAPTURED_URLS` (`.RESPONSE` or `.REQUEST` -> array)
 - `COOKIES` (for example `COOKIES["key"].VALUE["data"]`, when the string can be represented as a dictionary). Available fields also include `DOMAIN`, `PATH`, `EXPIRES`, `HTTP_ONLY`, `SECURE`, `SAME_SITE`.
 - `LOCAL_STORAGE`

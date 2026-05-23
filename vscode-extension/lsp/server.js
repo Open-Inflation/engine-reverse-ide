@@ -229,7 +229,7 @@ class MsraLanguageServer {
       ["GROUPS", "Resolves to [app.groups]"],
       ["GROUPS.Catalog.Product", "Reference to a named function group"],
       ["INPUT", "Resolves to the current function input namespace"],
-      ["UNSTANDART_HEADERS", "Runtime request/response headers"],
+      ["UNSTANDARD_HEADERS", "Runtime request/response headers"],
       ["CAPTURED_URLS", "Runtime captured URL list"],
       ["COOKIES", "Runtime cookie store"],
       ["LOCAL_STORAGE", "Runtime local storage"],

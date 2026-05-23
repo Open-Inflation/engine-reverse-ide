@@ -245,7 +245,7 @@
       "patterns": [
         {
           "name": "keyword.other.namespace.msra",
-          "match": "\\b(?:app|misklerreverseapi|warmup|variables|prefixes|regexes|groups|func|input|body|headers|url|params|examples|DOCUMENT|PREFIXES|REGEX|REGEXES|VARIABLES|INPUT|WARMUP|UNSTANDART_HEADERS|CAPTURED_URLS|COOKIES|LOCAL_STORAGE|SESSION_STORAGE|REQUEST|RESPONSE|SNIFF_RESPONSE)\\b"
+          "match": "\\b(?:app|misklerreverseapi|warmup|variables|prefixes|regexes|groups|func|input|body|headers|url|params|examples|DOCUMENT|PREFIXES|REGEX|REGEXES|VARIABLES|INPUT|WARMUP|UNSTANDARD_HEADERS|CAPTURED_URLS|COOKIES|LOCAL_STORAGE|SESSION_STORAGE|REQUEST|RESPONSE|SNIFF_RESPONSE)\\b"
         }
       ]
     },

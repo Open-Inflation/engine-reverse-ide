@@ -11,7 +11,7 @@ const { validateTableRelations } = require("./table-relations");
 const { validateTablePath } = require("./path-schema");
 
 const KNOWN_DYNAMIC_ROOTS = new Set([
-  "UNSTANDART_HEADERS",
+  "UNSTANDARD_HEADERS",
   "CAPTURED_URLS",
   "COOKIES",
   "LOCAL_STORAGE",

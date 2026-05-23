@@ -483,7 +483,7 @@ test("pipeline state is validated in the context of action", () => {
   const text = [
     "[app]",
     "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, what=<UNSTANDART_HEADERS.REQUEST.X-key>}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=domcontentloaded}, {action=wait_network, state=networkidle}]',
+    'pipeline=[{action=wait_sniffer, what=<UNSTANDARD_HEADERS.REQUEST.X-key>}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=domcontentloaded}, {action=wait_network, state=networkidle}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-pipeline-state.msra");
@@ -813,7 +813,7 @@ test("shared function headers accept referrer cors_mode credentials and headers"
     'referrer=<DOCUMENT.PREFIXES.ORIGIN>',
     'cors_mode=cors',
     'credentials=include',
-    "headers=<UNSTANDART_HEADERS>",
+    "headers=<UNSTANDARD_HEADERS>",
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///shared-headers.msra");
@@ -914,7 +914,7 @@ test("virtual variable references must resolve to declared variables", () => {
     "[app.variables.city_id]",
     'types=[{"type"=integer, "revalue"={from=1, to=27}}, {"type"=null, "value"=null}]',
     'description="Идентификатор города"',
-    'from=<UNSTANDART_HEADERS.REQUEST.x-city>',
+    'from=<UNSTANDARD_HEADERS.REQUEST.x-city>',
     "",
     "[app.func.A3A417]",
     "[app.func.A3A417.body]",

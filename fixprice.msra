@@ -18,7 +18,7 @@ url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>
 # Actual flow in code: MAIN_SITE_URL -> sniffer wait for X-Key -> optional test_mode clicks -> CATALOG_URL -> body > pre.
 pipeline=[
     {action=wait_network, state=networkidle},
-    {action=wait_sniffer, what=<UNSTANDART_HEADERS.REQUEST.X-Key>},
+    {action=wait_sniffer, what=<UNSTANDARD_HEADERS.REQUEST.X-Key>},
     {for_tests=true, action=wait_element, state=visible, what="div.selected-city > div.buttons > button.button.normal", then=click},
     {for_tests=true, action=wait_element, state=visible, what="a.link.product-category", then=click},
     {for_tests=true, action=wait_element, state=visible, what="div.page-content"},
@@ -32,32 +32,32 @@ on_error_screenshot_path="screenshot.png"
 types=[{"type"=integer, "revalue"={from=1, to=2147483647}}, {"type"=null, "value"=null}]
 description="Current city id used by catalog and balance requests."
 read_only=false
-from=<UNSTANDART_HEADERS.REQUEST.x-city>
+from=<UNSTANDARD_HEADERS.REQUEST.x-city>
 
 [app.variables.language]
 types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.LANGUAGE_TAG>}, {"type"=null, "value"=null}]
 description="Current language header value."
-from=<UNSTANDART_HEADERS.REQUEST.x-language>
+from=<UNSTANDARD_HEADERS.REQUEST.x-language>
 
 [app.variables.token]
 types=[{"type"=string, "value"=null}]
 description="Access token captured by the warmup sniffer."
-from=<UNSTANDART_HEADERS.REQUEST.x-key>
+from=<UNSTANDARD_HEADERS.REQUEST.x-key>
 
 [app.variables.delivery_type]
 types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.DELIVERY_TYPE>}, {"type"=null, "value"=null}]
 description="Delivery mode used by the catalog."
-from=<UNSTANDART_HEADERS.REQUEST.x-delivery-type>
+from=<UNSTANDARD_HEADERS.REQUEST.x-delivery-type>
 
 [app.variables.store_id]
 types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.STORE_ID>}, {"type"=null, "value"=null}]
 description="Store or PFM identifier."
-from=<UNSTANDART_HEADERS.REQUEST.x-pfm>
+from=<UNSTANDARD_HEADERS.REQUEST.x-pfm>
 
 [app.variables.client_route]
 types=[{"type"=string, "value"=null}]
 description="Route path used for the X-Client-Route header."
-from=<UNSTANDART_HEADERS.REQUEST.x-client-route>
+from=<UNSTANDARD_HEADERS.REQUEST.x-client-route>
 
 [app.prefixes]
 MAIN_SITE_URL="https://fix-price.com/catalog"
@@ -99,7 +99,7 @@ description="General helpers that are not browser-backed API methods."
 referrer=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>
 cors_mode=cors
 credentials=include
-headers={Accept="application/json, text/plain, */*"}+<UNSTANDART_HEADERS.REQUEST>
+headers={Accept="application/json, text/plain, */*"}+<UNSTANDARD_HEADERS.REQUEST>
 
 [app.func.CATALOG_TREE]
 name="tree"

@@ -71,7 +71,7 @@ def render_ref_value(expr: dict[str, Any] | None, self_ref: str = "self._parent"
             return f"{self_ref}.{parts[1]}"
         if root == "INPUT" and len(parts) >= 2:
             return parts[1]
-        if root == "UNSTANDART_HEADERS":
+        if root == "UNSTANDARD_HEADERS":
             if len(parts) == 1:
                 return f"{self_ref}.unstandard_headers"
             if len(parts) >= 3 and parts[1] == "REQUEST":
@@ -141,7 +141,7 @@ def render_text_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent"
             return f"str({self_ref}.{parts[1]})"
         if root == "INPUT" and len(parts) >= 2:
             return f"str({parts[1]})"
-        if root == "UNSTANDART_HEADERS":
+        if root == "UNSTANDARD_HEADERS":
             if len(parts) == 1:
                 return f"str({self_ref}.unstandard_headers)"
             if len(parts) >= 3 and parts[1] == "REQUEST":
@@ -167,7 +167,7 @@ def render_headers_expr(expr: dict[str, Any] | None) -> str:
         ) + "}"
     if kind == "ref":
         parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
-        if parts and parts[0] == "UNSTANDART_HEADERS":
+        if parts and parts[0] == "UNSTANDARD_HEADERS":
             if len(parts) >= 3 and parts[1] == "REQUEST":
                 return f"self.unstandard_headers.get({render_simple_value(parts[2])})"
             return "self.unstandard_headers"
@@ -182,7 +182,7 @@ def render_headers_value(expr: dict[str, Any] | None) -> str:
     kind = expr.get("kind")
     if kind == "ref":
         parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
-        if parts and parts[0] == "UNSTANDART_HEADERS":
+        if parts and parts[0] == "UNSTANDARD_HEADERS":
             if len(parts) >= 3 and parts[1] == "REQUEST":
                 return f"str(self.unstandard_headers.get({render_simple_value(parts[2])}))"
             return "str(self.unstandard_headers)"
