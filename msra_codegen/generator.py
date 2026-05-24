@@ -177,6 +177,22 @@ def root_client_class_name(project: dict[str, Any]) -> str:
     return pascal_case(name)
 
 
+def group_path_from_expr(expr: Any) -> str:
+    plain = get_plain_value(expr)
+    if isinstance(plain, dict) and plain.get("kind") == "ref":
+        parts = [part["value"] for part in plain.get("parts", []) if part.get("kind") == "name"]
+        if not parts:
+            return ""
+        if parts[0] == "GROUPS":
+            parts = parts[1:]
+        return ".".join(parts)
+    if isinstance(plain, str):
+        return plain.strip()
+    if isinstance(plain, list):
+        return ".".join(str(part).strip() for part in plain if str(part).strip())
+    return str(plain).strip() if plain is not None else ""
+
+
 def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     tables = [table for table in ast.get("tables", [])]
     table_index: dict[tuple[str, ...], dict[str, Any]] = {
@@ -285,7 +301,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
             continue
 
         root = table
-        group = str(get_plain_value(get_assignment(root, "group", "")))
+        group = group_path_from_expr(get_assignment(root, "group", ""))
         transport = str(get_plain_value(get_assignment(root, "transport", "fetch")))
         method = str(get_plain_value(get_assignment(root, "method", "GET")))
         functions.append(
@@ -682,6 +698,8 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
     for input_spec in func.get("inputs", []):
         type_names = type_names_from_expr(input_spec.get("type"))
         values = get_plain_value(input_spec.get("values"))
+        has_type_checks = any(type_name in {"integer", "boolean", "number", "string"} for type_name in type_names)
+        has_value_checks = bool(input_spec.get("revalue") or values)
         validations.append(
             {
                 "name": input_spec["name"],
@@ -693,6 +711,7 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
                 "revalue_error": revalue_to_error(input_spec.get("revalue")),
                 "revalue_range": revalue_to_range(input_spec.get("revalue")),
                 "values_expr": render_simple_value(values) if isinstance(values, list) and values and all(not isinstance(item, dict) for item in values) else None,
+                "has_checks": bool(input_spec.get("required", False)) or has_type_checks or has_value_checks,
             }
         )
     return validations

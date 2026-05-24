@@ -115,10 +115,11 @@ def render_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> 
     if kind == "array":
         return "[" + ", ".join(render_expr(item, self_ref=self_ref) for item in expr.get("items", [])) + "]"
     if kind == "inline_table":
-        return "{" + ", ".join(
+        items = ", ".join(
             f"{render_simple_value(item['key'])}: {render_expr(item['value'], self_ref=self_ref)}"
-            for item in expr.get("items", []))
-        + "}"
+            for item in expr.get("items", [])
+        )
+        return "{" + items + "}"
     if kind == "sequence":
         return " + ".join(render_text_expr(item, self_ref=self_ref) for item in expr.get("items", []))
     if kind == "merge":

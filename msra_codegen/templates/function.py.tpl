@@ -3,6 +3,7 @@
     async def {{ method_name }}(self{% if signature %}, {{ signature }}{% endif %}) -> {{ return_annotation }}:
         """{{ description }}"""
 {% for item in validation %}
+{% if item.has_checks %}
 {% if item.required %}
         if {{ item.name }} is None:
             raise ValueError("`{{ item.name }}` is required")
@@ -38,6 +39,7 @@
 {% if item.values_expr %}
 {{ indent }}if {{ item.name }} not in {{ item.values_expr }}:
 {{ indent }}    raise ValueError("`{{ item.name }}` must be one of {{ item.values_expr }}")
+{% endif %}
 {% endif %}
 {% endfor %}
 

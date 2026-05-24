@@ -147,9 +147,9 @@ list_style={
     indexed = false # Используется только при style = "bracket"
 }
 
-#data=<INPUT.url>
-# Важно: допускается отцуцтвие value, тогда из кода выбрать его будет не возможно, если значение еще имеет "default"=true то оно будет выбрано по умолчанию (если нет ни того, ни другого - просто мусор)
-values=[{"value_in_url"="/searchSuggestions/search/", "default"=true}, {"value_in_url"="/searchSuggestions/search/", "default"=true}] # не включая в себя параметры sub-url
+data=<INPUT.url>
+# Важно: default-only записи работают как fallback и сами по себе не выбираются. Для list=true и data нужен хотя бы один selectable value. value обязан быть статическим, без ссылок.
+values=[{"value_in_url"="/searchSuggestions/search/", "value"="/searchSuggestions/search/", "default"=true}, {"value_in_url"="/searchSuggestions/search/", "default"=true}] # не включая в себя параметры sub-url
 description="Энтрипоинт front'end страницы к которой нужно предоставить json-вид"
 
 [app.func.A3A417.url.params.from_global.params.text]

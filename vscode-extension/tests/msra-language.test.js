@@ -934,6 +934,46 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
   }
 });
 
+test("python codegen generates both bundled msra documents without failing", () => {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-codegen-"));
+  const cases = [
+    {
+      inputPath: path.join(repoRoot, "example.msra"),
+      outputDir: path.join(workDir, "example"),
+      packageName: "exampleapi",
+    },
+    {
+      inputPath: path.join(repoRoot, "fixprice.msra"),
+      outputDir: path.join(workDir, "fixprice"),
+      packageName: "fixpriceapi",
+    },
+  ];
+
+  try {
+    for (const testCase of cases) {
+      const result = spawnSync(
+        "python",
+        ["-m", "msra_codegen", testCase.inputPath, "-o", testCase.outputDir, "-p", testCase.packageName],
+        {
+          cwd: repoRoot,
+          encoding: "utf8",
+        },
+      );
+      assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+      const packageDir = path.join(testCase.outputDir, testCase.packageName);
+      const compileResult = spawnSync("python", ["-m", "compileall", "-q", packageDir], {
+        cwd: repoRoot,
+        encoding: "utf8",
+      });
+      assert.strictEqual(compileResult.status, 0, compileResult.stderr || compileResult.stdout);
+      assert.doesNotThrow(() => readFileSync(path.join(packageDir, "manager.py"), "utf8"));
+    }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test("body type must be a browser-supported MIME type", () => {
   const text = [
     "[app]",
