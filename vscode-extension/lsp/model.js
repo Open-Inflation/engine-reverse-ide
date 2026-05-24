@@ -190,6 +190,7 @@ class ReferenceOccurrence {
     resolvedKind = null,
     tablePathSegments = [],
     tableIdentityKey = null,
+    valuePathSegments = [],
   ) {
     this.expr = expr;
     this.range = range;
@@ -198,6 +199,7 @@ class ReferenceOccurrence {
     this.resolvedKind = resolvedKind;
     this.tablePathSegments = tablePathSegments;
     this.tableIdentityKey = tableIdentityKey;
+    this.valuePathSegments = valuePathSegments;
     this.resolvedPathSegments = null;
     this.resolvedPathKey = null;
   }

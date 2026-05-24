@@ -419,6 +419,10 @@ function validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsB
           continue;
         }
 
+        if (isFuncResultReferenceValue(inputEntry.value)) {
+          continue;
+        }
+
         const message = validateValueSpec(inputEntry.value, expectedSpec, { range: inputEntry.value.range });
         if (message) {
           diagnostics.push(
@@ -436,6 +440,14 @@ function validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsB
   }
 
   return diagnostics;
+}
+
+function isFuncResultReferenceValue(value) {
+  if (!(value instanceof RefExpr) || !Array.isArray(value.parts) || value.parts.length < 2) {
+    return false;
+  }
+  const root = value.parts[0];
+  return root && root.kind === "name" && String(root.value) === "FUNCRESULT";
 }
 
 function validateVariableSourceRelations(tableIndex, assignmentIndex) {

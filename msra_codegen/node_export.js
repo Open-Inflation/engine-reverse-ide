@@ -221,6 +221,7 @@ function serializeReference(reference) {
     tablePath: reference.tablePath,
     resolvedPath: reference.resolvedPath,
     resolvedKind: reference.resolvedKind,
+    valuePathSegments: reference.valuePathSegments,
   };
 }
 

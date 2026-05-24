@@ -9,6 +9,7 @@ const { validateGroupAssignments } = require("./group-relations");
 const { validateTableRelations } = require("./table-relations");
 const { validateTablePath } = require("./path-schema");
 const { pathIdentityKey, normalizePathSegments } = require("./path-schema");
+const { isFuncResultReferenceContext } = require("./reference-context");
 
 const KNOWN_DYNAMIC_ROOTS = new Set([
   "UNSTANDARD_HEADERS",
@@ -130,6 +131,10 @@ function resolveReference(ref, result) {
   if (resolved !== null) {
     return resolved;
   }
+  const funcResultResolved = resolveFuncResultReference(ref, path, result);
+  if (funcResultResolved !== null) {
+    return funcResultResolved;
+  }
   const root = path[0] && path[0].value;
   if (KNOWN_DYNAMIC_ROOTS.has(root)) {
     return {
@@ -140,6 +145,30 @@ function resolveReference(ref, result) {
     };
   }
   return null;
+}
+
+function resolveFuncResultReference(ref, path, result) {
+  if (!isFuncResultReferenceContext(ref.tablePath || [], ref.valuePathSegments || [])) {
+    return null;
+  }
+  if (path.length < 2) {
+    return null;
+  }
+  const functionId = path[1] && path[1].value;
+  if (!functionId) {
+    return null;
+  }
+  const functionPath = [makePathSegment("app"), makePathSegment("func"), makePathSegment(functionId)];
+  const resolved = resolveStaticPath(functionPath, result);
+  if (resolved === null) {
+    return null;
+  }
+  return {
+    path: resolved.path,
+    pathSegments: resolved.pathSegments,
+    key: resolved.key,
+    kind: "func-result",
+  };
 }
 
 function refPathSegments(ref) {

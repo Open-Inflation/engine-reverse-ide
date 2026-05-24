@@ -1239,6 +1239,34 @@ test("virtual variable references must resolve to declared variables", () => {
   assert.match(unresolvedDiagnostic.message, /VARIABLES\.ity_id/);
 });
 
+test("FUNCRESULT references are allowed inside example inputs", () => {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const examplePath = path.join(repoRoot, "example.msra");
+  const text = readFileSync(examplePath, "utf8").replace(
+    '"query"="example"',
+    '"query"=<FUNCRESULT.A3A417["some"]["path"][0]>',
+  );
+  const document = parseDocument(text, "file:///funcresult-example-inputs.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("FUNCRESULT references are rejected outside example inputs", () => {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const examplePath = path.join(repoRoot, "example.msra");
+  const text = readFileSync(examplePath, "utf8").replace(
+    '"local1.json"',
+    '<FUNCRESULT.A3A417["some"]["path"][0]>',
+  );
+  const document = parseDocument(text, "file:///funcresult-outside-example-inputs.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "unresolved-reference");
+
+  assert.strictEqual(diagnostics.length, 1, "expected FUNCRESULT to be rejected outside example inputs");
+  assert.match(diagnostics[0].message, /FUNCRESULT\.A3A417/);
+});
+
 test("variable sources cannot reference themselves", () => {
   const text = [
     "[app]",
@@ -1643,6 +1671,44 @@ test("reference completions insert angle brackets when the user has not typed th
     newText: "UNSTANDARD_HEADERS.RESPONSE.$0>",
   });
   assert.strictEqual(closedItem.insertTextFormat, 2);
+});
+
+test("FUNCRESULT completions are available inside example inputs", () => {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const examplePath = path.join(repoRoot, "example.msra");
+  const server = new MsraLanguageServer({
+    onRequest() {},
+    onNotification() {},
+    listen() {},
+    sendNotification() {},
+  });
+  const text = readFileSync(examplePath, "utf8").replace('"query"="example"', '"query"=');
+  const uri = "file:///completion-funcresult-example-inputs.msra";
+  server._updateDocument({ textDocument: { uri, text } }, false);
+  const lines = text.split(/\r?\n/);
+  const lineIndex = lines.findIndex((line) => line.includes('examples=[{"inputs"={"query"='));
+  assert.ok(lineIndex >= 0, "expected to find the example inputs line");
+  const character = lines[lineIndex].indexOf('"query"=') + '"query"='.length;
+  const response = server._completion({
+    textDocument: { uri },
+    position: {
+      line: lineIndex,
+      character,
+    },
+  });
+  const rootItem = response.items.find((candidate) => candidate.label === "FUNCRESULT");
+  const functionItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.A3A417");
+
+  assert.ok(rootItem, "expected FUNCRESULT root completion to be available");
+  assert.ok(functionItem, "expected function-specific FUNCRESULT completion to be available");
+  assert.deepStrictEqual(functionItem.textEdit, {
+    range: {
+      start: { line: lineIndex, character },
+      end: { line: lineIndex, character },
+    },
+    newText: "<FUNCRESULT.A3A417$0>",
+  });
+  assert.strictEqual(functionItem.insertTextFormat, 2);
 });
 
 test("completion is field-aware for groups enums and static values", () => {

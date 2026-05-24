@@ -10,6 +10,11 @@ const {
   collectDefinitionLocations,
   renderRef,
 } = require("./analysis");
+const {
+  DEFAULT_REFERENCE_ROOTS,
+  EXAMPLE_INPUT_REFERENCE_ROOTS,
+  isFuncResultReferenceContext,
+} = require("./reference-context");
 const { parseDocument } = require("./parser");
 const { TABLE_SCHEMAS, validateValueSpec } = require("./assignment-schema");
 const {
@@ -259,11 +264,12 @@ class MsraLanguageServer {
     const fieldItems = this._fieldCompletionItems(analyzed, completionContext);
     const { prefix, context, range, insertPrefix = "", suffix = "" } = completionContext;
     const useSnippet = Boolean(completionContext.referenceCompletion) || context === "reference";
+    const referenceRoots = completionContext.allowedReferenceRoots || DEFAULT_REFERENCE_ROOTS;
     if (fieldItems !== null) {
       return this._completionItemsFromPairs(fieldItems, prefix, range, context === "reference" ? 21 : 12, insertPrefix, suffix, useSnippet);
     }
     if (context === "reference") {
-      return this._completionItemsFromPairs(this._referenceCompletions(analyzed, completionContext), prefix, range, 21, "", suffix, true);
+      return this._completionItemsFromPairs(this._referenceCompletions(analyzed, completionContext, referenceRoots), prefix, range, 21, "", suffix, true);
     }
     if (context === "table") {
       return this._completionItemsFromPairs(this._tableCompletions(analyzed), prefix, range, 21, "", suffix, false);
@@ -293,13 +299,14 @@ class MsraLanguageServer {
       return literalSuggestions;
     }
 
-    const allowedRoots = this._allowedReferenceRoots(tablePath, targetKey, spec, schema);
+    const allowedRoots = this._allowedReferenceRoots(tablePath, target.valuePathSegments || [], targetKey, spec, schema);
     if (allowedRoots === null) {
       return [];
     }
     if (allowedRoots.length === 0) {
       return [];
     }
+    completionContext.allowedReferenceRoots = allowedRoots;
     completionContext.insertPrefix = completionContext.context === "reference" ? "" : "<";
     completionContext.suffix = completionContext.context === "reference" ? completionContext.suffix : ">";
     completionContext.referenceCompletion = true;
@@ -310,15 +317,58 @@ class MsraLanguageServer {
     const tablePath = assignment.tablePath || [];
     const schema = findSchemaForPath(tablePath);
     if (!schema) {
-      return { assignment, tablePath, key: assignment.key, spec: null, value: assignment.value };
+      return {
+        assignment,
+        tablePath,
+        key: assignment.key,
+        spec: null,
+        value: assignment.value,
+        valuePathSegments: [{
+          value: assignment.key,
+          quoted: Boolean(assignment.quoted),
+          range: assignment.keyRange || null,
+        }],
+      };
     }
     const outerSpec = schema.allowUnknownKeys ? schema.valueSpec : schema.keys[assignment.key];
     if (!outerSpec) {
-      return { assignment, tablePath, key: assignment.key, spec: null, value: assignment.value };
+      return {
+        assignment,
+        tablePath,
+        key: assignment.key,
+        spec: null,
+        value: assignment.value,
+        valuePathSegments: [{
+          value: assignment.key,
+          quoted: Boolean(assignment.quoted),
+          range: assignment.keyRange || null,
+        }],
+      };
     }
-    const resolved = this._resolveCompletionTarget(assignment.value, outerSpec, position, assignment.key);
+    const resolved = this._resolveCompletionTarget(
+      assignment.value,
+      outerSpec,
+      position,
+      assignment.key,
+      [{
+        value: assignment.key,
+        quoted: Boolean(assignment.quoted),
+        range: assignment.keyRange || null,
+      }],
+    );
     if (!resolved) {
-      return { assignment, tablePath, key: assignment.key, spec: outerSpec, value: assignment.value };
+      return {
+        assignment,
+        tablePath,
+        key: assignment.key,
+        spec: outerSpec,
+        value: assignment.value,
+        valuePathSegments: [{
+          value: assignment.key,
+          quoted: Boolean(assignment.quoted),
+          range: assignment.keyRange || null,
+        }],
+      };
     }
     return {
       assignment,
@@ -326,20 +376,26 @@ class MsraLanguageServer {
       key: resolved.key || assignment.key,
       spec: resolved.spec || outerSpec,
       value: resolved.value || assignment.value,
+      valuePathSegments: resolved.valuePathSegments || [{
+        value: assignment.key,
+        quoted: Boolean(assignment.quoted),
+        range: assignment.keyRange || null,
+      }],
     };
   }
 
-  _resolveCompletionTarget(value, spec, position, currentKey = null) {
+  _resolveCompletionTarget(value, spec, position, currentKey = null, valuePathSegments = []) {
     if (value instanceof ArrayExpr) {
       const item = this._arrayItemAt(value, position);
       const itemSpec = this._specForArrayValue(spec);
       if (!item) {
-        return { key: currentKey, spec: itemSpec || spec, value };
+        return { key: currentKey, spec: itemSpec || spec, value, valuePathSegments };
       }
-      return this._resolveCompletionTarget(item, itemSpec || spec, position, currentKey) || {
+      return this._resolveCompletionTarget(item, itemSpec || spec, position, currentKey, valuePathSegments) || {
         key: currentKey,
         spec: itemSpec || spec,
         value: item,
+        valuePathSegments,
       };
     }
     if (value instanceof InlineTableExpr) {
@@ -347,19 +403,28 @@ class MsraLanguageServer {
       const entryKey = entry ? entry.key : currentKey;
       const tableSpec = this._specForInlineTableValue(spec, value, entryKey);
       if (!entry) {
-        return { key: currentKey, spec: tableSpec || spec, value };
+        return { key: currentKey, spec: tableSpec || spec, value, valuePathSegments };
       }
       const entrySpec = this._specForInlineEntry(tableSpec || spec, value, entry.key, entryKey);
+      const entryPathSegments = [
+        ...valuePathSegments,
+        {
+          value: entry.key,
+          quoted: Boolean(entry.quoted),
+          range: entry.keyRange || null,
+        },
+      ];
       if (!entrySpec) {
-        return { key: entry.key, spec: tableSpec || spec, value: entry.value };
+        return { key: entry.key, spec: tableSpec || spec, value: entry.value, valuePathSegments: entryPathSegments };
       }
-      return this._resolveCompletionTarget(entry.value, entrySpec, position, entry.key) || {
+      return this._resolveCompletionTarget(entry.value, entrySpec, position, entry.key, entryPathSegments) || {
         key: entry.key,
         spec: entrySpec,
         value: entry.value,
+        valuePathSegments: entryPathSegments,
       };
     }
-    return { key: currentKey, spec, value };
+    return { key: currentKey, spec, value, valuePathSegments };
   }
 
   _arrayItemAt(arrayExpr, position) {
@@ -588,6 +653,14 @@ class MsraLanguageServer {
       }
     }
 
+    add("FUNCRESULT", "Function result namespace", "FUNCRESULT");
+    for (const table of [...analyzed.tableIndex.values()].sort((left, right) => comparePaths(left.path, right.path))) {
+      const path = table.path || [];
+      if (path.length === 3 && path[0] === "app" && path[1] === "func") {
+        add(`FUNCRESULT.${path[2]}`, `Result of ${pathLabel(path)}`, "FUNCRESULT");
+      }
+    }
+
     for (const entry of referenceNamespaceEntries("UNSTANDARD_HEADERS", REFERENCE_NAMESPACE_SPECS.UNSTANDARD_HEADERS.detail, REFERENCE_NAMESPACE_SPECS.UNSTANDARD_HEADERS.children)) {
       add(entry.label, entry.detail, entry.root);
     }
@@ -761,7 +834,7 @@ class MsraLanguageServer {
     return [];
   }
 
-  _allowedReferenceRoots(tablePath, key, spec, schema) {
+  _allowedReferenceRoots(tablePath, valuePathSegments, key, spec, schema) {
     if (spec && spec.kind === "reference") {
       return spec.roots;
     }
@@ -798,6 +871,9 @@ class MsraLanguageServer {
         return ["INPUT", "VARIABLES", "DOCUMENT.PREFIXES", "DOCUMENT.REGEXES"];
       }
       return ["INPUT", "VARIABLES", "DOCUMENT.PREFIXES", "DOCUMENT.REGEXES"];
+    }
+    if (isFuncResultReferenceContext(tablePath, valuePathSegments)) {
+      return EXAMPLE_INPUT_REFERENCE_ROOTS;
     }
     if (key === "from" && pathMatches(tablePath, ["app", "variables", "*"])) {
       return [

@@ -350,6 +350,7 @@ class Parser {
     this.currentTable = [];
     this.currentTableSegments = [];
     this.currentTableIdentityKey = pathIdentityKey([]);
+    this.currentValuePathSegments = [];
   }
 
   parse() {
@@ -454,7 +455,14 @@ class Parser {
       return;
     }
     const valueStartIndex = this.index;
-    const value = this._parseExpr(true, true, true);
+    const value = this._withValuePathSegment(
+      {
+        value: keyToken.value,
+        quoted: keyToken.type === "STRING",
+        range: keyToken.range,
+      },
+      () => this._parseExpr(true, true, true),
+    );
     const assignmentRange = new Range(keyToken.range.start, value ? value.range.end : this._previous().range.end);
     const key = keyToken.value;
     const fullPath = [...this.currentTable, key];
@@ -745,7 +753,16 @@ class Parser {
     const end = this._expect("GT", "Expected '>' to close reference") || this._previous();
     const expr = new RefExpr(new Range(start.range.start, end.range.end), parts);
     this.references.push(
-      new ReferenceOccurrence(expr, expr.range, [...this.currentTable], null, null, this.currentTableSegments.slice(), this.currentTableIdentityKey),
+      new ReferenceOccurrence(
+        expr,
+        expr.range,
+        [...this.currentTable],
+        null,
+        null,
+        this.currentTableSegments.slice(),
+        this.currentTableIdentityKey,
+        this.currentValuePathSegments.slice(),
+      ),
     );
     return expr;
   }
@@ -860,7 +877,14 @@ class Parser {
         }
         break;
       }
-      const value = this._parseExpr(false, true, true);
+      const value = this._withValuePathSegment(
+        {
+          value: keyToken.value,
+          quoted: keyToken.type === "STRING",
+          range: keyToken.range,
+        },
+        () => this._parseExpr(false, true, true),
+      );
       items.push(new InlineEntry(keyToken.value, keyToken.range, value, keyToken.type === "STRING"));
       if (this._match("COMMA")) {
         while (this._check("NEWLINE")) {
@@ -907,6 +931,15 @@ class Parser {
   _syncUntil(tokenTypes) {
     while (!this._check("EOF") && !tokenTypes.has(this._current().type)) {
       this._advance();
+    }
+  }
+
+  _withValuePathSegment(segment, fn) {
+    this.currentValuePathSegments.push(segment);
+    try {
+      return fn();
+    } finally {
+      this.currentValuePathSegments.pop();
     }
   }
 }
