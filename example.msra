@@ -142,7 +142,7 @@ list_style={
     # delimited -> ?tag=a,b
     # bracket   -> ?tag[]=a&tag[]=b или ?tag[0]=a&tag[1]=b
     # json      -> ?tag=["a","b"]
-    style=repeat,
+    style=delimited,
     delimiter=",", # Используется только при style = "delimited"
     indexed = false # Используется только при style = "bracket"
 }

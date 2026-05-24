@@ -404,11 +404,19 @@ def build_headers_spec(table: dict[str, Any] | None, get_assignment) -> dict[str
 
 
 def build_url_param_spec(table: dict[str, Any], get_assignment) -> dict[str, Any]:
+    list_style = get_plain_value(get_assignment(table, "list_style"))
+    if not isinstance(list_style, dict):
+        list_style = {}
     return {
         "name": table["path"][-1],
         "sub_url": bool(get_plain_value(get_assignment(table, "sub_url", False))),
         "required": bool(get_plain_value(get_assignment(table, "required", False))),
         "list": bool(get_plain_value(get_assignment(table, "list", False))),
+        "list_style": {
+            "style": str(list_style.get("style", "repeat") or "repeat").strip().lower(),
+            "delimiter": str(list_style.get("delimiter", ",") or ","),
+            "indexed": bool(list_style.get("indexed", False)),
+        },
         "data": get_assignment(table, "data"),
         "values": get_assignment(table, "values"),
         "description": str(get_plain_value(get_assignment(table, "description", ""))),
@@ -630,9 +638,14 @@ def build_function_context(
     transport = str(func.get("transport", "fetch"))
     method = str(func.get("method", "GET"))
     method_name = str(func.get("name", func["id"]))
-    inputs = func.get("inputs", [])
+    inputs = [dict(input_spec) for input_spec in func.get("inputs", [])]
     signature_parts = []
     signature_specs = []
+    input_allowed_values = build_input_allowed_values_map(func)
+    for input_spec in inputs:
+        allowed_values = input_allowed_values.get(input_spec["name"])
+        if allowed_values is not None:
+            input_spec["allowed_values"] = allowed_values
     for input_spec in inputs:
         arg_name = input_spec["name"]
         annotation = render_input_annotation(input_spec)
@@ -682,7 +695,7 @@ def build_function_context(
         },
         "body_expr": render_expr(body.get("data"), self_ref="self._parent") if body else None,
         "body_type": body.get("type") if body else None,
-        "validation": build_input_validation_context(func),
+        "validation": build_input_validation_context({"inputs": inputs}),
         "query_params": build_query_param_context(func),
         "direct_args": direct_args,
         "postprocess": {
@@ -705,15 +718,22 @@ def build_function_context(
 def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]:
     validations: list[dict[str, Any]] = []
     for input_spec in func.get("inputs", []):
-        type_names = type_names_from_expr(input_spec.get("type"))
-        values = get_plain_value(input_spec.get("values"))
-        has_type_checks = any(type_name in {"integer", "boolean", "number", "string"} for type_name in type_names)
+        type_expr = input_spec.get("type")
+        type_names = type_names_from_expr(type_expr)
+        is_list = is_list_type_expr(type_expr)
+        values = input_spec.get("allowed_values")
+        if values is None:
+            values = get_plain_value(input_spec.get("values"))
+        values = selectable_values_from_plain_values(values)
+        has_type_checks = is_list or any(type_name in {"integer", "boolean", "number", "string"} for type_name in type_names)
         has_value_checks = bool(input_spec.get("revalue") or values)
         validations.append(
             {
                 "name": input_spec["name"],
                 "required": bool(input_spec.get("required", False)),
                 "type_names": sorted(type_names),
+                "item_type_names": sorted(type_names) if is_list else [],
+                "is_list": is_list,
                 "revalue_pattern": (
                     revalue_to_pattern(input_spec.get("revalue"))
                 ),
@@ -733,39 +753,95 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for param in params:
         param_name = param["name"]
+        list_style = param.get("list_style") or {}
         data_expr = param.get("data")
         values = get_plain_value(param.get("values"))
-        matched_input = inputs.get(normalize_name(param_name))
-        item: dict[str, Any] = {"name": param_name, "name_expr": render_simple_value(param_name)}
+        source_input_name = ref_input_name(data_expr)
+        matched_input = inputs.get(normalize_name(source_input_name)) if source_input_name else inputs.get(normalize_name(param_name))
+        item: dict[str, Any] = {
+            "name": param_name,
+            "name_expr": render_simple_value(param_name),
+            "source_name": source_input_name or param_name,
+            "source_expr": render_expr(data_expr, self_ref="self._parent") if data_expr is not None else None,
+            "is_list": bool(param.get("list", False)) or bool(matched_input and is_list_type_expr(matched_input.get("type"))),
+            "has_value_map": False,
+            "selectable_values_expr": None,
+            "value_map_expr": None,
+            "default_values_expr": None,
+            "default_value_expr": None,
+            "list_style_style": str(list_style.get("style", "repeat") or "repeat").strip().lower(),
+            "list_style_delimiter_expr": render_simple_value(str(list_style.get("delimiter", ",") or ",")),
+            "list_style_indexed": bool(list_style.get("indexed", False)),
+            "temp_name": f"_{normalize_name(param_name)}_value",
+            "temp_list_name": f"_{normalize_name(param_name)}_values",
+        }
         if data_expr is not None:
             item["kind"] = "data"
-            item["value_expr"] = render_expr(data_expr, self_ref="self._parent")
+            if isinstance(values, list) and values and all(isinstance(entry, dict) for entry in values):
+                selectable_entries = [entry for entry in values if entry.get("value") is not None]
+                default_entries = [entry for entry in values if entry.get("default")]
+                if selectable_entries:
+                    item["has_value_map"] = True
+                    item["selectable_values_expr"] = render_simple_value([entry["value"] for entry in selectable_entries])
+                    item["value_map_expr"] = render_simple_value(
+                        {entry["value"]: entry["value_in_url"] for entry in selectable_entries}
+                    )
+                if default_entries:
+                    item["default_values_expr"] = render_simple_value([entry["value_in_url"] for entry in default_entries])
+                    if len(default_entries) == 1:
+                        item["default_value_expr"] = render_simple_value(default_entries[0]["value_in_url"])
+                if not selectable_entries and default_entries:
+                    if param.get("list", False) or (matched_input and is_list_type_expr(matched_input.get("type"))):
+                        item["value_expr"] = render_simple_value([entry["value_in_url"] for entry in default_entries])
+                    else:
+                        item["value_expr"] = render_simple_value(default_entries[0]["value_in_url"])
+            else:
+                item["value_expr"] = render_expr(data_expr, self_ref="self._parent")
             result.append(item)
             continue
-        if isinstance(values, list) and len(values) == 1 and isinstance(values[0], dict):
-            value_in_url = values[0].get("value_in_url")
-            default = bool(values[0].get("default", False))
-            if matched_input and "boolean" in type_names_from_expr(matched_input.get("type")) and value_in_url in {True, False, "true", "false"}:
-                item.update(
-                    {
-                        "kind": "boolean_literal",
-                        "input_name": matched_input["name"],
-                        "value_expr": render_simple_value("true" if str(value_in_url).lower() == "true" else "false"),
-                    }
-                )
+        if isinstance(values, list) and values and all(isinstance(entry, dict) for entry in values):
+            default_entries = [entry for entry in values if entry.get("default")]
+            selectable_entries = [entry for entry in values if entry.get("value") is not None]
+            if default_entries:
+                item["kind"] = "literal"
+                if param.get("list", False):
+                    item["value_expr"] = render_simple_value([entry["value_in_url"] for entry in default_entries])
+                else:
+                    item["value_expr"] = render_simple_value(default_entries[0]["value_in_url"])
                 result.append(item)
                 continue
-            if default:
-                item.update({"kind": "literal", "value_expr": render_simple_value(value_in_url)})
-                result.append(item)
-                continue
-            if matched_input:
-                item.update({"kind": "input_passthrough", "input_name": matched_input["name"]})
+            if selectable_entries:
+                item["kind"] = "literal"
+                if param.get("list", False):
+                    item["value_expr"] = render_simple_value([entry["value_in_url"] for entry in selectable_entries])
+                else:
+                    item["value_expr"] = render_simple_value(selectable_entries[0]["value_in_url"])
                 result.append(item)
                 continue
         if matched_input:
             item.update({"kind": "input_passthrough", "input_name": matched_input["name"]})
             result.append(item)
+    return result
+
+
+def build_input_allowed_values_map(func: dict[str, Any]) -> dict[str, list[Any]]:
+    url_spec = func.get("url") or {}
+    params = url_spec.get("params") or []
+    result: dict[str, list[Any]] = {}
+    for param in params:
+        source_input_name = ref_input_name(param.get("data"))
+        if not source_input_name or param.get("revalue") is not None:
+            continue
+        values = get_plain_value(param.get("values"))
+        if not isinstance(values, list):
+            continue
+        selectable_values = [
+            entry.get("value")
+            for entry in values
+            if isinstance(entry, dict) and entry.get("value") is not None
+        ]
+        if selectable_values:
+            result[source_input_name] = selectable_values
     return result
 
 
@@ -1038,6 +1114,14 @@ def type_annotation_from_types(type_names: set[str]) -> str:
     return annotation
 
 
+def type_annotation_from_expr(expr: dict[str, Any] | None) -> str:
+    if is_list_type_expr(expr):
+        item_expr = list_item_type_expr(expr)
+        return f"list[{type_annotation_from_expr(item_expr)}]"
+    type_names = type_names_from_expr(expr)
+    return type_annotation_from_types(type_names)
+
+
 def primary_type_name(type_names: set[str]) -> str | None:
     for candidate in ("integer", "number", "boolean", "string", "array", "object", "null"):
         if candidate in type_names:
@@ -1149,12 +1233,17 @@ def render_return_annotation(func: dict[str, Any]) -> str:
 
 
 def render_input_annotation(input_spec: dict[str, Any]) -> str:
-    type_names = type_names_from_expr(input_spec.get("type"))
-    base = type_annotation_from_types(type_names)
-    values = get_plain_value(input_spec.get("values"))
-    if isinstance(values, list) and values and all(not isinstance(item, dict) for item in values):
+    base = type_annotation_from_expr(input_spec.get("type"))
+    values = input_spec.get("allowed_values")
+    if values is None:
+        values = get_plain_value(input_spec.get("values"))
+    values = selectable_values_from_plain_values(values)
+    if input_spec.get("revalue") is None and values:
         literal_values = ", ".join(render_simple_value(item) for item in values)
-        base = f"Literal[{literal_values}]"
+        if base.startswith("list[") and base.endswith("]"):
+            base = f"list[Literal[{literal_values}]]"
+        else:
+            base = f"Literal[{literal_values}]"
     default_expr = input_spec.get("default")
     has_explicit_default = default_expr is not None and get_plain_value(default_expr) is not None
     if not input_spec.get("required", False) and not has_explicit_default and "| None" not in base:
@@ -1175,6 +1264,9 @@ def normalize_name(text: str) -> str:
 
 
 def type_names_from_expr(expr: dict[str, Any] | None) -> set[str]:
+    if is_list_type_expr(expr):
+        item_expr = list_item_type_expr(expr)
+        return type_names_from_expr(item_expr)
     plain = get_plain_value(expr)
     if isinstance(plain, str):
         return {plain}
@@ -1187,3 +1279,51 @@ def type_names_from_expr(expr: dict[str, Any] | None) -> set[str]:
     if isinstance(plain, dict) and plain.get("type"):
         return {str(plain["type"])}
     return set()
+
+
+def is_list_type_expr(expr: dict[str, Any] | None) -> bool:
+    if not isinstance(expr, dict) or expr.get("kind") != "sequence":
+        return False
+    items = expr.get("items", [])
+    if len(items) != 2:
+        return False
+    if get_plain_value(items[0]) != "list":
+        return False
+    return isinstance(items[1], dict) and items[1].get("kind") == "array"
+
+
+def list_item_type_expr(expr: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not is_list_type_expr(expr):
+        return None
+    items = expr.get("items", [])
+    if len(items) != 2:
+        return None
+    inner = items[1]
+    if not isinstance(inner, dict):
+        return None
+    inner_items = inner.get("items", [])
+    if not inner_items:
+        return None
+    first = inner_items[0]
+    return first if isinstance(first, dict) else None
+
+
+def ref_input_name(expr: dict[str, Any] | None) -> str | None:
+    if not isinstance(expr, dict) or expr.get("kind") != "ref":
+        return None
+    parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
+    if len(parts) >= 2 and parts[0] == "INPUT":
+        return parts[1]
+    return None
+
+
+def selectable_values_from_plain_values(values: Any) -> list[Any]:
+    if not isinstance(values, list):
+        return []
+    if all(not isinstance(item, dict) for item in values):
+        return list(values)
+    return [
+        item["value"]
+        for item in values
+        if isinstance(item, dict) and item.get("value") is not None
+    ]

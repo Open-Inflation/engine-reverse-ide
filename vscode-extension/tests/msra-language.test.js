@@ -965,6 +965,16 @@ test("python codegen generates both bundled msra documents without failing", () 
       packageName: "fixpriceapi",
     },
   ];
+  const delimitedInputPath = path.join(workDir, "example-delimited.msra");
+  const delimitedSource = readFileSync(path.join(repoRoot, "example.msra"), "utf8")
+    .replace("style=repeat,", "style=delimited,")
+    .replace('delimiter=","', 'delimiter="|"');
+  writeFileSync(delimitedInputPath, delimitedSource, "utf8");
+  cases.push({
+    inputPath: delimitedInputPath,
+    outputDir: path.join(workDir, "delimited"),
+    packageName: "delimitedapi",
+  });
 
   try {
     for (const testCase of cases) {
@@ -988,6 +998,17 @@ test("python codegen generates both bundled msra documents without failing", () 
       const outputModule = readFileSync(path.join(packageDir, "abstraction", "output.py"), "utf8");
       assert.match(outputModule, /class Output/);
       assert.match(outputModule, /def image\(/);
+      if (testCase.packageName === "exampleapi") {
+        const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
+        assert.match(productModule, /async def feed\(self, query: str \| None = None, url: list\[Literal\['\/searchSuggestions\/search\/'\]\] \| None = None, filename: str \| None = None\) -> abstraction\.Output:/);
+        assert.match(productModule, /request_url = self\._parent\._BASE_API/);
+        assert.match(productModule, /if _url_values in \(None, \[\]\):/);
+        assert.match(productModule, /query_params\.append\(\('url', _url_values\)\)/);
+        assert.match(productModule, /query_params\.append\(\('from_global', 'true'\)\)/);
+      } else if (testCase.packageName === "delimitedapi") {
+        const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
+        assert.match(productModule, /query_params\.append\(\('url', '\|'\.join\(str\(__item\) for __item in _url_values\)\)\)/);
+      }
       for (const filePath of collectPythonFiles(packageDir)) {
         const source = readFileSync(filePath, "utf8");
         assert.doesNotMatch(source, /\bApiParent\b/);
