@@ -231,8 +231,7 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
 
     const boundaryAssignment = getAssignment(assignmentIndex, tablePath, "boundary");
     const dataAssignment = getAssignment(assignmentIndex, tablePath, "data");
-    const parentBodyNamespace = tablePath.slice(0, -1);
-    const hasUrlChild = hasUnquotedChildTable(tableIndex, parentBodyNamespace, "url");
+    const hasUrlChild = hasUnquotedChildTable(tableIndex, tablePath, "url");
     const isMultipart = type === "multipart/form-data";
     const isFormEncoded = type === "application/x-www-form-urlencoded";
 

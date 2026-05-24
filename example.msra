@@ -33,7 +33,7 @@ pipeline=[ # timeout_ms возможно переопределить по же�
     ],
     {for_tests=true, action=wait_network, state=load},
     {if={action=element, state=visible, what="div.load-error"}, action=always, then={action=click, what="button#reload-button"}}
-    {action=wait_network, state=networkidle} # или domcontentloaded, networkidle, commit (добавить)
+    {action=wait_network, state=networkidle} # или domcontentloaded, networkidle, commit
 ]
 headers_sniffer=true
 on_error_screenshot_path="screenshot.png" # по умолчанию скриншоты не делаются

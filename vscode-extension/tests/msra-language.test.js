@@ -832,6 +832,23 @@ test("urlencoded bodies require data or a nested url table", () => {
   assert.match(payloadDiagnostic.message, /url/);
 });
 
+test("urlencoded body items accept a nested url table under the body item itself", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.body]",
+    '[app.func.A3A417.body.VLOJENNOST.ANYNAME3]',
+    'type="application/x-www-form-urlencoded"',
+    '[app.func.A3A417.body.VLOJENNOST.ANYNAME3.url]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///nested-urlencoded-url.msra");
+  const analysis = analyzeDocument(document);
+  const payloadDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-body-payload");
+
+  assert.ok(!payloadDiagnostic, "expected the nested url table to satisfy the urlencoded body requirement");
+});
+
 test("shared function headers accept referrer cors_mode credentials and headers", () => {
   const text = [
     "[app]",
