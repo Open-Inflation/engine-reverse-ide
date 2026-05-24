@@ -119,7 +119,7 @@ method=GET
 - `webkit`
 - `camoufox`
 
-`camoufox` нужен там, где используются `@Humanize`, `@BlockImages` и `humanize_action`.
+`camoufox` нужен там, где используются `@Humanize` и `@BlockImages`.
 Старые записи вида `humanize=true`, `block_images=true` и `headers_sniffer=true` больше не принимаются.
 
 ## Warmup
@@ -132,17 +132,11 @@ Warmup - это стартовая последовательность дейс
 | --- | --- | --- |
 | `@Humanize` / `@Humanize(3.0)` | Включает более “человеческое” поведение браузера | Снижает риск детекта автоматизации |
 | `@BlockImages` | Блокирует загрузку изображений | Ускоряет старт и снижает трафик |
-| `humanize_action` | Диапазон задержки между действиями | Делает последовательность менее “роботизированной” |
 | `url` | Стартовый URL warmup | Куда перейти до начала pipeline |
 | `pipeline` | Список шагов warmup | Основной сценарий подготовки |
 | `@SniffHeaders` | Включает сбор network headers | Нужен для `UNSTANDARD_HEADERS.*` и `CAPTURED_URLS.*` |
 | `on_error_screenshot_path` | Путь к скриншоту при ошибке | Позволяет сохранить диагностический снимок |
 | `timeout_ms` | Таймаут warmup | Локальный override поверх `app.timeout_ms` |
-
-### `humanize_action`
-
-Значение вида `{from=1000, to=3000}` задаёт диапазон задержки в миллисекундах.
-Оно имеет смысл только когда указан `@Humanize`.
 
 ### `pipeline`
 

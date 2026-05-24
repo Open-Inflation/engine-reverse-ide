@@ -180,7 +180,7 @@ function validateWarmupRelations(assignmentIndex) {
   const browser = getEnumAssignmentValue(assignmentIndex, ["app"], "browser");
   const browserIsCamoufox = browser === "camoufox";
 
-  for (const key of ["humanize", "block_images", "humanize_action"]) {
+  for (const key of ["humanize", "block_images"]) {
     const assignment = getAssignment(assignmentIndex, warmupPath, key);
     if (!assignment) {
       continue;
@@ -190,22 +190,6 @@ function validateWarmupRelations(assignmentIndex) {
         new Diagnostic(
           `Warmup option "${key}" is only available when app.browser="camoufox".`,
           assignment.keyRange,
-          "error",
-          "msra",
-          "invalid-warmup-context",
-        ),
-      );
-    }
-  }
-
-  const humanizeAction = getAssignment(assignmentIndex, warmupPath, "humanize_action");
-  if (humanizeAction && browserIsCamoufox) {
-    const humanize = getAssignment(assignmentIndex, warmupPath, "humanize");
-    if (!isHumanizeEnabled(humanize && humanize.value)) {
-      diagnostics.push(
-        new Diagnostic(
-          'Warmup option "humanize_action" requires humanize to be enabled.',
-          humanizeAction.keyRange,
           "error",
           "msra",
           "invalid-warmup-context",

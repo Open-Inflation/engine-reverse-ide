@@ -78,26 +78,7 @@ raise="Текст запроса должен состоять только из
 
 То есть сами действия нормализации строки до проверки не переносятся в сгенерированный код.
 
-## 4. `warmup.humanize_action` не протаскивается в runtime
-
-В `example.msra` warmup описан так:
-
-```msra
-[app.warmup]
-@Humanize
-humanize_action={from=1000, to=3000}
-@BlockImages
-```
-
-Сейчас генератор и шаблон используют `humanize`, `block_images`, `url`, `headers_sniffer`, `on_error_screenshot_path` и `pipeline`,
-но отдельный диапазон `humanize_action` в generated Python не сохраняется.
-
-Итог:
-
-- режим humanize включается;
-- но точная задержка действий из `humanize_action` теряется.
-
-## 5. `app.func.*.examples` не превращаются в generated tests or fixtures
+## 4. `app.func.*.examples` не превращаются в generated tests or fixtures
 
 В `example.msra` у функции есть примеры:
 
@@ -120,7 +101,7 @@ inputs={"query"="example2"}
 
 То есть `examples` остаются частью описания API, но не превращаются в код, который можно запустить как часть generated package.
 
-## 6. `FUNCRESULT`-ссылки поддержаны только в LSP-контексте примеров
+## 5. `FUNCRESULT`-ссылки поддержаны только в LSP-контексте примеров
 
 Планируемый синтаксис вида:
 

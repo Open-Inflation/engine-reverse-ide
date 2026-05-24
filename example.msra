@@ -17,7 +17,6 @@ browser=camoufox # доступно chromium, firefox, webkit, camoufox
 # Доступно только когда браузер camoufox
 @Humanize # по умолч false, доступно float>0
 @BlockImages # по умолч false
-humanize_action={from=1000, to=3000} # время в мс, которое будет потрачено на выполнение действия, доступно только при @Humanize
 
 url=<DOCUMENT.PREFIXES.ORIGIN>
 pipeline=[ # timeout_ms возможно переопределить по желанию

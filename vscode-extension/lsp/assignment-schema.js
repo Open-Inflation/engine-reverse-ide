@@ -327,21 +327,6 @@ const LIST_STYLE_SPEC = objectShape(
   },
 );
 
-const HUMANIZE_ACTION_SPEC = objectShape(
-  {
-    from: integerAtLeast(0),
-    to: integerAtLeast(0),
-  },
-  {},
-  {
-    rules: [
-      requireKeyOrder("from", "to", {
-        message: 'Expected key "to" to be greater than or equal to key "from" in "humanize_action".',
-      }),
-    ],
-  },
-);
-
 const URL_PARAM_VALUE_SPEC = objectShape(
   {
     value_in_url: STRINGISH,
@@ -597,7 +582,6 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["app", "warmup"]), {
     humanize: HUMANIZE_SPEC,
     block_images: BOOLEAN,
-    humanize_action: HUMANIZE_ACTION_SPEC,
     url: ANY,
     pipeline: arrayOf(PIPELINE_ITEM_SPEC),
     headers_sniffer: BOOLEAN,

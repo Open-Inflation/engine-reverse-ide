@@ -929,14 +929,13 @@ test("@Humanize and @BlockImages require camoufox browser", () => {
     "[app.warmup]",
     "@Humanize",
     "@BlockImages",
-    'humanize_action={from=1000, to=3000}',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-warmup-context.msra");
   const analysis = analyzeDocument(document);
   const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-warmup-context");
 
-  assert.strictEqual(diagnostics.length, 3);
+  assert.strictEqual(diagnostics.length, 2);
   assert.match(diagnostics[0].message, /camoufox/);
 });
 
@@ -967,6 +966,22 @@ test("warmup rejects unsupported keys like wait_url", () => {
 
   assert.ok(diagnostic, "expected wait_url to be rejected as an unsupported warmup key");
   assert.match(diagnostic.message, /wait_url/);
+});
+
+test("warmup rejects removed humanize_action key", () => {
+  const text = [
+    "[app]",
+    'browser=camoufox',
+    "[app.warmup]",
+    'humanize_action={from=1000, to=3000}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///removed-humanize-action.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "unknown-assignment-key");
+
+  assert.ok(diagnostic, "expected humanize_action to be rejected as an unsupported warmup key");
+  assert.match(diagnostic.message, /humanize_action/);
 });
 
 test("generator merges consecutive warmup test steps into a single test_mode guard", () => {
