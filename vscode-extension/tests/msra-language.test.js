@@ -179,7 +179,7 @@ test("app metadata rejects malformed authors and license values", () => {
   assert.match(invalidLicense.message, /license abbreviation/);
 });
 
-test("version name and color cannot be dynamic", () => {
+test("version and name cannot be dynamic", () => {
   const text = [
     "[misklerreverseapi]",
     "version=<INPUT.version>",
@@ -187,18 +187,15 @@ test("version name and color cannot be dynamic", () => {
     "version=<INPUT.version>",
     "[app.func.A3A417]",
     "name=<INPUT.name>",
-    "color=<INPUT.color>",
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///dynamic-version-name-color.msra");
+  const document = parseDocument(text, "file:///dynamic-version-name.msra");
   const analysis = analyzeDocument(document);
   const versionDiagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-version-dynamic");
   const nameDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-function-name-dynamic");
-  const colorDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-function-color-dynamic");
 
   assert.strictEqual(versionDiagnostics.length, 2, "expected both version fields to reject dynamic references");
   assert.ok(nameDiagnostic, "expected function name to reject dynamic references");
-  assert.ok(colorDiagnostic, "expected function color to reject dynamic references");
 });
 
 test("description fields cannot be dynamic", () => {
@@ -1744,7 +1741,6 @@ test("completion is field-aware for groups enums and static values", () => {
   });
   const text = readFileSync(examplePath, "utf8")
     .replace("group=<GROUPS.Catalog.Product>", "group=")
-    .replace('color="#ccb034"', "color=")
     .replace("transport=fetch", "transport=");
   const uri = "file:///completion-field-aware.msra";
   server._updateDocument({ textDocument: { uri, text } }, false);
@@ -1766,9 +1762,6 @@ test("completion is field-aware for groups enums and static values", () => {
   const groupLabels = getLabels("group=");
   assert.ok(groupLabels.includes("GROUPS.Catalog.Product"), "expected group completions to suggest the configured group");
   assert.ok(!groupLabels.some((label) => label.startsWith("DOCUMENT.")), "expected group completions to avoid unrelated document references");
-
-  const colorLabels = getLabels("color=");
-  assert.ok(!colorLabels.some((label) => label.startsWith("DOCUMENT.") || label.startsWith("GROUPS.") || label.startsWith("INPUT.")), "expected static color completion to avoid reference suggestions");
 
   const transportLabels = getLabels("transport=");
   assert.deepStrictEqual(new Set(transportLabels), new Set(["direct", "fetch", "goto"]));

@@ -311,7 +311,6 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
                 "group": group,
                 "transport": transport,
                 "method": method,
-                "color": get_plain_value(get_assignment(root, "color", "")),
                 "description": str(get_plain_value(get_assignment(root, "description", ""))),
                 "root_table": root,
                 "inputs": [],
@@ -481,6 +480,10 @@ def generate_project(
         target = package_root / script
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
+
+    from .docs_generator import generate_docs_project
+
+    generate_docs_project(project, output_dir, package_name, group_tree)
 
 
 def render_pyproject(project: dict[str, Any], package_name: str) -> str:

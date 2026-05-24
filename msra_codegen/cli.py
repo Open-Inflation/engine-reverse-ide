@@ -11,7 +11,7 @@ from .generator import build_project, generate_project
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="msra-codegen",
-        description="Generate an async Python client from an MSRA document.",
+        description="Generate an async Python client and Sphinx docs from an MSRA document.",
     )
     parser.add_argument("msra_file", type=Path, help="Path to the source .msra file")
     parser.add_argument(
@@ -45,5 +45,9 @@ def main(argv: list[str] | None = None) -> int:
         source_root=args.msra_file.resolve().parent,
     )
 
-    print(f"Generated {project['app']['name']} into {args.output.resolve()}")
+    output_root = args.output.resolve()
+    print(
+        f"Generated {project['app']['name']} into {output_root} "
+        f"(docs in {output_root / 'docs'})"
+    )
     return 0

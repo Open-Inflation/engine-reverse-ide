@@ -68,7 +68,6 @@ transport=fetch # доступно direct, fetch и goto
 method=GET
 # method="GET" # недоступно для goto
 group=<GROUPS.Catalog.Product>
-color="#ccb034"
 description="Основной способ получения карточек каталога.\n\nНе настраивается напрямую, должен получить url запроса"
 
 [app.func.A3A417.postprocess]

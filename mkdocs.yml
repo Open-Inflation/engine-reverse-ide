@@ -1,12 +1,14 @@
 site_name: MSRA Documentation
-site_description: MSRA path semantics and tooling notes
+site_description: Full MSRA language reference, path semantics, and tooling notes
 docs_dir: docs
 theme:
   name: readthedocs
 nav:
   - Home: index.md
-  - Пути: msra-paths.md
-  - Ограничения генератора: msra-generator-gaps.md
+  - Язык MSRA:
+      - Полный справочник: msra-language.md
+      - Пути и identity: msra-paths.md
+      - Ограничения генератора: msra-generator-gaps.md
 markdown_extensions:
   - tables
   - admonition

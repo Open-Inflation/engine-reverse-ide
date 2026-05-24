@@ -54,7 +54,7 @@ node ..\bin\msra.js check ..\example.msra
 
 ## Python Codegen
 
-This repo also includes a Python generator that turns an `.msra` document into an async Python client package.
+This repo also includes a Python generator that turns an `.msra` document into an async Python client package and a matching Sphinx documentation tree.
 
 ```powershell
 python -m msra_codegen .\fixprice.msra -o .\generated
@@ -75,6 +75,19 @@ The generator writes:
 - `<package-name>/abstraction/regexes.py`
 - `<package-name>/endpoints/*.py`
 - referenced `postprocess/*.js` assets
+- `docs/requirements.txt`
+- `docs/source/conf.py`
+- `docs/source/index.rst`
+- `docs/source/api.rst`
+- `docs/source/<package-name>.rst`
+- `docs/source/_api/*.rst`
+
+To build the generated docs locally:
+
+```powershell
+python -m pip install -r .\generated\docs\requirements.txt
+python -m sphinx -b html .\generated\docs\source .\generated\docs\_build\html
+```
 
 The reusable Jinja2 templates live under `msra_codegen/templates/`, so the output shape can be adjusted without editing the generator logic itself.
 

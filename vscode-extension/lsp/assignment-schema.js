@@ -550,7 +550,6 @@ const TABLE_SCHEMAS = [
     url: ANY,
     pipeline: arrayOf(PIPELINE_ITEM_SPEC),
     headers_sniffer: BOOLEAN,
-    error_selector: STRINGISH,
     on_error_screenshot_path: SCREENSHOT_PATH_SPEC,
     timeout_ms: integerAtLeast(0),
   }),
@@ -608,17 +607,12 @@ const TABLE_SCHEMAS = [
     transport: TRANSPORT_SPEC,
     method: METHOD_SPEC,
     group: GROUP_REFERENCE_SPEC,
-    color: STRINGISH,
     description: STRINGISH,
   }, {
     rules: [
       forbidDynamicValue("name", {
         code: "invalid-function-name-dynamic",
         message: 'Function name cannot be dynamic. References and other dynamic expressions are not allowed.',
-      }),
-      forbidDynamicValue("color", {
-        code: "invalid-function-color-dynamic",
-        message: 'Function color cannot be dynamic. References and other dynamic expressions are not allowed.',
       }),
       forbidDynamicValue("description", {
         code: "invalid-description-dynamic",
