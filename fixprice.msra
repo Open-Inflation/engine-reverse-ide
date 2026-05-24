@@ -5,7 +5,6 @@ version="0.2.4.1"
 name="FixPriceAPI"
 version="0.2.4.1"
 timeout_ms=35000
-class_name_pattern="Class{class_name}"
 browser=camoufox
 
 # Warmup mirrors FixPriceAPI._warmup():

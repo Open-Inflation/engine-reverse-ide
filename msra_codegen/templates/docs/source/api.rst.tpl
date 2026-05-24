@@ -1,15 +1,8 @@
 API Reference
 =============
 
-.. autosummary::
-   :recursive:
-   :toctree: _api
-
-   {{ package_name }}.endpoints
-   {{ package_name }}.manager
-
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
 {% for docname in api_docnames %}
    {{ docname }}

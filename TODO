@@ -1,4 +1,21 @@
+# Язык
+1. Убрать тумблеры вида
+sub_url=false
+required=false
+list=false
+Вместо этого описывать
+@IsSubUrl
+@IsRequired
+@IsList
+
+humanize=true # по умолч false, доступно float>0
+block_images=true # по умолч false
+вместо этого
+@Humanize
+@BlockImages
+
+2. Переименовать data в from
+
 
 # Кодогенерация
 1. Сделать тесты
-2. Сделать доки

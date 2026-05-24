@@ -5,35 +5,27 @@
 {{ description }}
 
 {% endif %}
+.. currentmodule:: {{ import_path }}
+
 .. automodule:: {{ import_path }}
-   :members:
-   :show-inheritance:
-   :undoc-members:
 
 {% if class_names %}
 .. rubric:: Classes
 
-.. autosummary::
+{% for class_name in class_names %}
+.. autoclass:: {{ class_name }}
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-{% for class_ref in class_refs %}
-   {{ class_ref }}
 {% endfor %}
 
 {% endif %}
 {% if child_pages %}
 .. rubric:: Submodules
 
-.. autosummary::
-   :toctree: _api
-
-{% for child_page in child_pages %}
-   {{ child_page }}
-{% endfor %}
-
-{% endif %}
-{% if child_pages %}
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
 {% for child_docname in child_docnames %}
    {{ child_docname }}

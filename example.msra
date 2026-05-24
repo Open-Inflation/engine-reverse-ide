@@ -11,7 +11,6 @@ description="Ozon API integration for catalog browsing and cart flows"
 license="GPL-3.0-or-later"
 version="0.0.1"
 timeout_ms=35000
-class_name_pattern="{class_name}Service" # Вообще это стоит по дефолту, вписано для ясности так же разрешено "{class_name.lower}" или "{class_name.upper}"
 browser=camoufox # доступно chromium, firefox, webkit, camoufox
 
 [app.warmup]

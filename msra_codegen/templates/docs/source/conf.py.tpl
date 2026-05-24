@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parents[2]
+REPO_ROOT = HERE.parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 project = "{{ project_name }}"
@@ -59,12 +59,7 @@ autosummary_generate = False
 autosummary_imported_members = True
 autosummary_ignore_module_all = False
 
-autodoc_default_options = {
-    "members": True,
-    "undoc-members": True,
-    "show-inheritance": True,
-    "member-order": "bysource",
-}
+autodoc_default_options = {}
 autodoc_typehints = "signature"
 autodoc_preserve_defaults = True
 

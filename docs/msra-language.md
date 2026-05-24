@@ -99,7 +99,6 @@ method=GET
 | `license` | Идентификатор лицензии | Метаданные пакета |
 | `version` | Версия API/клиента | Попадает в generated package и документацию |
 | `timeout_ms` | Глобальный таймаут по умолчанию | Используется как базовый лимит для операций |
-| `class_name_pattern` | Шаблон имени root-класса | Позволяет управлять стилем генерации классов |
 | `browser` | Браузер по умолчанию | Определяет runtime-поведение warmup и browser-backed функций |
 
 #### `authors`
@@ -110,20 +109,6 @@ method=GET
 | --- | --- |
 | `name` | Имя автора |
 | `email` | Email автора |
-
-#### `class_name_pattern`
-
-Шаблон может использовать:
-
-- `{class_name}`
-- `{class_name.lower}`
-- `{class_name.upper}`
-
-Пример:
-
-```msra
-class_name_pattern="{class_name}Service"
-```
 
 #### `browser`
 

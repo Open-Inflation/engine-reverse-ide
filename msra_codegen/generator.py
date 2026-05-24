@@ -135,17 +135,8 @@ def base_class_name_for_group(path: list[str]) -> str:
     return pascal_case(path[-1])
 
 
-def apply_class_name_pattern(class_name_pattern: str, class_name: str) -> str:
-    pattern = str(class_name_pattern or "").strip()
-    if not pattern:
-        return class_name
-    if "{class_name}" in pattern:
-        return pattern.format(class_name=class_name)
-    return f"{pattern}{class_name}"
-
-
-def class_name_for_group(path: list[str], class_name_pattern: str = "Class{class_name}") -> str:
-    return apply_class_name_pattern(class_name_pattern, base_class_name_for_group(path))
+def class_name_for_group(path: list[str]) -> str:
+    return f"Class{base_class_name_for_group(path)}"
 
 
 def field_name_for_group(path: list[str]) -> str:
@@ -216,7 +207,6 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         "description": str(get_plain_value(get_assignment(app_table, "description", ""))),
         "version": str(get_plain_value(get_assignment(app_table, "version", "0.1.0"))),
         "timeout_ms": int(get_plain_value(get_assignment(app_table, "timeout_ms", 35000))),
-        "class_name_pattern": str(get_plain_value(get_assignment(app_table, "class_name_pattern", "Class{class_name}"))),
         "browser": str(get_plain_value(get_assignment(app_table, "browser", "camoufox"))),
     }
 
@@ -884,7 +874,7 @@ def build_manager_context(
         "top_groups": [
             {
                 "field_name": field_name_for_group(group["path"]),
-                "class_name": class_name_for_group(group["path"], app["class_name_pattern"]),
+                "class_name": class_name_for_group(group["path"]),
                 "module_name": module_import_name_for_group(group),
                 "description": escape_docstring(group.get("description") or group["name"]),
             }
@@ -927,7 +917,6 @@ def build_group_context(
     package_name: str,
 ) -> dict[str, Any]:
     root_client_name = root_client_class_name(project)
-    class_name_pattern = project["app"]["class_name_pattern"]
     child_nodes = list(group_node.get("children", {}).values())
     module_depth = module_package_depth_for_group(group_node)
     return {
@@ -935,17 +924,17 @@ def build_group_context(
         "root_client_name": root_client_name,
         "root_import_prefix": "." * (module_depth + 1),
         "group_name": ".".join(group_node["path"]) or "MSRA",
-        "class_name": class_name_for_group(group_node["path"], class_name_pattern),
+        "class_name": class_name_for_group(group_node["path"]),
         "module_name": module_file_name_for_group(group_node["path"]),
         "module_stem": module_file_name_for_group(group_node["path"])[:-3],
         "description": escape_docstring(group_node.get("description") or "Generated API group."),
         "child_imports": [
             {
                 "package_name": module_import_name_for_group(child),
-                "class_name": class_name_for_group(child["path"], class_name_pattern),
+                "class_name": class_name_for_group(child["path"]),
                 "description": escape_docstring(
                     child.get("description")
-                    or class_name_for_group(child["path"], class_name_pattern)
+                    or class_name_for_group(child["path"])
                 ),
             }
             for child in child_nodes
@@ -953,10 +942,10 @@ def build_group_context(
         "children": [
             {
                 "field_name": field_name_for_group(child["path"]),
-                "class_name": class_name_for_group(child["path"], class_name_pattern),
+                "class_name": class_name_for_group(child["path"]),
                 "description": escape_docstring(
                     child.get("description")
-                    or class_name_for_group(child["path"], class_name_pattern)
+                    or class_name_for_group(child["path"])
                 ),
             }
             for child in child_nodes
@@ -1015,7 +1004,7 @@ def render_endpoints_init(project: dict[str, Any], package_name: str, group_tree
             "top_groups": [
                 {
                     "package_name": module_import_name_for_group(group),
-                    "class_name": class_name_for_group(group["path"], project["app"]["class_name_pattern"]),
+                    "class_name": class_name_for_group(group["path"]),
                     "description": escape_docstring(group.get("description") or group["name"]),
                 }
                 for group in top_level_groups(group_tree)

@@ -506,10 +506,6 @@ const BODY_TYPE_SPEC = patternOf(
   /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[^;]+)*$/i,
   "browser-supported MIME type",
 );
-const CLASS_NAME_PATTERN_SPEC = patternOf(
-  /\{class_name(?:\.(?:lower|upper))?\}/,
-  'template containing "{class_name}", "{class_name.lower}", or "{class_name.upper}"',
-);
 const SCREENSHOT_PATH_SPEC = patternOf(
   /\.(?:jpe?g|png)$/i,
   "path ending in .jpg, .jpeg, or .png",
@@ -533,7 +529,6 @@ const TABLE_SCHEMAS = [
     license: LICENSE_SPEC,
     version: STRINGISH,
     timeout_ms: integerAtLeast(0),
-    class_name_pattern: CLASS_NAME_PATTERN_SPEC,
     browser: BROWSER_SPEC,
   }, {
     rules: [

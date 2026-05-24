@@ -276,7 +276,6 @@ test("timeout_ms must be a non-negative integer", () => {
 test("enum and pattern schema rules validate app function settings", () => {
   const text = [
     "[app]",
-    'class_name_pattern="Service"',
     "[app.warmup]",
     'on_error_screenshot_path="screenshot.txt"',
     "[app.func.A3A417]",
@@ -291,12 +290,11 @@ test("enum and pattern schema rules validate app function settings", () => {
 
   const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
 
-  assert.strictEqual(diagnostics.length, 5);
-  assert.match(diagnostics[0].message, /class_name/i);
-  assert.match(diagnostics[1].message, /jpg|jpeg|png/i);
-  assert.match(diagnostics[2].message, /GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS/);
-  assert.match(diagnostics[3].message, /cors|no-cors|same-origin/);
-  assert.match(diagnostics[4].message, /omit|same-origin|include/);
+  assert.strictEqual(diagnostics.length, 4);
+  assert.match(diagnostics[0].message, /jpg|jpeg|png/i);
+  assert.match(diagnostics[1].message, /GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS/);
+  assert.match(diagnostics[2].message, /cors|no-cors|same-origin/);
+  assert.match(diagnostics[3].message, /omit|same-origin|include/);
 });
 
 test("function transport validates its enum and forbids method for goto", () => {
@@ -927,7 +925,6 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     'version="0.1.0"',
     "timeout_ms=1000",
     'browser=camoufox',
-    'class_name_pattern="Class{class_name}"',
     'description=""',
     "",
     "[app.prefixes]",
