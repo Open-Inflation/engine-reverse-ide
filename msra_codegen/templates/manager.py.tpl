@@ -1,14 +1,13 @@
 """Async client generated from MSRA."""
 
 from collections import defaultdict
-from dataclasses import dataclass, field
 from io import BytesIO
 import re
 from typing import Any
 
 from aiohttp_retry import ExponentialRetry, RetryClient
 from camoufox import AsyncCamoufox, DefaultAddons
-from human_requests import ApiParent, HumanBrowser, HumanContext, HumanPage, api_child_field
+from human_requests import HumanBrowser, HumanContext, HumanPage
 from human_requests.abstraction import FetchResponse, HttpMethod, Proxy
 from human_requests.network_analyzer.anomaly_sniffer import (
     HeaderAnomalySniffer, WaitHeader, WaitSource
@@ -19,54 +18,38 @@ from . import abstraction
 {% for group in top_groups %}
 from .endpoints.{{ group.module_name }} import {{ group.class_name }}
 {% endfor %}
-
-
-@dataclass
-class {{ client_class_name }}(ApiParent):
+class {{ client_class_name }}:
     """Generated async client for {{ app_name_doc }}."""
 
-    timeout_ms: float = {{ app.timeout_ms }}
-    """Timeout in milliseconds."""
-    headless: bool = True
-    """Run browser in headless mode."""
-    test_mode: bool = False
-    """Enable warmup steps used by tests."""
-    proxy: str | dict | Proxy | None = field(default_factory=Proxy.from_env)
-    """Proxy configuration for browser and direct requests."""
-    browser_opts: dict[str, Any] = field(default_factory=dict)
-    """Additional options passed to Camoufox."""
-
+    def __init__(
+        self,
+        timeout_ms: float = {{ app.timeout_ms }},
+        headless: bool = True,
+        test_mode: bool = False,
+        proxy: str | dict | Proxy | None = None,
+        browser_opts: dict[str, Any] | None = None,
+    ):
+        """Generated async client for {{ app_name_doc }}."""
+        self.timeout_ms = timeout_ms
+        self.headless = headless
+        self.test_mode = test_mode
+        self.proxy = Proxy.from_env() if proxy is None else proxy
+        self.browser_opts = {} if browser_opts is None else dict(browser_opts)
 {% for prefix in prefixes %}
-    {{ prefix.attr_name }}: str = {{ prefix.value }}
+        self.{{ prefix.attr_name }} = {{ prefix.value }}
 {% endfor %}
-{% if prefixes %}
-
-{% endif %}
-    # Created in _warmup
-    session: HumanBrowser = field(init=False, repr=False)
-    """Browser session used for requests."""
-    ctx: HumanContext = field(init=False, repr=False)
-    """Browser context."""
-    page: HumanPage = field(init=False, repr=False)
-    """Browser page."""
-
-    unstandard_headers: dict[str, str] = field(init=False, repr=False)
-    """Collected custom headers."""
-    unstandard_urls: dict[str, list[str]] = field(init=False, repr=False)
-    """Collected request urls grouped by header/anomaly name."""
-
+        self.session: HumanBrowser | None = None
+        self.ctx: HumanContext | None = None
+        self.page: HumanPage | None = None
+        self.unstandard_headers: dict[str, str] = {}
+        self.unstandard_urls: dict[str, list[str]] = {}
 {% for variable in variables %}
-    {{ variable.backing_name }}: {{ variable.getter_return }} = field(init=False, default=None, repr=False)
-    """Captured value for {{ variable.name }}."""
+        self.{{ variable.backing_name }}: {{ variable.getter_return }} = None
 {% endfor %}
-
 {% for group in top_groups %}
-    {{ group.field_name }}: {{ group.class_name }} = api_child_field({{ group.class_name }})
-    """API for {{ group.description }}"""
+        self.{{ group.field_name }} = {{ group.class_name }}(self)
 {% endfor %}
-{% if top_groups %}
 
-{% endif %}
     async def __aenter__(self):
         await self._warmup()
         return self

@@ -25,6 +25,22 @@ function hasTablePath(document, path) {
   return false;
 }
 
+function collectPythonFiles(dir) {
+  const { readdirSync, statSync } = require("node:fs");
+  const files = [];
+  for (const entry of readdirSync(dir)) {
+    const fullPath = path.join(dir, entry);
+    if (statSync(fullPath).isDirectory()) {
+      files.push(...collectPythonFiles(fullPath));
+      continue;
+    }
+    if (entry.endsWith(".py")) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
 test("example document stays valid and keeps the documented path", () => {
   const examplePath = path.resolve(__dirname, "..", "..", "example.msra");
   const text = readFileSync(examplePath, "utf8");
@@ -922,7 +938,7 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     const managerText = readFileSync(path.join(outputDir, packageName, "manager.py"), "utf8");
     const guardCount = (managerText.match(/if self\.test_mode:/g) || []).length;
     assert.strictEqual(guardCount, 1, "expected consecutive test-only steps to share a single test_mode guard");
-    assert.match(managerText, /_MAIN_SITE_URL: str = 'https:\/\/example\.com\/'/);
+    assert.match(managerText, /self\._MAIN_SITE_URL = 'https:\/\/example\.com\/'/);
     assert.match(managerText, /self\._MAIN_SITE_URL/);
     assert.match(managerText, /source=WaitSource\.RESPONSE/);
     assert.match(managerText, /wait_for_load_state\('load'\)/);
@@ -967,6 +983,12 @@ test("python codegen generates both bundled msra documents without failing", () 
         encoding: "utf8",
       });
       assert.strictEqual(compileResult.status, 0, compileResult.stderr || compileResult.stdout);
+      for (const filePath of collectPythonFiles(packageDir)) {
+        const source = readFileSync(filePath, "utf8");
+        assert.doesNotMatch(source, /\bApiParent\b/);
+        assert.doesNotMatch(source, /\bApiChild\b/);
+        assert.doesNotMatch(source, /\bapi_child_field\b/);
+      }
       assert.doesNotThrow(() => readFileSync(path.join(packageDir, "manager.py"), "utf8"));
     }
   } finally {
