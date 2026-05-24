@@ -70,6 +70,8 @@
             resp = await page.goto(url, wait_until="domcontentloaded")
             if resp is None:
                 raise RuntimeError("page.goto() returned None")
+            json_override = None
+            text_override = None
 {% if postprocess.render_html %}
             await page.wait_for_load_state("networkidle")
 {% endif %}
@@ -82,21 +84,16 @@
             if isinstance(evaluate_result, dict):
                 result_type = str(evaluate_result.get("type", "")).lower()
                 if result_type in {"json", "text/json"}:
-                    payload = json.loads(evaluate_result.get("data", "null"))
-
-                    def _json(self):
-                        return payload
-
-                    resp.json = MethodType(_json, resp)
+                    json_override = json.loads(evaluate_result.get("data", "null"))
                 elif result_type in {"text", "text/plain"}:
-                    payload = str(evaluate_result.get("data", ""))
-
-                    def _text(self):
-                        return payload
-
-                    resp.text = MethodType(_text, resp)
+                    text_override = str(evaluate_result.get("data", ""))
 {% endif %}
-            return resp
+            return await abstraction.Output.from_playwright_response(
+                resp,
+                page=page,
+                json_override=json_override,
+                text_override=text_override,
+            )
         finally:
             await page.close()
 {% else %}

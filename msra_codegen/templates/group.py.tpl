@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import MethodType
 import re
 from typing import TYPE_CHECKING, Any, Literal
 
 from human_requests import autotest
-from human_requests.abstraction import FetchResponse, HttpMethod
-from human_requests.network_analyzer.anomaly_sniffer import WaitHeader, WaitSource
-from playwright.async_api import Response as PWResponse
+from human_requests.abstraction import HttpMethod
 from urllib.parse import urlencode
 
 from {{ root_import_prefix }} import abstraction

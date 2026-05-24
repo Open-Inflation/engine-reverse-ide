@@ -983,11 +983,21 @@ test("python codegen generates both bundled msra documents without failing", () 
         encoding: "utf8",
       });
       assert.strictEqual(compileResult.status, 0, compileResult.stderr || compileResult.stdout);
+      const abstractionInit = readFileSync(path.join(packageDir, "abstraction", "__init__.py"), "utf8");
+      assert.match(abstractionInit, /from \.output import Output/);
+      const outputModule = readFileSync(path.join(packageDir, "abstraction", "output.py"), "utf8");
+      assert.match(outputModule, /class Output/);
+      assert.match(outputModule, /def image\(/);
       for (const filePath of collectPythonFiles(packageDir)) {
         const source = readFileSync(filePath, "utf8");
         assert.doesNotMatch(source, /\bApiParent\b/);
         assert.doesNotMatch(source, /\bApiChild\b/);
         assert.doesNotMatch(source, /\bapi_child_field\b/);
+        if (!filePath.endsWith(path.join("abstraction", "output.py"))) {
+          assert.doesNotMatch(source, /\bFetchResponse\b/);
+          assert.doesNotMatch(source, /\bPWResponse\b/);
+          assert.doesNotMatch(source, /\bBytesIO\b/);
+        }
       }
       assert.doesNotThrow(() => readFileSync(path.join(packageDir, "manager.py"), "utf8"));
     }

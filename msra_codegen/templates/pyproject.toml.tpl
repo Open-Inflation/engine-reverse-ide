@@ -12,19 +12,19 @@ license = "MIT"
 authors = [
     { name = "Miskler" }
 ]
+dependencies = [
+    "camoufox[geoip]",
+    "human_requests",
+    "aiohttp",
+    "aiohttp-retry",
+    "Pillow"
+]
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.package-data]
 {{ package_name }} = ["postprocess/*.js"]
-
-dependencies = [
-    "camoufox[geoip]",
-    "human_requests",
-    "aiohttp",
-    "aiohttp-retry"
-]
 
 [tool.setuptools.dynamic]
 version = { attr = "{{ package_name }}.__version__" }

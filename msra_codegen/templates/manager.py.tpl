@@ -1,14 +1,14 @@
 """Async client generated from MSRA."""
 
 from collections import defaultdict
-from io import BytesIO
 import re
+from time import perf_counter, time
 from typing import Any
 
 from aiohttp_retry import ExponentialRetry, RetryClient
 from camoufox import AsyncCamoufox, DefaultAddons
 from human_requests import HumanBrowser, HumanContext, HumanPage
-from human_requests.abstraction import FetchResponse, HttpMethod, Proxy
+from human_requests.abstraction import HttpMethod, Proxy
 from human_requests.network_analyzer.anomaly_sniffer import (
     HeaderAnomalySniffer, WaitHeader, WaitSource
 )
@@ -172,10 +172,10 @@ class {{ client_class_name }}:
         credentials: str | None = None,
         referrer: str | None = None,
         headers: dict[str, Any] | None = None,
-    ) -> FetchResponse:
+    ) -> abstraction.Output:
         """Perform an HTTP request through the browser session."""
         request_headers = headers if headers is not None else {{ request.headers_expr }}
-        return await self.page.fetch(
+        response = await self.page.fetch(
             url=url,
             method=method,
             body=json_body,
@@ -185,6 +185,7 @@ class {{ client_class_name }}:
             referrer=referrer if referrer is not None else {{ request.referrer_expr }},
             headers=request_headers,
         )
+        return abstraction.Output.from_fetch_response(response)
 
     async def _direct_request(
         self,
@@ -192,8 +193,9 @@ class {{ client_class_name }}:
         *,
         retry_attempts: int = 3,
         timeout: float = 10,
-    ) -> BytesIO:
+    ) -> abstraction.Output:
         """Download raw bytes with retries, used by direct transport functions."""
+        start_t = perf_counter()
         retry_options = ExponentialRetry(
             attempts=retry_attempts, start_timeout=3.0, max_timeout=timeout
         )
@@ -201,6 +203,15 @@ class {{ client_class_name }}:
         async with RetryClient(retry_options=retry_options) as retry_client:
             async with retry_client.get(url, raise_for_status=True, proxy=px.as_str()) as resp:
                 body = await resp.read()
-                file = BytesIO(body)
-                file.name = url.split("/")[-1]
-        return file
+                return abstraction.Output.from_raw(
+                    body,
+                    url=str(resp.url),
+                    headers=dict(resp.headers),
+                    status_code=resp.status,
+                    status_text=resp.reason,
+                    redirected=bool(resp.history),
+                    response_type="basic",
+                    duration=perf_counter() - start_t,
+                    end_time=time(),
+                    page=self.page,
+                )

@@ -439,7 +439,7 @@ name="download_image"
 method=GET
 group=<GROUPS.General>
 color="#6C7A89"
-description="Direct HTTP retry helper for images; bypasses the browser request pipeline and returns BytesIO."
+description="Direct HTTP retry helper for images; bypasses the browser request pipeline and returns Output with .image()."
 
 [app.func.GENERAL_DOWNLOAD_IMAGE.input.url]
 type=string

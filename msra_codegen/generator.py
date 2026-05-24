@@ -448,6 +448,10 @@ def generate_project(
         render_template("abstraction/__init__.py.tpl", abstraction_context),
     )
     write_text(
+        abstraction_root / "output.py",
+        render_template("abstraction/output.py.tpl", {}),
+    )
+    write_text(
         abstraction_root / "regexes.py",
         render_template("abstraction/regexes.py.tpl", abstraction_context),
     )
@@ -649,6 +653,11 @@ def build_function_context(
     body = func.get("body")
     headers_spec = func.get("headers")
     postprocess = func.get("postprocess") or {}
+    url_expr = render_expr(url_spec.get("base"), self_ref="self._parent")
+    if url_expr == "None":
+        url_input = next((input_spec["name"] for input_spec in inputs if input_spec["name"] == "url"), None)
+        if url_input:
+            url_expr = url_input
     direct_args: list[str] = []
     if any(input_spec["name"] == "retry_attempts" for input_spec in inputs):
         direct_args.append("retry_attempts=retry_attempts")
@@ -664,7 +673,7 @@ def build_function_context(
         "return_annotation": render_return_annotation(func),
         "transport": transport,
         "method": method,
-        "url_expr": render_expr(url_spec.get("base"), self_ref="self._parent"),
+        "url_expr": url_expr,
         "request": {
             "referrer_expr": render_request_referrer(headers_spec, default_if_missing=False),
             "cors_mode_expr": render_request_cors_mode(headers_spec, default_if_missing=False),
@@ -1136,12 +1145,7 @@ def write_text(path: Path, content: str) -> None:
 
 
 def render_return_annotation(func: dict[str, Any]) -> str:
-    transport = str(func.get("transport", "fetch"))
-    if transport == "goto":
-        return "PWResponse"
-    if transport == "direct":
-        return "BytesIO"
-    return "FetchResponse"
+    return "abstraction.Output"
 
 
 def render_input_annotation(input_spec: dict[str, Any]) -> str:
