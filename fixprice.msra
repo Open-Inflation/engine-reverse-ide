@@ -437,7 +437,7 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
 [app.func.GENERAL_DOWNLOAD_IMAGE]
 name="download_image"
 method=GET
-transport=
+transport=direct
 group=<GROUPS.General>
 color="#6C7A89"
 description="Direct HTTP retry helper for images; bypasses the browser request pipeline and returns Output with .image()."

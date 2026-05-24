@@ -1003,7 +1003,7 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(productModule, /async def feed\(self, query: str \| None = None, url: list\[Literal\['\/searchSuggestions\/search\/'\]\] \| None = None, filename: str \| None = None\) -> abstraction\.Output:/);
         assert.match(productModule, /request_url = self\._parent\._BASE_API/);
         assert.match(productModule, /if _url_values in \(None, \[\]\):/);
-        assert.match(productModule, /query_params\.append\(\('url', _url_values\)\)/);
+        assert.match(productModule, /query_params\.append\(\('url', ','.join\(str\(__item\) for __item in _url_values\)\)\)/);
         assert.match(productModule, /query_params\.append\(\('from_global', 'true'\)\)/);
       } else if (testCase.packageName === "delimitedapi") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
@@ -1578,8 +1578,9 @@ test("completion replaces typed reference prefixes instead of duplicating them",
       start: { line: 2, character: 5 },
       end: { line: 2, character: "url=<DOCUMENT.PREFIXE".length },
     },
-    newText: "DOCUMENT.PREFIXES",
+    newText: "DOCUMENT.PREFIXES$0>",
   });
+  assert.strictEqual(prefixItem.insertTextFormat, 2);
 
   const dottedItem = getCompletionItem("url=<DOCUMENT.PREFIXES.", "DOCUMENT.PREFIXES.BASE_API");
   assert.deepStrictEqual(dottedItem.textEdit, {
@@ -1587,8 +1588,175 @@ test("completion replaces typed reference prefixes instead of duplicating them",
       start: { line: 2, character: 5 },
       end: { line: 2, character: "url=<DOCUMENT.PREFIXES.".length },
     },
-    newText: "DOCUMENT.PREFIXES.BASE_API",
+    newText: "DOCUMENT.PREFIXES.BASE_API$0>",
   });
+  assert.strictEqual(dottedItem.insertTextFormat, 2);
+});
+
+test("reference completions insert angle brackets when the user has not typed them", () => {
+  const getResponseCompletion = (lineText, character) => {
+    const server = new MsraLanguageServer({
+      onRequest() {},
+      onNotification() {},
+      listen() {},
+      sendNotification() {},
+    });
+    const text = [
+      "[app]",
+      "[app.variables.city_id]",
+      'types=[{"type"=integer, "revalue"={from=1, to=2147483647}}, {"type"=null, "value"=null}]',
+      'description="Current city id used by catalog and balance requests."',
+      "read_only=false",
+      lineText,
+      "",
+    ].join("\n");
+    const uri = `file:///completion-reference-wrap-${lineText.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}.msra`;
+    server._updateDocument({ textDocument: { uri, text } }, false);
+    const response = server._completion({
+      textDocument: { uri },
+      position: {
+        line: 5,
+        character,
+      },
+    });
+    const item = response.items.find((candidate) => candidate.label === "UNSTANDARD_HEADERS.RESPONSE");
+    assert.ok(item, "expected response headers completion to be available");
+    return item;
+  };
+
+  const bareItem = getResponseCompletion("from=", "from=".length);
+  assert.deepStrictEqual(bareItem.textEdit, {
+    range: {
+      start: { line: 5, character: "from=".length },
+      end: { line: 5, character: "from=".length },
+    },
+    newText: "<UNSTANDARD_HEADERS.RESPONSE.$0>",
+  });
+  assert.strictEqual(bareItem.insertTextFormat, 2);
+
+  const closedItem = getResponseCompletion("from=<>", "from=<>".length);
+  assert.deepStrictEqual(closedItem.textEdit, {
+    range: {
+      start: { line: 5, character: "from=<".length },
+      end: { line: 5, character: "from=<>".length },
+    },
+    newText: "UNSTANDARD_HEADERS.RESPONSE.$0>",
+  });
+  assert.strictEqual(closedItem.insertTextFormat, 2);
+});
+
+test("completion is field-aware for groups enums and static values", () => {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const examplePath = path.join(repoRoot, "example.msra");
+  const server = new MsraLanguageServer({
+    onRequest() {},
+    onNotification() {},
+    listen() {},
+    sendNotification() {},
+  });
+  const text = readFileSync(examplePath, "utf8")
+    .replace("group=<GROUPS.Catalog.Product>", "group=")
+    .replace('color="#ccb034"', "color=")
+    .replace("transport=fetch", "transport=");
+  const uri = "file:///completion-field-aware.msra";
+  server._updateDocument({ textDocument: { uri, text } }, false);
+  const lines = text.split(/\r?\n/);
+
+  const getLabels = (needle) => {
+    const lineIndex = lines.findIndex((line) => line.includes(needle));
+    assert.ok(lineIndex >= 0, `expected to find ${needle}`);
+    const position = {
+      line: lineIndex,
+      character: lines[lineIndex].indexOf(needle) + needle.length,
+    };
+    return server._completion({
+      textDocument: { uri },
+      position,
+    }).items.map((item) => item.label);
+  };
+
+  const groupLabels = getLabels("group=");
+  assert.ok(groupLabels.includes("GROUPS.Catalog.Product"), "expected group completions to suggest the configured group");
+  assert.ok(!groupLabels.some((label) => label.startsWith("DOCUMENT.")), "expected group completions to avoid unrelated document references");
+
+  const colorLabels = getLabels("color=");
+  assert.ok(!colorLabels.some((label) => label.startsWith("DOCUMENT.") || label.startsWith("GROUPS.") || label.startsWith("INPUT.")), "expected static color completion to avoid reference suggestions");
+
+  const transportLabels = getLabels("transport=");
+  assert.deepStrictEqual(new Set(transportLabels), new Set(["direct", "fetch", "goto"]));
+});
+
+test("completion narrows nested inline table values by field", () => {
+  const server = new MsraLanguageServer({
+    onRequest() {},
+    onNotification() {},
+    listen() {},
+    sendNotification() {},
+  });
+
+  const cases = [
+    {
+      text: [
+        "[app]",
+        "[app.warmup]",
+        "pipeline=[{for_tests=true, action=}]",
+        "",
+      ].join("\n"),
+      needle: "action=",
+      expected: new Set(["wait_sniffer", "wait_element", "element", "wait_network", "always"]),
+    },
+    {
+      text: [
+        "[app]",
+        "[app.func.X]",
+        "[app.func.X.url]",
+        "[app.func.X.url.params.A]",
+        'values=[{"value_in_url"="metro", "default"=}]',
+        "",
+      ].join("\n"),
+      needle: '"default"=',
+      expected: new Set(["true", "false"]),
+    },
+    {
+      text: [
+        "[app]",
+        "[app.func.X]",
+        "[app.func.X.input.city_id]",
+        "type=integer",
+        "revalue={from=1, to=}",
+        "",
+      ].join("\n"),
+      needle: "to=",
+      expected: new Set(),
+    },
+    {
+      text: [
+        "[app]",
+        "[app.warmup]",
+        "pipeline=[{action=wait_network, state=}]",
+        "",
+      ].join("\n"),
+      needle: "state=",
+      expected: new Set(["load", "domcontentloaded", "networkidle", "commit"]),
+    },
+  ];
+
+  for (const [index, testCase] of cases.entries()) {
+    const uri = `file:///completion-nested-${index}.msra`;
+    server._updateDocument({ textDocument: { uri, text: testCase.text } }, false);
+    const lines = testCase.text.split(/\r?\n/);
+    const lineIndex = lines.findIndex((line) => line.includes(testCase.needle));
+    assert.ok(lineIndex >= 0, `expected to find ${testCase.needle}`);
+    const response = server._completion({
+      textDocument: { uri },
+      position: {
+        line: lineIndex,
+        character: lines[lineIndex].indexOf(testCase.needle) + testCase.needle.length,
+      },
+    });
+    const labels = new Set(response.items.map((item) => item.label));
+    assert.deepStrictEqual(labels, testCase.expected);
+  }
 });
 
 test("language configuration keeps brackets out of comments and strings", () => {
