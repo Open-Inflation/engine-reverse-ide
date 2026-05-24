@@ -103,7 +103,7 @@ block_images=true
 
 ```msra
 [app.func.A3A417.examples]
-examples=[{"inputs"={"query"="example"}, "test"=false, "file"="local1.json"}, {"file"="local2.json"}]
+examples=[{"inputs"={"query"="example"}, "test"=false, "file"="local1.json"}, {"inputs"={"query"="example"}}]
 test=true
 ```
 
@@ -120,7 +120,7 @@ test=true
 Планируемый синтаксис вида:
 
 ```msra
-<FUNCRESULT.A3A417["some"]["path"][0]>
+<FUNCRESULT.A3A417.JSON["some"]["path"][0]>
 ```
 
 не поддерживается текущим codegen-ом, но LSP уже понимает его как специальный reference-синтаксис.
@@ -129,6 +129,8 @@ test=true
 
 - codegen пока не умеет генерировать runtime-логику для `FUNCRESULT`;
 - LSP принимает такую ссылку только внутри `[app.func.*.examples.examples]` в значениях `inputs.<key>`;
+- синтаксис должен содержать result-kind сегмент `JSON`, `TEXT` или `IMAGE`, то есть `<FUNCRESULT.<function>.JSON|TEXT|IMAGE>`;
+- если выбран `JSON`, после него можно продолжать путь к конкретным элементам через `["..."]` и `[0]`;
 - вне этого блока ссылка должна продолжать считаться ошибочной.
 
 Иными словами, это специальная ссылка на результат функции, которая сейчас доступна только на уровне анализа и подсказок LSP. Сгенерированный Python-код пока не получает для неё runtime-реализации.

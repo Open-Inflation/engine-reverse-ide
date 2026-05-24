@@ -111,6 +111,10 @@ description="Fetches the catalog tree from /v1/category."
 [app.func.CATALOG_TREE.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/category"
 
+[app.func.CATALOG_TREE.examples]
+examples=[{"inputs"={}, "file"="../fixprice_api/tests/__snapshots__/ClassCatalog.tree.json"}]
+test=true
+
 [app.func.CATALOG_PRODUCTS_LIST]
 name="products_list"
 method=POST
@@ -174,6 +178,10 @@ description="Sort query parameter."
 type="application/json"
 data={category=<INPUT.category_alias>, brand=[], price=[], isDividedPrice=false, isNew=false, isHit=false, isSpecialPrice=false}
 
+[app.func.CATALOG_PRODUCTS_LIST.examples]
+examples=[{"inputs"={"category_alias"=<FUNCRESULT.CATALOG_TREE.JSON["1"]["alias"]>}, "file"="../fixprice_api/tests/__snapshots__/ClassCatalog.products_list.json"}]
+test=true
+
 [app.func.CATALOG_PRODUCT_BALANCE]
 name="balance"
 method=GET
@@ -221,6 +229,10 @@ list=false
 values=[{"value_in_url"="true", "default"=true}]
 description="Present only when in_stock is true."
 
+[app.func.CATALOG_PRODUCT_BALANCE.examples]
+examples=[{"inputs"={"product_id"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["id"]>}, "file"="../fixprice_api/tests/__snapshots__/ProductService.balance.json"}]
+test=true
+
 [app.func.CATALOG_PRODUCT_INFO]
 name="info"
 transport=goto
@@ -257,6 +269,10 @@ base=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>"/catalog/"
 render_html=true
 evaluate="postprocess/catalog-product-info.evaluate.js"
 
+[app.func.CATALOG_PRODUCT_INFO.examples]
+examples=[{"inputs"={"url"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["url"]>}, "file"="../fixprice_api/tests/__snapshots__/ProductService.info.json"}]
+test=true
+
 [app.func.GEOLOCATION_COUNTRIES_LIST]
 name="countries_list"
 method=GET
@@ -279,6 +295,10 @@ required=false
 list=false
 data=<INPUT.alias>
 description="Optional alias query parameter."
+
+[app.func.GEOLOCATION_COUNTRIES_LIST.examples]
+examples=[{"inputs"={}, "file"="../fixprice_api/tests/__snapshots__/ClassGeolocation.countries_list.json"}]
+test=true
 
 [app.func.GEOLOCATION_REGIONS_LIST]
 name="regions_list"
@@ -303,6 +323,10 @@ list=false
 data=<INPUT.country_id>
 description="Optional countryId query parameter."
 
+[app.func.GEOLOCATION_REGIONS_LIST.examples]
+examples=[{"inputs"={}, "file"="../fixprice_api/tests/__snapshots__/ClassGeolocation.regions_list.json"}]
+test=true
+
 [app.func.GEOLOCATION_CITIES_LIST]
 name="cities_list"
 method=GET
@@ -326,6 +350,10 @@ list=false
 data=<INPUT.country_id>
 description="CountryId query parameter."
 
+[app.func.GEOLOCATION_CITIES_LIST.examples]
+examples=[{"inputs"={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>}, "file"="../fixprice_api/tests/__snapshots__/ClassGeolocation.cities_list.json"}]
+test=true
+
 [app.func.GEOLOCATION_CITY_INFO]
 name="city_info"
 method=GET
@@ -341,6 +369,10 @@ description="City id used in the path."
 
 [app.func.GEOLOCATION_CITY_INFO.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city/"<INPUT.city_id>
+
+[app.func.GEOLOCATION_CITY_INFO.examples]
+examples=[{"inputs"={"city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[0]["id"]>}, "file"="../fixprice_api/tests/__snapshots__/ClassGeolocation.city_info.json"}]
+test=true
 
 [app.func.GEOLOCATION_SHOP_SEARCH]
 name="search"
@@ -424,6 +456,10 @@ list=false
 data=<INPUT.search>
 description="Optional addressPart query parameter."
 
+[app.func.GEOLOCATION_SHOP_SEARCH.examples]
+examples=[{"inputs"={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>, "city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[85]["id"]>}, "file"="../fixprice_api/tests/__snapshots__/ShopService.search.json"}]
+test=true
+
 [app.func.ADVERTISING_HOME_BRANDS_LIST]
 name="home_brands_list"
 method=GET
@@ -433,6 +469,10 @@ description="Returns the brand list used on the homepage."
 
 [app.func.ADVERTISING_HOME_BRANDS_LIST.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
+
+[app.func.ADVERTISING_HOME_BRANDS_LIST.examples]
+examples=[{"inputs"={}, "file"="../fixprice_api/tests/__snapshots__/ClassAdvertising.home_brands_list.json"}]
+test=true
 
 [app.func.GENERAL_DOWNLOAD_IMAGE]
 name="download_image"

@@ -9,7 +9,7 @@ const { validateGroupAssignments } = require("./group-relations");
 const { validateTableRelations } = require("./table-relations");
 const { validateTablePath } = require("./path-schema");
 const { pathIdentityKey, normalizePathSegments } = require("./path-schema");
-const { isFuncResultReferenceContext } = require("./reference-context");
+const { parseFuncResultReference } = require("./reference-context");
 
 const KNOWN_DYNAMIC_ROOTS = new Set([
   "UNSTANDARD_HEADERS",
@@ -66,6 +66,39 @@ function analyzeDocument(document) {
   result.rootTableIndex = rootTableIndex;
 
   for (const ref of document.references) {
+    const funcResultReference = parseFuncResultReference(ref.expr, ref.tablePath || [], ref.valuePathSegments || []);
+    if (funcResultReference !== null) {
+      if (!funcResultReference.valid) {
+        diagnostics.push(
+          new Diagnostic(
+            funcResultReference.message,
+            funcResultReference.range || ref.range,
+            "error",
+            "msra",
+            funcResultReference.code,
+          ),
+        );
+        continue;
+      }
+      const resolved = resolveFuncResultReference(funcResultReference, result);
+      if (resolved !== null) {
+        ref.resolvedPath = resolved.path;
+        ref.resolvedPathSegments = resolved.pathSegments;
+        ref.resolvedPathKey = resolved.key;
+        ref.resolvedKind = resolved.kind;
+        continue;
+      }
+      diagnostics.push(
+        new Diagnostic(
+          `Unresolved reference <${renderRef(ref.expr)}>`,
+          ref.range,
+          "error",
+          "msra",
+          "unresolved-reference",
+        ),
+      );
+      continue;
+    }
     const resolved = resolveReference(ref, result);
     ref.resolvedPath = resolved ? resolved.path : null;
     ref.resolvedPathSegments = resolved ? resolved.pathSegments : null;
@@ -131,10 +164,6 @@ function resolveReference(ref, result) {
   if (resolved !== null) {
     return resolved;
   }
-  const funcResultResolved = resolveFuncResultReference(ref, path, result);
-  if (funcResultResolved !== null) {
-    return funcResultResolved;
-  }
   const root = path[0] && path[0].value;
   if (KNOWN_DYNAMIC_ROOTS.has(root)) {
     return {
@@ -147,18 +176,8 @@ function resolveReference(ref, result) {
   return null;
 }
 
-function resolveFuncResultReference(ref, path, result) {
-  if (!isFuncResultReferenceContext(ref.tablePath || [], ref.valuePathSegments || [])) {
-    return null;
-  }
-  if (path.length < 2) {
-    return null;
-  }
-  const functionId = path[1] && path[1].value;
-  if (!functionId) {
-    return null;
-  }
-  const functionPath = [makePathSegment("app"), makePathSegment("func"), makePathSegment(functionId)];
+function resolveFuncResultReference(funcResultReference, result) {
+  const functionPath = [makePathSegment("app"), makePathSegment("func"), makePathSegment(funcResultReference.functionId)];
   const resolved = resolveStaticPath(functionPath, result);
   if (resolved === null) {
     return null;
@@ -167,7 +186,7 @@ function resolveFuncResultReference(ref, path, result) {
     path: resolved.path,
     pathSegments: resolved.pathSegments,
     key: resolved.key,
-    kind: "func-result",
+    kind: `func-result-${String(funcResultReference.resultKind || "").toLowerCase()}`,
   };
 }
 

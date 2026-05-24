@@ -219,10 +219,10 @@ const EXAMPLE_INPUTS_SPEC = recordOf(ANY, {
 });
 const EXAMPLE_ITEM_SPEC = objectShape(
   {
-    file: STRINGISH,
+    inputs: EXAMPLE_INPUTS_SPEC,
   },
   {
-    inputs: EXAMPLE_INPUTS_SPEC,
+    file: STRINGISH,
     test: BOOLEAN,
   },
 );

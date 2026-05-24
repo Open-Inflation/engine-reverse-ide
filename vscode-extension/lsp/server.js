@@ -653,11 +653,15 @@ class MsraLanguageServer {
       }
     }
 
-    add("FUNCRESULT", "Function result namespace", "FUNCRESULT");
-    for (const table of [...analyzed.tableIndex.values()].sort((left, right) => comparePaths(left.path, right.path))) {
-      const path = table.path || [];
-      if (path.length === 3 && path[0] === "app" && path[1] === "func") {
-        add(`FUNCRESULT.${path[2]}`, `Result of ${pathLabel(path)}`, "FUNCRESULT");
+    if (isFuncResultReferenceContext(completionContext.assignment ? completionContext.assignment.tablePath || [] : [], completionContext.target ? completionContext.target.valuePathSegments || [] : [])) {
+      for (const table of [...analyzed.tableIndex.values()].sort((left, right) => comparePaths(left.path, right.path))) {
+        const path = table.path || [];
+        if (path.length === 3 && path[0] === "app" && path[1] === "func") {
+          const functionLabel = pathLabel([path[2]]);
+          add(`FUNCRESULT.${functionLabel}.JSON`, `JSON result of ${pathLabel(path)}`, "FUNCRESULT");
+          add(`FUNCRESULT.${functionLabel}.TEXT`, `Text result of ${pathLabel(path)}`, "FUNCRESULT");
+          add(`FUNCRESULT.${functionLabel}.IMAGE`, `Image result of ${pathLabel(path)}`, "FUNCRESULT");
+        }
       }
     }
 

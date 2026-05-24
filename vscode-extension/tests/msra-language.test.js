@@ -419,7 +419,7 @@ test("nested example, values, list_style, and types structures are validated str
     'type=string',
     "",
     "[app.func.A3A417.examples]",
-    'examples=[{"inputs"={"query"="example"}, "test"=false}]',
+    'examples=[{"test"=false}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///strict-nested-structures.msra");
@@ -429,13 +429,29 @@ test("nested example, values, list_style, and types structures are validated str
   const badDelimiter = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-assignment-value-type" && /delimiter|stringish|string/i.test(diagnostic.message));
   const unknownListStyleKey = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unknown-inline-table-key" && /extra/.test(diagnostic.message));
   const unknownValuesKey = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unknown-inline-table-key" && /foo/.test(diagnostic.message));
-  const missingExampleFile = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-inline-table-key" && /file/.test(diagnostic.message));
+  const missingExampleInputs = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-inline-table-key" && /inputs/.test(diagnostic.message));
 
   assert.ok(missingType, "expected a missing type field inside app.variables.city_id.types");
   assert.ok(badDelimiter, "expected a non-string delimiter inside list_style to be rejected");
   assert.ok(unknownListStyleKey, "expected unexpected list_style keys to be rejected");
   assert.ok(unknownValuesKey, "expected unexpected values keys to be rejected");
-  assert.ok(missingExampleFile, "expected examples items to require file");
+  assert.ok(missingExampleInputs, "expected examples items to require inputs");
+});
+
+test("examples items accept missing file when inputs are present", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "type=string",
+    "[app.func.A3A417.examples]",
+    'examples=[{"inputs"={"query"="example"}, "test"=false}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///example-item-file-optional.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
 test("examples inputs must reference declared function inputs", () => {
@@ -1244,7 +1260,7 @@ test("FUNCRESULT references are allowed inside example inputs", () => {
   const examplePath = path.join(repoRoot, "example.msra");
   const text = readFileSync(examplePath, "utf8").replace(
     '"query"="example"',
-    '"query"=<FUNCRESULT.A3A417["some"]["path"][0]>',
+    '"query"=<FUNCRESULT.A3A417.JSON["some"]["path"][0]>',
   );
   const document = parseDocument(text, "file:///funcresult-example-inputs.msra");
   const analysis = analyzeDocument(document);
@@ -1252,19 +1268,21 @@ test("FUNCRESULT references are allowed inside example inputs", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
-test("FUNCRESULT references are rejected outside example inputs", () => {
+test("FUNCRESULT references require a result kind and reject bare headers syntax", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
   const examplePath = path.join(repoRoot, "example.msra");
   const text = readFileSync(examplePath, "utf8").replace(
-    '"local1.json"',
-    '<FUNCRESULT.A3A417["some"]["path"][0]>',
+    '"query"="example"',
+    '"query"=<FUNCRESULT.headers>',
   );
-  const document = parseDocument(text, "file:///funcresult-outside-example-inputs.msra");
+  const document = parseDocument(text, "file:///funcresult-invalid-syntax.msra");
   const analysis = analyzeDocument(document);
-  const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "unresolved-reference");
+  const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-funcresult-reference");
 
-  assert.strictEqual(diagnostics.length, 1, "expected FUNCRESULT to be rejected outside example inputs");
-  assert.match(diagnostics[0].message, /FUNCRESULT\.A3A417/);
+  assert.strictEqual(diagnostics.length, 1, "expected bare FUNCRESULT syntax to be rejected");
+  assert.match(diagnostics[0].message, /JSON/i);
+  assert.match(diagnostics[0].message, /TEXT/i);
+  assert.match(diagnostics[0].message, /IMAGE/i);
 });
 
 test("variable sources cannot reference themselves", () => {
@@ -1682,13 +1700,14 @@ test("FUNCRESULT completions are available inside example inputs", () => {
     listen() {},
     sendNotification() {},
   });
-  const text = readFileSync(examplePath, "utf8").replace('"query"="example"', '"query"=');
+  const text = readFileSync(examplePath, "utf8").replace('"query"="example"', '"query"=<FUNCRESULT.A3A417.');
   const uri = "file:///completion-funcresult-example-inputs.msra";
   server._updateDocument({ textDocument: { uri, text } }, false);
   const lines = text.split(/\r?\n/);
-  const lineIndex = lines.findIndex((line) => line.includes('examples=[{"inputs"={"query"='));
-  assert.ok(lineIndex >= 0, "expected to find the example inputs line");
-  const character = lines[lineIndex].indexOf('"query"=') + '"query"='.length;
+  const lineIndex = lines.findIndex((line) => line.includes('FUNCRESULT.A3A417.'));
+  assert.ok(lineIndex >= 0, "expected to find the FUNCRESULT reference line");
+  const startCharacter = lines[lineIndex].indexOf('<') + 1;
+  const character = lines[lineIndex].indexOf('FUNCRESULT.A3A417.') + 'FUNCRESULT.A3A417.'.length;
   const response = server._completion({
     textDocument: { uri },
     position: {
@@ -1696,19 +1715,22 @@ test("FUNCRESULT completions are available inside example inputs", () => {
       character,
     },
   });
-  const rootItem = response.items.find((candidate) => candidate.label === "FUNCRESULT");
-  const functionItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.A3A417");
+  const jsonItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.A3A417.JSON");
+  const textItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.A3A417.TEXT");
+  const imageItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.A3A417.IMAGE");
 
-  assert.ok(rootItem, "expected FUNCRESULT root completion to be available");
-  assert.ok(functionItem, "expected function-specific FUNCRESULT completion to be available");
-  assert.deepStrictEqual(functionItem.textEdit, {
+  assert.ok(jsonItem, "expected JSON FUNCRESULT completion to be available");
+  assert.ok(textItem, "expected TEXT FUNCRESULT completion to be available");
+  assert.ok(imageItem, "expected IMAGE FUNCRESULT completion to be available");
+  assert.deepStrictEqual(jsonItem.textEdit, {
     range: {
-      start: { line: lineIndex, character },
+      start: { line: lineIndex, character: startCharacter },
       end: { line: lineIndex, character },
     },
-    newText: "<FUNCRESULT.A3A417$0>",
+    newText: "FUNCRESULT.A3A417.JSON$0>",
   });
-  assert.strictEqual(functionItem.insertTextFormat, 2);
+  assert.strictEqual(jsonItem.insertTextFormat, 2);
+  assert.ok(!response.items.some((candidate) => candidate.label === "FUNCRESULT.A3A417"), "expected bare function result labels to stay hidden");
 });
 
 test("completion is field-aware for groups enums and static values", () => {
