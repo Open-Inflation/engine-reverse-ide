@@ -23,7 +23,7 @@ humanize_action={from=1000, to=3000} # время в мс, которое буд
 url=<DOCUMENT.PREFIXES.ORIGIN>
 pipeline=[ # timeout_ms возможно переопределить по желанию
     # по мимо wait_element доступен element (моментальная проверка) и always (выполнить действие всегда, не дожидаясь условия)
-    {action=wait_sniffer, what=<UNSTANDARD_HEADERS.REQUEST.X-key>}, # если ключ был получен ДО вызова действия, оно все равно считается успешным
+    {action=wait_sniffer, source=request, what="X-Key"}, # если ключ был получен ДО вызова действия, оно все равно считается успешным
     {for_tests=true, action=wait_element, state=visible, what="div.selected-city > div.buttons > button.button.normal", then=click}, # then опционален
     {for_tests=true, action=wait_element, state=visible, what="a.link.product-category", then=click}, # then допускает констукцию {action=click, what="a.link.product-category"}, если передано только действие, то селектор выбирается от того что ждали
     {for_tests=true, action=wait_element, state=visible, what="div.page-content", timeout_ms=10000} # можно переопределить таймаут для конкретного действия,

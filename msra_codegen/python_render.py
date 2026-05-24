@@ -55,6 +55,22 @@ def render_request_headers(headers_spec: dict[str, Any] | None, *, default_if_mi
     return render_headers_expr(headers_spec.get("headers"))
 
 
+def wait_source_expr(source: Any) -> str:
+    source_name = str(get_plain_value(source) or "request").strip().lower()
+    if source_name == "response":
+        return "WaitSource.RESPONSE"
+    return "WaitSource.REQUEST"
+
+
+def header_names_from_wait_sniffer(step: dict[str, Any]) -> list[str]:
+    what = step.get("what")
+    if isinstance(what, dict) and what.get("kind") == "ref":
+        parts = [part["value"] for part in what.get("parts", []) if part.get("kind") == "name"]
+        if len(parts) >= 3:
+            return [parts[-1]]
+    return ["X-Key"]
+
+
 def render_ref_value(expr: dict[str, Any] | None, self_ref: str = "self._parent") -> str:
     if expr is None:
         return "None"

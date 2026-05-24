@@ -18,7 +18,7 @@ url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>
 # Actual flow in code: MAIN_SITE_URL -> sniffer wait for X-Key -> optional test_mode clicks -> CATALOG_URL -> body > pre.
 pipeline=[
     {action=wait_network, state=networkidle},
-    {action=wait_sniffer, what=<UNSTANDARD_HEADERS.REQUEST.X-Key>},
+    {action=wait_sniffer, source=request, what="X-Key"},
     {for_tests=true, action=wait_element, state=visible, what="div.selected-city > div.buttons > button.button.normal", then=click},
     {for_tests=true, action=wait_element, state=visible, what="a.link.product-category", then=click},
     {for_tests=true, action=wait_element, state=visible, what="div.page-content"},

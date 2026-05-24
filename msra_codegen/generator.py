@@ -24,6 +24,8 @@ from .python_render import (
     render_request_headers,
     render_request_referrer,
     render_simple_value,
+    header_names_from_wait_sniffer,
+    wait_source_expr,
     render_text_expr,
 )
 
@@ -545,6 +547,7 @@ def build_pipeline_step_context(step_expr: dict[str, Any], *, page_ref: str, sni
             "state": step.get("state", "load"),
             "state_expr": render_simple_value(step.get("state", "load")),
             "what_expr": render_expr(step.get("what"), self_ref="self._parent"),
+            "sniffer_source_expr": wait_source_expr(step.get("source", "request")),
             "sniffer_headers": header_names_from_wait_sniffer(step),
             "then_step": None,
             "then": None,
@@ -556,6 +559,7 @@ def build_pipeline_step_context(step_expr: dict[str, Any], *, page_ref: str, sni
         "state": step.get("state", "load"),
         "state_expr": render_simple_value(step.get("state", "load")),
         "what_expr": render_expr(step.get("what"), self_ref="self._parent"),
+        "sniffer_source_expr": wait_source_expr(step.get("source", "request")),
         "sniffer_headers": header_names_from_wait_sniffer(step),
         "sniffer_headers_expr": render_simple_value(header_names_from_wait_sniffer(step)),
         "then_step": then_step,
@@ -1105,15 +1109,6 @@ def collect_postprocess_scripts(project: dict[str, Any]) -> list[str]:
         if isinstance(evaluate, str) and evaluate:
             scripts.append(evaluate)
     return scripts
-
-
-def header_names_from_wait_sniffer(step: dict[str, Any]) -> list[str]:
-    what = step.get("what")
-    if isinstance(what, dict) and what.get("kind") == "ref":
-        parts = [part["value"] for part in what.get("parts", []) if part.get("kind") == "name"]
-        if len(parts) >= 3:
-            return [parts[-1]]
-    return ["X-Key"]
 
 
 def write_text(path: Path, content: str) -> None:

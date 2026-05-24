@@ -2,6 +2,7 @@ const {
   ArrayExpr,
   BoolExpr,
   Diagnostic,
+  CallExpr,
   InlineTableExpr,
   IdentExpr,
   MergeExpr,
@@ -192,6 +193,7 @@ function makeFixedSchema(match, keys, options = {}) {
     match,
     allowUnknownKeys: Boolean(options.allowUnknownKeys),
     keys,
+    rules: Array.isArray(options.rules) ? options.rules : [],
   };
 }
 
@@ -298,6 +300,10 @@ const URL_PARAM_VALUE_SPEC = objectShape(
         code: "missing-url-param-value",
         message: 'Expected key "value" unless "default=true" is present.',
       }),
+      forbidDynamicValue("value", {
+        code: "invalid-url-param-value-dynamic",
+        message: 'URL parameter value key "value" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
     ],
   },
 );
@@ -328,6 +334,14 @@ const REGEX_ACTION_ITEM_SPEC = objectShape(
   },
   {
     rules: [
+      forbidDynamicValue("what", {
+        code: "invalid-regex-action-what-dynamic",
+        message: 'Regex action key "what" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("with", {
+        code: "invalid-regex-action-with-dynamic",
+        message: 'Regex action key "with" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
       requireKeyWhenValue("what", "action", ["replace"], {
         valueSpec: STRINGISH,
         message: 'Expected key "what" when action="replace".',
@@ -351,6 +365,14 @@ const PIPELINE_THEN_OBJECT_SPEC = objectShape(
     what: ANY,
     timeout_ms: integerAtLeast(0),
   },
+  {
+    rules: [
+      forbidDynamicValue("what", {
+        code: "invalid-pipeline-what-dynamic",
+        message: 'Pipeline key "what" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
+  },
 );
 const PIPELINE_THEN_SPEC = oneOf(PIPELINE_THEN_ACTION_SPEC, PIPELINE_THEN_OBJECT_SPEC);
 const PIPELINE_IF_ELEMENT_SPEC = objectShape(
@@ -360,6 +382,14 @@ const PIPELINE_IF_ELEMENT_SPEC = objectShape(
   {
     state: PIPELINE_WAIT_ELEMENT_STATE_SPEC,
     what: ANY,
+  },
+  {
+    rules: [
+      forbidDynamicValue("what", {
+        code: "invalid-pipeline-what-dynamic",
+        message: 'Pipeline key "what" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   },
 );
 const PIPELINE_IF_NETWORK_SPEC = objectShape(
@@ -374,12 +404,25 @@ const PIPELINE_IF_SPEC = oneOf(PIPELINE_IF_ELEMENT_SPEC, PIPELINE_IF_NETWORK_SPE
 const PIPELINE_WAIT_SNIFFER_SPEC = objectShape(
   {
     action: enumOf(["wait_sniffer"]),
+    source: enumOf(["request", "response"]),
     what: ANY,
   },
   {
     raise: STRINGISH,
     timeout_ms: integerAtLeast(0),
     for_tests: BOOLEAN,
+  },
+  {
+    rules: [
+      forbidDynamicValue("what", {
+        code: "invalid-pipeline-what-dynamic",
+        message: 'Pipeline key "what" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("raise", {
+        code: "invalid-pipeline-raise-dynamic",
+        message: 'Pipeline key "raise" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   },
 );
 const PIPELINE_WAIT_ELEMENT_SPEC = objectShape(
@@ -394,6 +437,18 @@ const PIPELINE_WAIT_ELEMENT_SPEC = objectShape(
     timeout_ms: integerAtLeast(0),
     for_tests: BOOLEAN,
   },
+  {
+    rules: [
+      forbidDynamicValue("what", {
+        code: "invalid-pipeline-what-dynamic",
+        message: 'Pipeline key "what" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("raise", {
+        code: "invalid-pipeline-raise-dynamic",
+        message: 'Pipeline key "raise" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
+  },
 );
 const PIPELINE_WAIT_NETWORK_SPEC = objectShape(
   {
@@ -404,6 +459,14 @@ const PIPELINE_WAIT_NETWORK_SPEC = objectShape(
     raise: STRINGISH,
     timeout_ms: integerAtLeast(0),
     for_tests: BOOLEAN,
+  },
+  {
+    rules: [
+      forbidDynamicValue("raise", {
+        code: "invalid-pipeline-raise-dynamic",
+        message: 'Pipeline key "raise" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   },
 );
 const PIPELINE_ALWAYS_SPEC = objectShape(
@@ -416,6 +479,14 @@ const PIPELINE_ALWAYS_SPEC = objectShape(
     raise: STRINGISH,
     timeout_ms: integerAtLeast(0),
     for_tests: BOOLEAN,
+  },
+  {
+    rules: [
+      forbidDynamicValue("raise", {
+        code: "invalid-pipeline-raise-dynamic",
+        message: 'Pipeline key "raise" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   },
 );
 const PIPELINE_CONCURRENT_ITEM_SPEC = oneOf(PIPELINE_WAIT_SNIFFER_SPEC, PIPELINE_WAIT_ELEMENT_SPEC, PIPELINE_WAIT_NETWORK_SPEC);
@@ -447,6 +518,13 @@ const SCREENSHOT_PATH_SPEC = patternOf(
 const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["misklerreverseapi"]), {
     version: STRINGISH,
+  }, {
+    rules: [
+      forbidDynamicValue("version", {
+        code: "invalid-version-dynamic",
+        message: 'Version cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
   makeFixedSchema(exactPath(["app"]), {
     name: APP_NAME_SPEC,
@@ -457,6 +535,13 @@ const TABLE_SCHEMAS = [
     timeout_ms: integerAtLeast(0),
     class_name_pattern: CLASS_NAME_PATTERN_SPEC,
     browser: BROWSER_SPEC,
+  }, {
+    rules: [
+      forbidDynamicValue("version", {
+        code: "invalid-version-dynamic",
+        message: 'Version cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
   makeFixedSchema(exactPath(["app", "warmup"]), {
     humanize: HUMANIZE_SPEC,
@@ -474,6 +559,13 @@ const TABLE_SCHEMAS = [
     description: STRINGISH,
     read_only: BOOLEAN,
     from: ANY,
+  }, {
+    rules: [
+      forbidDynamicValue("description", {
+        code: "invalid-description-dynamic",
+        message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
   makeDynamicSchema(exactPath(["app", "prefixes"]), STRINGISH, {
     keyDescription: "prefix",
@@ -483,9 +575,27 @@ const TABLE_SCHEMAS = [
     actions: arrayOf(REGEX_ACTION_ITEM_SPEC),
     raise: STRINGISH,
     description: STRINGISH,
+  }, {
+    rules: [
+      forbidDynamicValue("raise", {
+        code: "invalid-regex-raise-dynamic",
+        message: 'Regex "raise" cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("description", {
+        code: "invalid-description-dynamic",
+        message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
   makeFixedSchema(matchesGroupPath, {
     description: STRINGISH,
+  }, {
+    rules: [
+      forbidDynamicValue("description", {
+        code: "invalid-description-dynamic",
+        message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
   makeFixedSchema(matchesFuncHeadersPath, {
     referrer: ANY,
@@ -500,6 +610,21 @@ const TABLE_SCHEMAS = [
     group: GROUP_REFERENCE_SPEC,
     color: STRINGISH,
     description: STRINGISH,
+  }, {
+    rules: [
+      forbidDynamicValue("name", {
+        code: "invalid-function-name-dynamic",
+        message: 'Function name cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("color", {
+        code: "invalid-function-color-dynamic",
+        message: 'Function color cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("description", {
+        code: "invalid-description-dynamic",
+        message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
   makeFixedSchema(exactPath(["app", "func", "*", "input", "*"]), {
     type: INPUT_TYPE_SPEC,
@@ -509,6 +634,13 @@ const TABLE_SCHEMAS = [
     values: ARRAY,
     data: ANY,
     revalue: REVALUE_SPEC,
+  }, {
+    rules: [
+      forbidDynamicValue("description", {
+        code: "invalid-description-dynamic",
+        message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
   makeFixedSchema(matchesBodyPath, {
     type: BODY_TYPE_SPEC,
@@ -534,6 +666,13 @@ const TABLE_SCHEMAS = [
     description: STRINGISH,
     data: ANY,
     revalue: REVALUE_SPEC,
+  }, {
+    rules: [
+      forbidDynamicValue("description", {
+        code: "invalid-description-dynamic",
+        message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
   makeFixedSchema(exactPath(["app", "func", "*", "examples"]), {
     examples: arrayOf(EXAMPLE_ITEM_SPEC),
@@ -562,10 +701,14 @@ function validateAssignment(tablePath, assignment) {
     return [];
   }
   const valueDiagnostics = collectValueDiagnostics(assignment.value, spec, assignment.valueRange);
-  if (valueDiagnostics.length === 0) {
-    return [];
+  if (valueDiagnostics.length > 0) {
+    return valueDiagnostics;
   }
-  return valueDiagnostics;
+  const ruleDiagnostics = [];
+  for (const rule of schema.rules || []) {
+    ruleDiagnostics.push(...evaluateFixedSchemaRule(rule, assignment));
+  }
+  return ruleDiagnostics;
 }
 
 function findSchema(tablePath) {
@@ -582,14 +725,22 @@ function validateValueSpec(value, spec, context = null) {
   return diagnostics.length ? diagnostics[0].message : null;
 }
 
-function collectValueDiagnostics(value, spec, fallbackRange = null) {
+function collectValueDiagnostics(value, spec, fallbackRange = null, skipRules = false) {
   if (spec.kind === "any") {
     return [];
   }
   if (spec.kind === "oneOf") {
     for (const option of spec.options) {
-      if (collectValueDiagnostics(value, option, fallbackRange).length === 0) {
-        return [];
+      const structuralDiagnostics = collectValueDiagnostics(value, option, fallbackRange, true);
+      if (structuralDiagnostics.length === 0) {
+        if (skipRules) {
+          return [];
+        }
+        const diagnostics = collectValueDiagnostics(value, option, fallbackRange, false);
+        if (diagnostics.length === 0) {
+          return [];
+        }
+        return diagnostics;
       }
     }
     return [typeDiagnostic(fallbackRange || value.range, `Expected one of: ${spec.options.map(describeSpec).join(", ")}`, "invalid-assignment-value-type")];
@@ -606,7 +757,7 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
     }
     const diagnostics = [];
     for (const item of value.items) {
-      diagnostics.push(...collectValueDiagnostics(item, spec.item, item.range));
+      diagnostics.push(...collectValueDiagnostics(item, spec.item, item.range, skipRules));
     }
     return diagnostics;
   }
@@ -616,7 +767,7 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
     }
     const diagnostics = [];
     for (const entry of value.items) {
-      diagnostics.push(...collectValueDiagnostics(entry.value, spec.valueSpec, entry.value.range));
+      diagnostics.push(...collectValueDiagnostics(entry.value, spec.valueSpec, entry.value.range, skipRules));
     }
     return diagnostics;
   }
@@ -645,13 +796,15 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
         continue;
       }
       required.delete(entry.key);
-      diagnostics.push(...collectValueDiagnostics(entry.value, entrySpec, entry.value.range));
+      diagnostics.push(...collectValueDiagnostics(entry.value, entrySpec, entry.value.range, skipRules));
     }
     for (const key of required.keys()) {
       diagnostics.push(typeDiagnostic(fallbackRange || value.range, `Missing required key "${key}" in ${describeSpec(spec)}.`, "missing-inline-table-key"));
     }
-    for (const rule of spec.rules || []) {
-      diagnostics.push(...evaluateObjectRule(rule, value, entriesByKey, fallbackRange || value.range));
+    if (!skipRules) {
+      for (const rule of spec.rules || []) {
+        diagnostics.push(...evaluateObjectRule(rule, value, entriesByKey, fallbackRange || value.range));
+      }
     }
     return diagnostics;
   }
@@ -660,7 +813,7 @@ function collectValueDiagnostics(value, spec, fallbackRange = null) {
       return [];
     }
     if (value instanceof InlineTableExpr) {
-      const diagnostics = collectValueDiagnostics(value, NUMERIC_RANGE_SPEC, fallbackRange);
+      const diagnostics = collectValueDiagnostics(value, NUMERIC_RANGE_SPEC, fallbackRange, skipRules);
       if (diagnostics.length > 0) {
         const keys = new Set(value.items.map((entry) => entry.key));
         if (keys.has("regex")) {
@@ -856,11 +1009,46 @@ function evaluateObjectRule(rule, value, entriesByKey, fallbackRange) {
       typeDiagnostic(
         forbiddenEntry.keyRange || fallbackRange,
         rule.message,
+      rule.code,
+    ),
+    ];
+  }
+  if (rule.kind === "forbidDynamicValue") {
+    const targetEntry = entriesByKey.get(rule.key);
+    if (!targetEntry) {
+      return [];
+    }
+    if (!containsDynamicValue(targetEntry.value)) {
+      return [];
+    }
+    return [
+      typeDiagnostic(
+        targetEntry.value.range || targetEntry.keyRange || fallbackRange,
+        rule.message,
         rule.code,
       ),
     ];
   }
   return [];
+}
+
+function evaluateFixedSchemaRule(rule, assignment) {
+  if (rule.kind !== "forbidDynamicValue") {
+    return [];
+  }
+  if (rule.key !== assignment.key) {
+    return [];
+  }
+  if (!containsDynamicValue(assignment.value)) {
+    return [];
+  }
+  return [
+    typeDiagnostic(
+      assignment.valueRange || assignment.keyRange,
+      rule.message,
+      rule.code,
+    ),
+  ];
 }
 
 function getNumericLiteral(value) {
@@ -890,6 +1078,28 @@ function isBareListTypePrefix(value) {
   }
   if (value instanceof IdentExpr) {
     return value.name === "list";
+  }
+  return false;
+}
+
+function forbidDynamicValue(key, options = {}) {
+  return {
+    kind: "forbidDynamicValue",
+    key,
+    code: options.code || "invalid-inline-table-key-value",
+    message: options.message || `Expected key "${key}" to be static.`,
+  };
+}
+
+function containsDynamicValue(value) {
+  if (value instanceof RefExpr || value instanceof SequenceExpr || value instanceof MergeExpr || value instanceof CallExpr) {
+    return true;
+  }
+  if (value instanceof ArrayExpr) {
+    return value.items.some((item) => containsDynamicValue(item));
+  }
+  if (value instanceof InlineTableExpr) {
+    return value.items.some((entry) => containsDynamicValue(entry.value));
   }
   return false;
 }

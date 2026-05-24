@@ -30,7 +30,7 @@
 {{ indent }}await {{ sniffer_ref }}.wait(
 {{ indent }}    tasks=[
 {{ indent }}        WaitHeader(
-{{ indent }}            source=WaitSource.REQUEST,
+{{ indent }}            source={{ step.sniffer_source_expr }},
 {{ indent }}            headers={{ step.sniffer_headers_expr }},
 {{ indent }}        )
 {{ indent }}    ],

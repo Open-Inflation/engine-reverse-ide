@@ -163,6 +163,84 @@ test("app metadata rejects malformed authors and license values", () => {
   assert.match(invalidLicense.message, /license abbreviation/);
 });
 
+test("version name and color cannot be dynamic", () => {
+  const text = [
+    "[misklerreverseapi]",
+    "version=<INPUT.version>",
+    "[app]",
+    "version=<INPUT.version>",
+    "[app.func.A3A417]",
+    "name=<INPUT.name>",
+    "color=<INPUT.color>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///dynamic-version-name-color.msra");
+  const analysis = analyzeDocument(document);
+  const versionDiagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-version-dynamic");
+  const nameDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-function-name-dynamic");
+  const colorDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-function-color-dynamic");
+
+  assert.strictEqual(versionDiagnostics.length, 2, "expected both version fields to reject dynamic references");
+  assert.ok(nameDiagnostic, "expected function name to reject dynamic references");
+  assert.ok(colorDiagnostic, "expected function color to reject dynamic references");
+});
+
+test("description fields cannot be dynamic", () => {
+  const text = [
+    "[app]",
+    "[app.variables.city_id]",
+    "description=<INPUT.description>",
+    "[app.regexes.TEXT_REQUEST]",
+    'regex="^[a-z]+$"',
+    "actions=[{action=lower}]",
+    "raise=<INPUT.raise>",
+    "description=<INPUT.description>",
+    "[app.groups.Catalog]",
+    "description=<INPUT.description>",
+    "[app.func.A3A417]",
+    "description=<INPUT.description>",
+    "[app.func.A3A417.input.query]",
+    'type=string',
+    "description=<INPUT.description>",
+    "[app.func.A3A417.url.params.url]",
+    "description=<INPUT.description>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///dynamic-descriptions.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-description-dynamic");
+  const regexRaiseDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-regex-raise-dynamic");
+
+  assert.strictEqual(diagnostics.length, 6, "expected all dynamic descriptions to be rejected");
+  assert.ok(regexRaiseDiagnostic, "expected regex raise to reject dynamic references");
+});
+
+test("pipeline and regex action fields cannot be dynamic", () => {
+  const text = [
+    "[app]",
+    "[app.regexes.TEXT_REQUEST]",
+    'regex="^[a-z]+$"',
+    'actions=[{action=replace, what=<INPUT.what>, with=<INPUT.with>}]',
+    "raise=<INPUT.raise>",
+    "[app.warmup]",
+    'pipeline=[{action=wait_sniffer, source=request, what=<INPUT.what>, raise=<INPUT.raise>}, {action=wait_element, state=visible, what=<INPUT.selector>, raise=<INPUT.raise>}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///dynamic-pipeline-and-actions.msra");
+  const analysis = analyzeDocument(document);
+  const actionWhatDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-regex-action-what-dynamic");
+  const actionWithDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-regex-action-with-dynamic");
+  const pipelineWhatDiagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-pipeline-what-dynamic");
+  const pipelineRaiseDiagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-pipeline-raise-dynamic");
+  const regexRaiseDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-regex-raise-dynamic");
+
+  assert.ok(actionWhatDiagnostic, "expected regex action what to reject dynamic references");
+  assert.ok(actionWithDiagnostic, "expected regex action with to reject dynamic references");
+  assert.strictEqual(pipelineWhatDiagnostics.length, 2, "expected both pipeline what fields to reject dynamic references");
+  assert.strictEqual(pipelineRaiseDiagnostics.length, 2, "expected both pipeline raise fields to reject dynamic references");
+  assert.ok(regexRaiseDiagnostic, "expected regex raise to reject dynamic references");
+});
+
 test("timeout_ms must be a non-negative integer", () => {
   const text = [
     "[app]",
@@ -511,7 +589,7 @@ test("pipeline state is validated in the context of action", () => {
   const text = [
     "[app]",
     "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, what=<UNSTANDARD_HEADERS.REQUEST.X-key>}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=domcontentloaded}, {action=wait_network, state=networkidle}]',
+    'pipeline=[{action=wait_sniffer, source=request, what="X-Key"}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=domcontentloaded}, {action=wait_network, state=networkidle}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-pipeline-state.msra");
@@ -538,7 +616,7 @@ test("pipeline state rejects values that do not match the action context", () =>
   const text = [
     "[app]",
     "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, state=visible}, {action=wait_element, state=idle, what="div.page-content"}, {action=wait_network, state=visible}]',
+    'pipeline=[{action=wait_sniffer, source=request, state=visible}, {action=wait_element, state=idle, what="div.page-content"}, {action=wait_network, state=visible}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-pipeline-state.msra");
@@ -547,6 +625,34 @@ test("pipeline state rejects values that do not match the action context", () =>
 
   assert.strictEqual(invalidStateDiagnostics.length, 3, "expected each pipeline item to fail validation when the state does not match its action context");
   assert.ok(invalidStateDiagnostics.every((diagnostic) => /Expected one of:/.test(diagnostic.message)));
+});
+
+test("wait_sniffer requires source", () => {
+  const text = [
+    "[app]",
+    "[app.warmup]",
+    'pipeline=[{action=wait_sniffer, what="X-Key"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///missing-wait-sniffer-source.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(diagnostic, "expected wait_sniffer to require a source");
+  assert.match(diagnostic.message, /source/);
+});
+
+test("wait_sniffer accepts response source", () => {
+  const text = [
+    "[app]",
+    "[app.warmup]",
+    'pipeline=[{action=wait_sniffer, source=response, what="X-Key"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///response-wait-sniffer-source.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
 test("url param values require value unless default=true is present", () => {
@@ -567,6 +673,66 @@ test("url param values require value unless default=true is present", () => {
   assert.match(diagnostic.message, /default=true/);
 });
 
+test("url param values reject dynamic value references", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    'values=[{"value_in_url"="/searchSuggestions/search/", "value"=<INPUT.url>, "default"=true}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///dynamic-url-param-value.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-url-param-value-dynamic");
+
+  assert.ok(diagnostic, "expected URL param value references to be rejected");
+  assert.match(diagnostic.message, /dynamic/);
+  assert.match(diagnostic.message, /reference/i);
+});
+
+test("list url params with data require at least one selectable value", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.url]",
+    "type=list[string]",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    "list=true",
+    "data=<INPUT.url>",
+    'values=[{"value_in_url"="/searchSuggestions/search/", "default"=true}, {"value_in_url"="/searchSuggestions/search/", "default"=true}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///missing-selectable-url-param-value.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "missing-url-param-selectable-value");
+
+  assert.ok(diagnostic, "expected list url params with data to require at least one selectable value");
+  assert.match(diagnostic.message, /default=true/);
+  assert.match(diagnostic.message, /revalue/);
+});
+
+test("list url params with revalue can omit selectable values", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.url]",
+    "type=list[string]",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    "list=true",
+    "data=<INPUT.url>",
+    "revalue={from=1, to=27}",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///url-param-revalue-allows-missing-values.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "missing-url-param-selectable-value");
+
+  assert.ok(!diagnostic, "expected revalue to make selectable values optional");
+});
+
 test("list url params reject non-list inputs in data", () => {
   const text = [
     "[app]",
@@ -577,6 +743,7 @@ test("list url params reject non-list inputs in data", () => {
     "[app.func.A3A417.url.params.url]",
     "list=true",
     "data=<INPUT.query>",
+    'values=[{"value_in_url"="/search", "value"="search"}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-list-url-param-input.msra");
@@ -598,6 +765,7 @@ test("list url params accept list-typed inputs in data", () => {
     "[app.func.A3A417.url.params.url]",
     "list=true",
     "data=<INPUT.query>",
+    'values=[{"value_in_url"="/search", "value"="search"}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-list-url-param-input.msra");
@@ -737,8 +905,9 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     'MAIN_SITE_URL="https://example.com/"',
     "",
     "[app.warmup]",
+    "headers_sniffer=true",
     'url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>',
-    'pipeline=[{for_tests=true, action=wait_network, state=load}, {for_tests=true, action=wait_element, state=visible, what="div.one", then=click}, {action=wait_network, state=networkidle}]',
+    'pipeline=[{action=wait_sniffer, source=response, what="X-Key"}, {for_tests=true, action=wait_network, state=load}, {for_tests=true, action=wait_element, state=visible, what="div.one", then=click}, {action=wait_network, state=networkidle}]',
     "",
   ].join("\n");
 
@@ -755,6 +924,7 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     assert.strictEqual(guardCount, 1, "expected consecutive test-only steps to share a single test_mode guard");
     assert.match(managerText, /_MAIN_SITE_URL: str = 'https:\/\/example\.com\/'/);
     assert.match(managerText, /self\._MAIN_SITE_URL/);
+    assert.match(managerText, /source=WaitSource\.RESPONSE/);
     assert.match(managerText, /wait_for_load_state\('load'\)/);
     assert.match(managerText, /wait_for_selector\(/);
     assert.match(managerText, /locator = self\.page\.locator\('div\.one'\)\.first/);
@@ -974,6 +1144,48 @@ test("virtual variable references must resolve to declared variables", () => {
 
   assert.ok(unresolvedDiagnostic, "expected the typo in VARIABLES reference to be reported");
   assert.match(unresolvedDiagnostic.message, /VARIABLES\.ity_id/);
+});
+
+test("variable sources cannot reference themselves", () => {
+  const text = [
+    "[app]",
+    "[app.variables.city_id]",
+    'types=[{"type"=integer}]',
+    'description="City id"',
+    "read_only=false",
+    "from=<VARIABLES.city_id>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///self-referential-variable.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "self-referential-variable-source");
+
+  assert.ok(diagnostic, "expected a variable to reject referencing itself");
+  assert.match(diagnostic.message, /city_id/);
+});
+
+test("variable sources reject circular dependencies", () => {
+  const text = [
+    "[app]",
+    "[app.variables.a]",
+    'types=[{"type"=string}]',
+    'description="A"',
+    "read_only=false",
+    "from=<VARIABLES.b>",
+    "[app.variables.b]",
+    'types=[{"type"=string}]',
+    'description="B"',
+    "read_only=false",
+    "from=<VARIABLES.a>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///circular-variable-sources.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostics = analysis.diagnostics.filter((item) => item.code === "circular-variable-source");
+
+  assert.strictEqual(diagnostics.length, 2, "expected both variables in the cycle to be rejected");
+  assert.match(diagnostics[0].message, /app\.variables\.a/);
+  assert.match(diagnostics[0].message, /app\.variables\.b/);
 });
 
 test("grammar highlights boolean and null keywords", () => {

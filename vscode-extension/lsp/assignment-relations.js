@@ -36,6 +36,7 @@ function validateAssignmentRelations(tableIndex, assignmentIndex) {
   diagnostics.push(...validateBodyRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateUrlParamValueRelations(assignmentsByTable));
   diagnostics.push(...validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsByTable));
+  diagnostics.push(...validateVariableSourceRelations(tableIndex, assignmentIndex));
 
   return diagnostics;
 }
@@ -306,6 +307,7 @@ function validateUrlParamValueRelations(assignmentsByTable) {
     const valuesAssignment = assignments.find((assignment) => assignment.key === "values");
     const listAssignment = assignments.find((assignment) => assignment.key === "list");
     const dataAssignment = assignments.find((assignment) => assignment.key === "data");
+    const revalueAssignment = assignments.find((assignment) => assignment.key === "revalue");
 
     if (
       tablePath[3] === "url" &&
@@ -316,6 +318,27 @@ function validateUrlParamValueRelations(assignmentsByTable) {
       dataAssignment
     ) {
       diagnostics.push(...validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAssignment));
+    }
+
+    if (
+      tablePath[3] === "url" &&
+      tablePath[4] === "params" &&
+      listAssignment &&
+      listAssignment.value instanceof BoolExpr &&
+      listAssignment.value.value === true &&
+      dataAssignment &&
+      !revalueAssignment &&
+      !hasSelectableUrlParamValues(valuesAssignment)
+    ) {
+      diagnostics.push(
+        new Diagnostic(
+          `URL parameter [${pathLabel(tablePath)}] with list=true and data requires at least one selectable "value" entry in "values"; entries with only default=true are fallback choices and do not count. Use revalue instead if the parameter should accept arbitrary values.`,
+          (valuesAssignment && valuesAssignment.keyRange) || dataAssignment.keyRange,
+          "error",
+          "msra",
+          "missing-url-param-selectable-value",
+        ),
+      );
     }
 
     if (!valuesAssignment || !(valuesAssignment.value instanceof ArrayExpr)) {
@@ -413,6 +436,148 @@ function validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsB
   }
 
   return diagnostics;
+}
+
+function validateVariableSourceRelations(tableIndex, assignmentIndex) {
+  const diagnostics = [];
+  const variableNodes = new Map();
+
+  for (const table of tableIndex.values()) {
+    const tablePath = table.path || [];
+    if (!isVariableTablePath(tablePath)) {
+      continue;
+    }
+
+    const fromAssignment = getAssignment(assignmentIndex, tablePath, "from");
+    if (!fromAssignment) {
+      continue;
+    }
+
+    const tableKey = pathIdentityKey(tablePath);
+    variableNodes.set(tableKey, {
+      table,
+      fromAssignment,
+      deps: collectVariableDependencies(fromAssignment.value),
+    });
+  }
+
+  const components = stronglyConnectedVariableComponents(variableNodes);
+  for (const component of components) {
+    if (!component.length) {
+      continue;
+    }
+
+    if (component.length === 1) {
+      const key = component[0];
+      const node = variableNodes.get(key);
+      if (!node || !node.deps.has(key)) {
+        continue;
+      }
+      diagnostics.push(
+        new Diagnostic(
+          `Variable [${pathLabel(node.table.path)}] cannot reference itself in "from".`,
+          node.fromAssignment.valueRange || node.fromAssignment.keyRange,
+          "error",
+          "msra",
+          "self-referential-variable-source",
+        ),
+      );
+      continue;
+    }
+
+    const labels = component
+      .map((key) => pathLabel(variableNodes.get(key).table.path))
+      .sort((left, right) => left.localeCompare(right));
+    const message = `Circular variable source chain detected among: ${labels.join(", ")}.`;
+    for (const key of component) {
+      const node = variableNodes.get(key);
+      diagnostics.push(
+        new Diagnostic(
+          message,
+          node.fromAssignment.valueRange || node.fromAssignment.keyRange,
+          "error",
+          "msra",
+          "circular-variable-source",
+        ),
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
+function stronglyConnectedVariableComponents(variableNodes) {
+  const indexByKey = new Map();
+  const lowLinkByKey = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const components = [];
+  let index = 0;
+
+  function visit(key) {
+    indexByKey.set(key, index);
+    lowLinkByKey.set(key, index);
+    index += 1;
+    stack.push(key);
+    onStack.add(key);
+
+    const node = variableNodes.get(key);
+    for (const dep of node.deps) {
+      if (!variableNodes.has(dep)) {
+        continue;
+      }
+      if (!indexByKey.has(dep)) {
+        visit(dep);
+        lowLinkByKey.set(key, Math.min(lowLinkByKey.get(key), lowLinkByKey.get(dep)));
+        continue;
+      }
+      if (onStack.has(dep)) {
+        lowLinkByKey.set(key, Math.min(lowLinkByKey.get(key), indexByKey.get(dep)));
+      }
+    }
+
+    if (lowLinkByKey.get(key) !== indexByKey.get(key)) {
+      return;
+    }
+
+    const component = [];
+    while (stack.length) {
+      const nodeKey = stack.pop();
+      onStack.delete(nodeKey);
+      component.push(nodeKey);
+      if (nodeKey === key) {
+        break;
+      }
+    }
+    components.push(component);
+  }
+
+  for (const key of variableNodes.keys()) {
+    if (!indexByKey.has(key)) {
+      visit(key);
+    }
+  }
+
+  return components;
+}
+
+function collectVariableDependencies(value) {
+  const dependencies = new Set();
+  walkExpressions(value, (node) => {
+    if (!(node instanceof RefExpr)) {
+      return;
+    }
+    const path = refPathSegments(node);
+    if (path[0] !== "VARIABLES" || path.length < 2) {
+      return;
+    }
+    dependencies.add(pathIdentityKey(["app", "variables", path[1]]));
+  });
+  return dependencies;
+}
+
+function isVariableTablePath(tablePath) {
+  return tablePath.length === 3 && tablePath[0] === "app" && tablePath[1] === "variables";
 }
 
 function collectInputsByFunction(tableIndex) {
@@ -580,6 +745,23 @@ function collectInputRefs(expr) {
     }
   });
   return refs;
+}
+
+function hasSelectableUrlParamValues(valuesAssignment) {
+  if (!valuesAssignment || !(valuesAssignment.value instanceof ArrayExpr)) {
+    return false;
+  }
+
+  for (const item of valuesAssignment.value.items) {
+    if (!(item instanceof InlineTableExpr)) {
+      continue;
+    }
+    if (item.items.some((entry) => entry.key === "value")) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function walkExpressions(expr, visitor) {
