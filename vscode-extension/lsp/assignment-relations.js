@@ -332,7 +332,7 @@ function validateUrlParamValueRelations(assignmentsByTable) {
     ) {
       diagnostics.push(
         new Diagnostic(
-          `URL parameter [${pathLabel(tablePath)}] with list=true and data requires at least one selectable "value" entry in "values"; entries with only default=true are fallback choices and do not count. Use revalue instead if the parameter should accept arbitrary values.`,
+          `URL parameter [${pathLabel(tablePath)}] with @List and data requires at least one selectable "value" entry in "values"; entries with only default=true are fallback choices and do not count. Use revalue instead if the parameter should accept arbitrary values.`,
           (valuesAssignment && valuesAssignment.keyRange) || dataAssignment.keyRange,
           "error",
           "msra",
@@ -361,7 +361,7 @@ function validateUrlParamValueRelations(assignmentsByTable) {
       if (!allowMultipleDefaults && defaultCount > 1) {
         diagnostics.push(
           new Diagnostic(
-            `Table [${pathLabel(tablePath)}] cannot define multiple default values in "values" unless "list=true".`,
+            `Table [${pathLabel(tablePath)}] cannot define multiple default values in "values" unless @List is present.`,
             defaultEntry.keyRange || valuesAssignment.keyRange,
             "error",
             "msra",
@@ -732,7 +732,7 @@ function validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAs
 
     diagnostics.push(
       new Diagnostic(
-        `URL parameter [${pathLabel(tablePath)}] with list=true requires data to reference INPUT.${inputName} as a list type (${pathLabel(inputPath)}).`,
+        `URL parameter [${pathLabel(tablePath)}] with @List requires data to reference INPUT.${inputName} as a list type (${pathLabel(inputPath)}).`,
         inputRef.range,
         "error",
         "msra",

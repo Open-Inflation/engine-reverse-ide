@@ -84,9 +84,9 @@ raise="Текст запроса должен состоять только из
 
 ```msra
 [app.warmup]
-humanize=true
+@Humanize
 humanize_action={from=1000, to=3000}
-block_images=true
+@BlockImages
 ```
 
 Сейчас генератор и шаблон используют `humanize`, `block_images`, `url`, `headers_sniffer`, `on_error_screenshot_path` и `pipeline`,

@@ -3,6 +3,7 @@
   "scopeName": "source.msra",
   "patterns": [
     { "include": "#comments" },
+    { "include": "#annotations" },
     { "include": "#prefix-sections" },
     { "include": "#assignments" },
     { "include": "#headers" },
@@ -34,6 +35,22 @@
         {
           "name": "keyword.other.attribute-name.msra",
           "match": "^[ \\t]*[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*(?=[ \\t]*[:=])"
+        }
+      ]
+    },
+    "annotations": {
+      "patterns": [
+        {
+          "name": "meta.annotation.msra",
+          "match": "^[ \\t]*(@)([A-Za-z_][A-Za-z0-9_-]*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.annotation.msra"
+            },
+            "2": {
+              "name": "entity.name.tag.annotation.msra"
+            }
+          }
         }
       ]
     },

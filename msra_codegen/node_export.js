@@ -201,6 +201,9 @@ function serializeAssignment(assignment) {
     valueRange: serializeRange(assignment.valueRange),
     fullPath: assignment.fullPath,
     quoted: Boolean(assignment.quoted),
+    annotation: Boolean(assignment.annotation),
+    annotationName: assignment.annotationName || null,
+    annotationHasArguments: Boolean(assignment.annotationHasArguments),
   };
 }
 

@@ -167,6 +167,9 @@ class AssignmentDef {
     tablePathSegments = [],
     tableIdentityKey = null,
     identityKey = null,
+    annotation = false,
+    annotationName = null,
+    annotationHasArguments = false,
   ) {
     this.tablePath = tablePath;
     this.key = key;
@@ -178,6 +181,9 @@ class AssignmentDef {
     this.tablePathSegments = tablePathSegments;
     this.tableIdentityKey = tableIdentityKey;
     this.identityKey = identityKey;
+    this.annotation = annotation;
+    this.annotationName = annotationName;
+    this.annotationHasArguments = annotationHasArguments;
   }
 }
 

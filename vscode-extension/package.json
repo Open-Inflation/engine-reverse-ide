@@ -131,6 +131,12 @@
             }
           },
           {
+            "scope": "entity.name.tag.annotation.msra",
+            "settings": {
+              "foreground": "#C678DD"
+            }
+          },
+          {
             "scope": "entity.name.variable.prefix.msra",
             "settings": {
               "foreground": "#C678DD"

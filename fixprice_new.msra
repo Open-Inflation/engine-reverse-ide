@@ -2,30 +2,24 @@
 version="0.2.4.1"
 
 [app]
+@Humanize
+@BlockImages
 name="FixPriceAPI"
 version="0.2.4.1"
 timeout_ms=35000
 browser=camoufox
-
-# Warmup mirrors FixPriceAPI._warmup():
-# MAIN_SITE_URL -> sniffer for X-Key -> optional test_mode clicks -> CATALOG_URL -> body > pre.
-# Camoufox is started with @Humanize, @BlockImages, exclude_addons=[UBO], and i_know_what_im_doing=True.
-[app.warmup]
-@Humanize
-@BlockImages
-url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>
-# Actual flow in code: MAIN_SITE_URL -> sniffer wait for X-Key -> optional test_mode clicks -> CATALOG_URL -> body > pre.
-pipeline=[
-    {action=wait_network, state=networkidle},
-    {action=wait_sniffer, source=request, what="X-Key"},
-    {for_tests=true, action=wait_element, state=visible, what="div.selected-city > div.buttons > button.button.normal", then=click},
-    {for_tests=true, action=wait_element, state=visible, what="a.link.product-category", then=click},
-    {for_tests=true, action=wait_element, state=visible, what="div.page-content"},
-    {for_tests=true, action=wait_network, state=load},
-    {action=wait_element, state=visible, what="body > pre"}
-]
-@SniffHeaders
+warmup="./warmup.py:pipeline"
 on_error_screenshot_path="screenshot.png"
+
+# Warmup is implemented in ./warmup.py:pipeline. MSRA only declares the contract
+# expected from the warmup result/sniffer, not browser automation steps.
+[app.warmup_result.headers]
+token="X-Key"
+city_id="x-city"
+language="x-language"
+delivery_type="x-delivery-type"
+store_id="x-pfm"
+client_route="x-client-route"
 
 [app.variables.city_id]
 types=[{"type"=integer, "revalue"={from=1, to=2147483647}}, {"type"=null, "value"=null}]
@@ -103,6 +97,7 @@ headers={Accept="application/json, text/plain, */*"}+<UNSTANDARD_HEADERS.REQUEST
 name="tree"
 method=GET
 group=<GROUPS.Catalog>
+color="#D9A441"
 description="Fetches the catalog tree from /v1/category."
 
 [app.func.CATALOG_TREE.url]
@@ -116,11 +111,12 @@ test=true
 name="products_list"
 method=POST
 group=<GROUPS.Catalog>
+color="#D9A441"
 description="Fetches products inside a category or subcategory; the JSON body mirrors the request built in products_list()."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.category_alias]
-type=string
 @Required
+type=string
 description="Category alias used in the request path and JSON body."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.subcategory_alias]
@@ -150,22 +146,22 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/product/in/"<INPUT.category_alias>
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.page]
 @Required
-data=<INPUT.page>
+from=<INPUT.page>
 description="Page query parameter."
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.limit]
 @Required
-data=<INPUT.limit>
+from=<INPUT.limit>
 description="Limit query parameter."
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.sort]
 @Required
-data=<INPUT.sort>
+from=<INPUT.sort>
 description="Sort query parameter."
 
 [app.func.CATALOG_PRODUCTS_LIST.body]
 type="application/json"
-data={category=<INPUT.category_alias>, brand=[], price=[], isDividedPrice=false, isNew=false, isHit=false, isSpecialPrice=false}
+from={category=<INPUT.category_alias>, brand=[], price=[], isDividedPrice=false, isNew=false, isHit=false, isSpecialPrice=false}
 
 [app.func.CATALOG_PRODUCTS_LIST.examples]
 examples=[{"inputs"={"category_alias"=<FUNCRESULT.CATALOG_TREE.JSON["1"]["alias"]>}, "file"="../fixprice_api/tests/__snapshots__/ClassCatalog.products_list.json"}]
@@ -175,11 +171,12 @@ test=true
 name="balance"
 method=GET
 group=<GROUPS.Catalog.Products>
+color="#E08A1E"
 description="Checks store balance for a product in the current city."
 
 [app.func.CATALOG_PRODUCT_BALANCE.input.product_id]
-type=integer
 @Required
+type=integer
 revalue={from=1, to=2147483647}
 description="Product id used in the balance path."
 
@@ -201,7 +198,7 @@ values=[{"value_in_url"="all", "default"=true}]
 description="Fixed canPickup query parameter."
 
 [app.func.CATALOG_PRODUCT_BALANCE.url.params.addressPart]
-data=<INPUT.search>
+from=<INPUT.search>
 description="Optional address filter."
 
 [app.func.CATALOG_PRODUCT_BALANCE.url.params.inStock]
@@ -216,6 +213,7 @@ test=true
 name="info"
 transport=goto
 group=<GROUPS.Catalog.Products>
+color="#E08A1E"
 description="Loads the product page, extracts window.__NUXT__, and overrides resp.json to return the product payload."
 
 # Either url or (category, product_id, slug) must be provided; MSRA cannot encode the Python overload exactly.
@@ -251,6 +249,7 @@ test=true
 name="countries_list"
 method=GET
 group=<GROUPS.Geolocation>
+color="#2AA198"
 description="Lists countries and supports an optional ISO-2 alias filter."
 
 [app.func.GEOLOCATION_COUNTRIES_LIST.input.alias]
@@ -262,7 +261,7 @@ description="Optional ISO-2 country alias, uppercased by the code."
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/country"
 
 [app.func.GEOLOCATION_COUNTRIES_LIST.url.params.alias]
-data=<INPUT.alias>
+from=<INPUT.alias>
 description="Optional alias query parameter."
 
 [app.func.GEOLOCATION_COUNTRIES_LIST.examples]
@@ -273,6 +272,7 @@ test=true
 name="regions_list"
 method=GET
 group=<GROUPS.Geolocation>
+color="#2AA198"
 description="Lists regions and can optionally filter by country id."
 
 [app.func.GEOLOCATION_REGIONS_LIST.input.country_id]
@@ -284,7 +284,7 @@ description="Optional country id filter."
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/region"
 
 [app.func.GEOLOCATION_REGIONS_LIST.url.params.countryId]
-data=<INPUT.country_id>
+from=<INPUT.country_id>
 description="Optional countryId query parameter."
 
 [app.func.GEOLOCATION_REGIONS_LIST.examples]
@@ -295,11 +295,12 @@ test=true
 name="cities_list"
 method=GET
 group=<GROUPS.Geolocation>
+color="#2AA198"
 description="Lists cities for a country."
 
 [app.func.GEOLOCATION_CITIES_LIST.input.country_id]
-type=integer
 @Required
+type=integer
 revalue={from=1, to=2147483647}
 description="Country id used by the cities endpoint."
 
@@ -308,7 +309,7 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city"
 
 [app.func.GEOLOCATION_CITIES_LIST.url.params.countryId]
 @Required
-data=<INPUT.country_id>
+from=<INPUT.country_id>
 description="CountryId query parameter."
 
 [app.func.GEOLOCATION_CITIES_LIST.examples]
@@ -319,11 +320,12 @@ test=true
 name="city_info"
 method=GET
 group=<GROUPS.Geolocation>
+color="#2AA198"
 description="Returns a single city by id."
 
 [app.func.GEOLOCATION_CITY_INFO.input.city_id]
-type=integer
 @Required
+type=integer
 revalue={from=1, to=2147483647}
 description="City id used in the path."
 
@@ -338,6 +340,7 @@ test=true
 name="search"
 method=GET
 group=<GROUPS.Geolocation>
+color="#2AA198"
 description="Searches stores by country, region, city, and address filters."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.country_id]
@@ -378,19 +381,19 @@ values=[{"value_in_url"="all", "default"=true}]
 description="Fixed showTemporarilyClosed parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.countryId]
-data=<INPUT.country_id>
+from=<INPUT.country_id>
 description="Optional countryId query parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.regionId]
-data=<INPUT.region_id>
+from=<INPUT.region_id>
 description="Optional regionId query parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.cityId]
-data=<INPUT.city_id>
+from=<INPUT.city_id>
 description="Optional cityId query parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.addressPart]
-data=<INPUT.search>
+from=<INPUT.search>
 description="Optional addressPart query parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.examples]
@@ -401,6 +404,7 @@ test=true
 name="home_brands_list"
 method=GET
 group=<GROUPS.Advertising>
+color="#3A87C6"
 description="Returns the brand list used on the homepage."
 
 [app.func.ADVERTISING_HOME_BRANDS_LIST.url]
@@ -415,11 +419,12 @@ name="download_image"
 method=GET
 transport=direct
 group=<GROUPS.General>
+color="#6C7A89"
 description="Direct HTTP retry helper for images; bypasses the browser request pipeline and returns Output with .image()."
 
 [app.func.GENERAL_DOWNLOAD_IMAGE.input.url]
-type=string
 @Required
+type=string
 description="Direct image URL."
 
 [app.func.GENERAL_DOWNLOAD_IMAGE.input.retry_attempts]

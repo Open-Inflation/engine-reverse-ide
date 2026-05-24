@@ -184,6 +184,50 @@ function matchesUrlParamsPath(path) {
   return false;
 }
 
+function matchesWarmupPath(path) {
+  return path.length === 2 && path[0] === "app" && path[1] === "warmup";
+}
+
+function matchesVariablesPath(path) {
+  return path.length === 3 && path[0] === "app" && path[1] === "variables";
+}
+
+function matchesInputPath(path) {
+  return path.length === 5 && path[0] === "app" && path[1] === "func" && path[3] === "input";
+}
+
+function annotationRequirementForAssignment(tablePath, key) {
+  if (matchesWarmupPath(tablePath)) {
+    if (key === "humanize") {
+      return { kind: "humanize", label: "@Humanize", legacyLabel: "humanize" };
+    }
+    if (key === "block_images") {
+      return { kind: "flag", label: "@BlockImages", legacyLabel: "block_images" };
+    }
+    if (key === "headers_sniffer") {
+      return { kind: "flag", label: "@SniffHeaders", legacyLabel: "headers_sniffer" };
+    }
+  }
+  if (matchesVariablesPath(tablePath) && key === "read_only") {
+    return { kind: "flag", label: "@ReadOnly", legacyLabel: "read_only" };
+  }
+  if (matchesInputPath(tablePath) && key === "required") {
+    return { kind: "flag", label: "@Required", legacyLabel: "required" };
+  }
+  if (matchesUrlParamsPath(tablePath)) {
+    if (key === "sub_url") {
+      return { kind: "flag", label: "@SubUrl", legacyLabel: "sub_url" };
+    }
+    if (key === "required") {
+      return { kind: "flag", label: "@Required", legacyLabel: "required" };
+    }
+    if (key === "list") {
+      return { kind: "flag", label: "@List", legacyLabel: "list" };
+    }
+  }
+  return null;
+}
+
 function matchesBodyUrlPath(path) {
   return path.length >= 7 && path[0] === "app" && path[1] === "func" && path[3] === "body" && path[path.length - 1] === "url";
 }
@@ -670,6 +714,37 @@ const TABLE_SCHEMAS = [
 ];
 
 function validateAssignment(tablePath, assignment) {
+  const annotationRequirement = annotationRequirementForAssignment(tablePath, assignment.key);
+  if (annotationRequirement) {
+    if (!assignment.annotation) {
+      const legacyTarget = annotationRequirement.kind === "humanize" ? '"humanize=..."' : `"${annotationRequirement.legacyLabel}=..."`;
+      return [
+        typeDiagnostic(
+          assignment.keyRange,
+          `Use ${annotationRequirement.label} instead of ${legacyTarget} in table [${pathLabel(tablePath)}].`,
+          "annotation-required",
+        ),
+      ];
+    }
+    if (annotationRequirement.kind === "flag" && assignment.annotationHasArguments) {
+      return [
+        typeDiagnostic(
+          assignment.keyRange,
+          `Annotation ${annotationRequirement.label} does not accept arguments. Use bare ${annotationRequirement.label}.`,
+          "invalid-annotation-argument",
+        ),
+      ];
+    }
+    if (annotationRequirement.kind === "humanize" && assignment.annotationHasArguments && !(assignment.value instanceof NumberExpr)) {
+      return [
+        typeDiagnostic(
+          assignment.keyRange,
+          "Annotation @Humanize accepts either bare form or a positive number argument.",
+          "invalid-annotation-argument",
+        ),
+      ];
+    }
+  }
   const schema = findSchema(tablePath);
   if (schema === null) {
     return [];

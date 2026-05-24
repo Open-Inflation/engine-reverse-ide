@@ -403,7 +403,6 @@ test("nested example, values, list_style, and types structures are validated str
     "[app]",
     "[app.variables.city_id]",
     'types=[{"revalue"={from=1, to=27}}]',
-    "read_only=false",
     "[app.func.A3A417]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
@@ -501,20 +500,38 @@ test("variable type items reject value and revalue together", () => {
   assert.match(diagnostic.message, /revalue/);
 });
 
-test("read_only on app.variables must be boolean", () => {
+test("@ReadOnly annotation on app.variables stays valid", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
     'types=[{"type"=integer}]',
-    'read_only="false"',
+    "@ReadOnly",
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-variable-read-only.msra");
   const analysis = analyzeDocument(document);
-  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
 
-  assert.ok(diagnostic, "expected read_only to reject string values");
-  assert.match(diagnostic.message, /boolean/i);
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("@Required and @SubUrl annotations stay valid", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "type=string",
+    "@Required",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    "@SubUrl",
+    "@Required",
+    'values=[{"value_in_url"="/search", "value"="search"}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///valid-required-suburl-annotations.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
 test("values and revalue cannot coexist in input and url params tables", () => {
@@ -726,7 +743,7 @@ test("list url params with data require at least one selectable value", () => {
     "type=list[string]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
-    "list=true",
+    "@List",
     "data=<INPUT.url>",
     'values=[{"value_in_url"="/searchSuggestions/search/", "default"=true}, {"value_in_url"="/searchSuggestions/search/", "default"=true}]',
     "",
@@ -748,7 +765,7 @@ test("list url params with revalue can omit selectable values", () => {
     "type=list[string]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
-    "list=true",
+    "@List",
     "data=<INPUT.url>",
     "revalue={from=1, to=27}",
     "",
@@ -768,7 +785,7 @@ test("list url params reject non-list inputs in data", () => {
     'type=string',
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
-    "list=true",
+    "@List",
     "data=<INPUT.query>",
     'values=[{"value_in_url"="/search", "value"="search"}]',
     "",
@@ -778,7 +795,7 @@ test("list url params reject non-list inputs in data", () => {
   const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-url-param-list-input-type");
 
   assert.ok(diagnostic, "expected list url params to reject non-list inputs in data");
-  assert.match(diagnostic.message, /list=true/);
+  assert.match(diagnostic.message, /@List/);
   assert.match(diagnostic.message, /INPUT\.query/);
 });
 
@@ -790,7 +807,7 @@ test("list url params accept list-typed inputs in data", () => {
     "type=list[string]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
-    "list=true",
+    "@List",
     "data=<INPUT.query>",
     'values=[{"value_in_url"="/search", "value"="search"}]',
     "",
@@ -866,13 +883,13 @@ test("app browser must be one of the supported browsers", () => {
   assert.match(browserDiagnostic.message, /chromium|firefox|webkit|camoufox/);
 });
 
-test("warmup humanize options require camoufox browser", () => {
+test("@Humanize and @BlockImages require camoufox browser", () => {
   const text = [
     "[app]",
     'browser=chromium',
     "[app.warmup]",
-    "humanize=true",
-    "block_images=true",
+    "@Humanize",
+    "@BlockImages",
     'humanize_action={from=1000, to=3000}',
     "",
   ].join("\n");
@@ -884,12 +901,12 @@ test("warmup humanize options require camoufox browser", () => {
   assert.match(diagnostics[0].message, /camoufox/);
 });
 
-test("warmup humanize accepts positive numbers when camoufox is enabled", () => {
+test("@Humanize accepts positive numbers when camoufox is enabled", () => {
   const text = [
     "[app]",
     'browser=camoufox',
     "[app.warmup]",
-    "humanize=0.5",
+    "@Humanize(0.5)",
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-humanize-number.msra");
@@ -931,7 +948,7 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     'MAIN_SITE_URL="https://example.com/"',
     "",
     "[app.warmup]",
-    "headers_sniffer=true",
+    "@SniffHeaders",
     'url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>',
     'pipeline=[{action=wait_sniffer, source=response, what="X-Key"}, {for_tests=true, action=wait_network, state=load}, {for_tests=true, action=wait_element, state=visible, what="div.one", then=click}, {action=wait_network, state=networkidle}]',
     "",
@@ -1157,13 +1174,12 @@ test("nested body tables require the parent body item", () => {
   assert.match(parentDiagnostic.message, /app\.func\.A3A417\.body\.VLOJENNOS2T/);
 });
 
-test("url param values cannot define multiple defaults unless list=true", () => {
+test("url param values cannot define multiple defaults unless @List is present", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
-    'list=false',
     'values=[{"value_in_url"="/search", "default"=true}, {"value_in_url"="/search-alt", "default"=true}]',
     "",
   ].join("\n");
@@ -1171,8 +1187,8 @@ test("url param values cannot define multiple defaults unless list=true", () => 
   const analysis = analyzeDocument(document);
   const diagnostic = analysis.diagnostics.find((item) => item.code === "duplicate-url-param-default");
 
-  assert.ok(diagnostic, "expected duplicate defaults to be rejected when list=false");
-  assert.match(diagnostic.message, /list=true/);
+  assert.ok(diagnostic, "expected duplicate defaults to be rejected when @List is absent");
+  assert.match(diagnostic.message, /@List/);
 });
 
 test("function group accepts group references and nested group references", () => {
@@ -1262,6 +1278,56 @@ test("FUNCRESULT references are allowed inside example inputs", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
+test("annotation-only flags reject explicit arguments", () => {
+  const text = [
+    "[app]",
+    "browser=camoufox",
+    "[app.warmup]",
+    "@Humanize(true)",
+    "@BlockImages(false)",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "type=string",
+    "@Required(false)",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-annotation-arguments.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-annotation-argument");
+
+  assert.strictEqual(diagnostics.length, 3);
+  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@Required/.test(diagnostic.message)));
+});
+
+test("legacy boolean toggles are rejected in favor of annotations", () => {
+  const text = [
+    "[app]",
+    "browser=camoufox",
+    "[app.warmup]",
+    "humanize=true",
+    "block_images=true",
+    "headers_sniffer=true",
+    "[app.variables.city_id]",
+    "read_only=true",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "type=string",
+    "required=true",
+    "[app.func.A3A417.url]",
+    "[app.func.A3A417.url.params.url]",
+    "sub_url=true",
+    "required=true",
+    "list=true",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///legacy-annotation-syntax.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostics = analysis.diagnostics.filter((item) => item.code === "annotation-required");
+
+  assert.strictEqual(diagnostics.length, 8);
+  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@SniffHeaders|@ReadOnly|@Required|@SubUrl|@List/.test(diagnostic.message)));
+});
+
 test("FUNCRESULT references require a result kind and reject bare headers syntax", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
   const examplePath = path.join(repoRoot, "example.msra");
@@ -1285,7 +1351,6 @@ test("variable sources cannot reference themselves", () => {
     "[app.variables.city_id]",
     'types=[{"type"=integer}]',
     'description="City id"',
-    "read_only=false",
     "from=<VARIABLES.city_id>",
     "",
   ].join("\n");
@@ -1303,12 +1368,10 @@ test("variable sources reject circular dependencies", () => {
     "[app.variables.a]",
     'types=[{"type"=string}]',
     'description="A"',
-    "read_only=false",
     "from=<VARIABLES.b>",
     "[app.variables.b]",
     'types=[{"type"=string}]',
     'description="B"',
-    "read_only=false",
     "from=<VARIABLES.a>",
     "",
   ].join("\n");
@@ -1414,6 +1477,17 @@ test("grammar distinguishes path segments, assignment keys, and inline table key
   assert.strictEqual(inlineKeyPatterns[1].name, "support.type.property-name.msra");
 });
 
+test("grammar highlights annotations separately from assignment keys", () => {
+  const annotationPatterns = grammar.repository.annotations.patterns;
+
+  assert.strictEqual(annotationPatterns.length, 1);
+  assert.strictEqual(annotationPatterns[0].name, "meta.annotation.msra");
+  assert.match(annotationPatterns[0].match, /@/);
+  assert.strictEqual(annotationPatterns[0].captures[1].name, "punctuation.definition.annotation.msra");
+  assert.strictEqual(annotationPatterns[0].captures[2].name, "entity.name.tag.annotation.msra");
+  assert.notStrictEqual(annotationPatterns[0].captures[2].name, grammar.repository.assignments.patterns[0].name);
+});
+
 test("grammar highlights bare field values", () => {
   const bareValuePattern = grammar.repository["bare-values"].patterns[0];
 
@@ -1449,6 +1523,7 @@ test("package contributes a stable MSRA palette", () => {
   assert.strictEqual(semanticRules["enumMember.msra"].foreground, "#98C379");
   assert.strictEqual(semanticRules["literal.msra"].foreground, "#D19A66");
   assert.strictEqual(scopeToColor.get("keyword.other.attribute-name.msra"), "#E5C07B");
+  assert.strictEqual(scopeToColor.get("entity.name.tag.annotation.msra"), "#C678DD");
   assert.strictEqual(scopeToColor.get("entity.name.variable.prefix.msra"), "#C678DD");
   assert.strictEqual(scopeToColor.get("support.type.property-name.msra"), "#98C379");
   assert.strictEqual(scopeToColor.get("constant.other.bare-value.msra"), "#D19A66");
@@ -1642,20 +1717,19 @@ test("reference completions insert angle brackets when the user has not typed th
       sendNotification() {},
     });
     const text = [
-      "[app]",
-      "[app.variables.city_id]",
-      'types=[{"type"=integer, "revalue"={from=1, to=2147483647}}, {"type"=null, "value"=null}]',
-      'description="Current city id used by catalog and balance requests."',
-      "read_only=false",
-      lineText,
-      "",
-    ].join("\n");
+    "[app]",
+    "[app.variables.city_id]",
+    'types=[{"type"=integer, "revalue"={from=1, to=2147483647}}, {"type"=null, "value"=null}]',
+    'description="Current city id used by catalog and balance requests."',
+    lineText,
+    "",
+  ].join("\n");
     const uri = `file:///completion-reference-wrap-${lineText.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}.msra`;
     server._updateDocument({ textDocument: { uri, text } }, false);
     const response = server._completion({
       textDocument: { uri },
       position: {
-        line: 5,
+        line: 4,
         character,
       },
     });
@@ -1667,8 +1741,8 @@ test("reference completions insert angle brackets when the user has not typed th
   const bareItem = getResponseCompletion("from=", "from=".length);
   assert.deepStrictEqual(bareItem.textEdit, {
     range: {
-      start: { line: 5, character: "from=".length },
-      end: { line: 5, character: "from=".length },
+      start: { line: 4, character: "from=".length },
+      end: { line: 4, character: "from=".length },
     },
     newText: "<UNSTANDARD_HEADERS.RESPONSE.$0>",
   });
@@ -1677,8 +1751,8 @@ test("reference completions insert angle brackets when the user has not typed th
   const closedItem = getResponseCompletion("from=<>", "from=<>".length);
   assert.deepStrictEqual(closedItem.textEdit, {
     range: {
-      start: { line: 5, character: "from=<".length },
-      end: { line: 5, character: "from=<>".length },
+      start: { line: 4, character: "from=<".length },
+      end: { line: 4, character: "from=<>".length },
     },
     newText: "UNSTANDARD_HEADERS.RESPONSE.$0>",
   });

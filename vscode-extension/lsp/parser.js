@@ -109,6 +109,12 @@ class Tokenizer {
         this._emit("NEWLINE", "\n", start, end);
         continue;
       }
+      if (char === "@") {
+        const start = this._position();
+        this._advanceChar();
+        this._emit("AT", "@", start, this._position());
+        continue;
+      }
       if (char === "#") {
         while (true) {
           const next = this._peekChar();
@@ -363,6 +369,10 @@ class Parser {
         this._parseTableHeader();
         continue;
       }
+      if (this._check("AT")) {
+        this._parseAnnotationOrRecover();
+        continue;
+      }
       this._parseAssignmentOrRecover();
     }
     return new ParsedDocument({
@@ -463,38 +473,7 @@ class Parser {
       },
       () => this._parseExpr(true, true, true),
     );
-    const assignmentRange = new Range(keyToken.range.start, value ? value.range.end : this._previous().range.end);
-    const key = keyToken.value;
-    const fullPath = [...this.currentTable, key];
-    const tablePathSegments = this.currentTableSegments.slice();
-    const tableIdentityKey = this.currentTableIdentityKey;
-    const assignmentIdentityKey = JSON.stringify([tableIdentityKey, key]);
-    const assignment = new AssignmentDef(
-      [...this.currentTable],
-      key,
-      keyToken.range,
-      value,
-      value.range,
-      fullPath,
-      keyToken.type === "STRING",
-      tablePathSegments,
-      tableIdentityKey,
-      assignmentIdentityKey,
-    );
-    if (this.assignments.has(assignmentIdentityKey)) {
-      this._error(
-        `Duplicate assignment for ${pathLabel([...tablePathSegments, { value: key, quoted: keyToken.type === "STRING" }])}`,
-        assignmentRange,
-        "duplicate-assignment",
-      );
-    } else {
-      this.assignments.set(assignmentIdentityKey, assignment);
-    }
-    const currentTableKey = tableIdentityKey;
-    if (!this.tables.has(currentTableKey)) {
-      this.tables.set(currentTableKey, new TableDef([...this.currentTable], keyToken.range, tablePathSegments, tableIdentityKey));
-    }
-    this.tables.get(currentTableKey).assignments.push(assignment);
+    this._registerAssignment(keyToken, value, keyToken.type === "STRING");
     if (this._check("NEWLINE")) {
       this._advance();
     } else if (!this._check("EOF")) {
@@ -510,6 +489,115 @@ class Parser {
       return this._advance();
     }
     return null;
+  }
+
+  _parseAnnotationOrRecover() {
+    const atToken = this._advance();
+    const nameToken = this._parseKeyToken();
+    if (nameToken === null) {
+      this._error("Expected annotation name after '@'", this._current().range, "expected-annotation-name");
+      this._syncToNextStatement();
+      return;
+    }
+    const annotationKey = this._annotationKeyForName(nameToken.value);
+    if (annotationKey === null) {
+      this._error(`Unknown annotation @${nameToken.value}`, nameToken.range, "unknown-annotation");
+      this._syncToNextStatement();
+      return;
+    }
+    const annotationRange = new Range(atToken.range.start, nameToken.range.end);
+    let value = new BoolExpr(annotationRange, true);
+    let annotationHasArguments = false;
+    if (this._match("LPAREN")) {
+      annotationHasArguments = true;
+      if (this._check("RPAREN")) {
+        this._advance();
+      } else {
+        value = this._withValuePathSegment(
+          {
+            value: annotationKey,
+            quoted: false,
+            range: annotationRange,
+          },
+          () => this._parseExpr(false, true, true),
+        );
+        this._expect("RPAREN", "Expected ')' to close annotation");
+      }
+    }
+    this._registerAssignment(
+      {
+        value: annotationKey,
+        range: annotationRange,
+        type: "IDENT",
+      },
+      value,
+      false,
+      true,
+      nameToken.value,
+      annotationHasArguments,
+    );
+    if (this._check("NEWLINE")) {
+      this._advance();
+    } else if (!this._check("EOF")) {
+      this._error("Expected end of line after annotation", this._current().range, "trailing-annotation");
+      this._syncToNextStatement();
+    }
+  }
+
+  _annotationKeyForName(name) {
+    const normalized = String(name || "")
+      .toLowerCase()
+      .replace(/[_-]/g, "");
+    const annotationMap = {
+      suburl: "sub_url",
+      required: "required",
+      list: "list",
+      readonly: "read_only",
+      humanize: "humanize",
+      blockimages: "block_images",
+      sniffheaders: "headers_sniffer",
+      headerssniffer: "headers_sniffer",
+    };
+    return annotationMap[normalized] || null;
+  }
+
+  _registerAssignment(keyToken, value, quoted = false, annotation = false, annotationName = null, annotationHasArguments = false) {
+    const key = keyToken.value;
+    const keyRange = keyToken.range;
+    const assignmentRange = new Range(keyRange.start, value ? value.range.end : this._previous().range.end);
+    const fullPath = [...this.currentTable, key];
+    const tablePathSegments = this.currentTableSegments.slice();
+    const tableIdentityKey = this.currentTableIdentityKey;
+    const assignmentIdentityKey = JSON.stringify([tableIdentityKey, key]);
+    const assignment = new AssignmentDef(
+      [...this.currentTable],
+      key,
+      keyRange,
+      value,
+      value.range,
+      fullPath,
+      quoted,
+      tablePathSegments,
+      tableIdentityKey,
+      assignmentIdentityKey,
+      annotation,
+      annotationName,
+      annotationHasArguments,
+    );
+    if (this.assignments.has(assignmentIdentityKey)) {
+      this._error(
+        `Duplicate assignment for ${pathLabel([...tablePathSegments, { value: key, quoted }])}`,
+        assignmentRange,
+        "duplicate-assignment",
+      );
+    } else {
+      this.assignments.set(assignmentIdentityKey, assignment);
+    }
+    if (!this.tables.has(tableIdentityKey)) {
+      this.tables.set(tableIdentityKey, new TableDef([...this.currentTable], keyRange, tablePathSegments, tableIdentityKey));
+    }
+    this.tables.get(tableIdentityKey).assignments.push(assignment);
+    return assignment;
   }
 
   _parsePath(until) {

@@ -1,20 +1,88 @@
 # Язык
 1. Убрать тумблеры вида
-sub_url=false
-required=false
-list=false
-Вместо этого описывать
-@IsSubUrl
-@IsRequired
-@IsList
+@SubUrl
+@Required
+@List
+@ReadOnly
 
-humanize=true # по умолч false, доступно float>0
-block_images=true # по умолч false
-вместо этого
-@Humanize
-@BlockImages
+@Humanize # по умолч false, доступно float>0
+@BlockImages # по умолч false
+@SniffHeaders
+
+1.5 Убрать test поле и file параметр
+[app.func.GEOLOCATION_REGIONS_LIST.examples]
+test=true
 
 2. Переименовать data в from
+
+3. Вместо
+pipeline=[
+    {action=wait_network, state=networkidle},
+    {action=wait_sniffer, source=request, what="X-Key"},
+    {for_tests=true, action=wait_element, state=visible, what="div.selected-city > div.buttons > button.button.normal", then=click},
+    {for_tests=true, action=wait_element, state=visible, what="a.link.product-category", then=click},
+    {for_tests=true, action=wait_element, state=visible, what="div.page-content"},
+    {for_tests=true, action=wait_network, state=load},
+    {action=wait_element, state=visible, what="body > pre"}
+]
+Описывать
+
+`warmup="./warmup.py:pipeline"`
+```
+from human_requests.network_analyzer.anomaly_sniffer import (
+    HeaderAnomalySniffer, WaitHeader, WaitSource
+)
+from human_requests import HumanBrowser, HumanContext, HumanPage
+
+from MisklerSiteReverseApi import Warmup
+"""
+class Warmup:
+    browser: HumanBrowser
+    context: HumanContext
+    page: HumanPage
+    sniffer: HeaderAnomalySniffer
+    timeout_ms: int
+    test_mode: bool
+    prefixes: dict[str, str]
+"""
+    
+async def pipeline(warmup: Warmup):
+    await warmup.page.goto(warmup.prefixes["MAIN_SITE_URL"], wait_until="domcontentloaded")
+    await warmup.page.wait_for_load_state('networkidle')
+
+    await warmup.sniffer.wait(
+        tasks=[
+            WaitHeader(
+                source=WaitSource.REQUEST,
+                headers=['X-Key'],
+            )
+        ],
+        timeout_ms=warmup.timeout_ms,
+    )
+
+    if warmup.test_mode:
+        await warmup.page.wait_for_selector(
+            selector='div.selected-city > div.buttons > button.button.normal', timeout=warmup.timeout_ms, state='visible'
+        )
+        locator = warmup.page.locator('div.selected-city > div.buttons > button.button.normal').first
+        await locator.click(timeout=warmup.timeout_ms)
+
+        await warmup.page.wait_for_selector(
+            selector='a.link.product-category', timeout=warmup.timeout_ms, state='visible'
+        )
+        locator = warmup.page.locator('a.link.product-category').first
+        await locator.click(timeout=warmup.timeout_ms)
+
+        await warmup.page.wait_for_selector(
+            selector='div.page-content', timeout=warmup.timeout_ms, state='visible'
+        )
+
+        await warmup.page.wait_for_load_state('load')
+
+    await warmup.page.wait_for_selector(
+        selector='body > pre', timeout=warmup.timeout_ms, state='visible'
+    )
+```
 
 
 # Кодогенерация
