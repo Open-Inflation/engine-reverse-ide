@@ -15,6 +15,7 @@ const SEMANTIC_TOKEN_TYPES = [
   "property",
   "enumMember",
   "literal",
+  "decorator",
   "variable",
 ];
 
@@ -91,7 +92,8 @@ function collectSemanticTokens(document) {
 
   const assignments = [...document.assignments.values()].sort(compareByStart);
   for (const assignment of assignments) {
-    addToken(tokens, assignment.keyRange, classifyAssignmentKey(assignment), assignment.quoted);
+    const assignmentRange = assignment.annotation && assignment.annotationRange ? assignment.annotationRange : assignment.keyRange;
+    addToken(tokens, assignmentRange, classifyAssignmentKey(assignment), assignment.quoted);
     collectBareValueTokens(assignment.value, tokens);
     collectInlineTableTokens(assignment.value, tokens);
   }
@@ -305,6 +307,9 @@ function classifyReferenceSegment(segment, index, parts) {
 function classifyAssignmentKey(assignment) {
   if (!assignment) {
     return null;
+  }
+  if (assignment.annotation) {
+    return "decorator";
   }
   if (isCustomPrefixAssignment(assignment.tablePath)) {
     return "variable";

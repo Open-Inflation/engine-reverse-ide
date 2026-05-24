@@ -108,9 +108,10 @@ description="Fetches the catalog tree from /v1/category."
 [app.func.CATALOG_TREE.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/category"
 
-[app.func.CATALOG_TREE.examples]
-examples=[{"inputs"={}, "file"="../fixprice_api/tests/__snapshots__/ClassCatalog.tree.json"}]
-test=true
+[app.func.CATALOG_TREE.examples.snapshot]
+@Test
+@Docs
+inputs={}
 
 [app.func.CATALOG_PRODUCTS_LIST]
 name="products_list"
@@ -150,26 +151,27 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/product/in/"<INPUT.category_alias>
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.page]
 @Required
-data=<INPUT.page>
+from=<INPUT.page>
 description="Page query parameter."
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.limit]
 @Required
-data=<INPUT.limit>
+from=<INPUT.limit>
 description="Limit query parameter."
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.sort]
 @Required
-data=<INPUT.sort>
+from=<INPUT.sort>
 description="Sort query parameter."
 
 [app.func.CATALOG_PRODUCTS_LIST.body]
 type="application/json"
-data={category=<INPUT.category_alias>, brand=[], price=[], isDividedPrice=false, isNew=false, isHit=false, isSpecialPrice=false}
+from={category=<INPUT.category_alias>, brand=[], price=[], isDividedPrice=false, isNew=false, isHit=false, isSpecialPrice=false}
 
-[app.func.CATALOG_PRODUCTS_LIST.examples]
-examples=[{"inputs"={"category_alias"=<FUNCRESULT.CATALOG_TREE.JSON["1"]["alias"]>}, "file"="../fixprice_api/tests/__snapshots__/ClassCatalog.products_list.json"}]
-test=true
+[app.func.CATALOG_PRODUCTS_LIST.examples.snapshot]
+@Test
+@Docs
+inputs={"category_alias"=<FUNCRESULT.CATALOG_TREE.JSON["1"]["alias"]>}
 
 [app.func.CATALOG_PRODUCT_BALANCE]
 name="balance"
@@ -201,16 +203,17 @@ values=[{"value_in_url"="all", "default"=true}]
 description="Fixed canPickup query parameter."
 
 [app.func.CATALOG_PRODUCT_BALANCE.url.params.addressPart]
-data=<INPUT.search>
+from=<INPUT.search>
 description="Optional address filter."
 
 [app.func.CATALOG_PRODUCT_BALANCE.url.params.inStock]
 values=[{"value_in_url"="true", "default"=true}]
 description="Present only when in_stock is true."
 
-[app.func.CATALOG_PRODUCT_BALANCE.examples]
-examples=[{"inputs"={"product_id"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["id"]>}, "file"="../fixprice_api/tests/__snapshots__/ProductService.balance.json"}]
-test=true
+[app.func.CATALOG_PRODUCT_BALANCE.examples.snapshot]
+@Test
+@Docs
+inputs={"product_id"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["id"]>}
 
 [app.func.CATALOG_PRODUCT_INFO]
 name="info"
@@ -243,9 +246,10 @@ base=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>"/catalog/"
 render_html=true
 evaluate="postprocess/catalog-product-info.evaluate.js"
 
-[app.func.CATALOG_PRODUCT_INFO.examples]
-examples=[{"inputs"={"url"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["url"]>}, "file"="../fixprice_api/tests/__snapshots__/ProductService.info.json"}]
-test=true
+[app.func.CATALOG_PRODUCT_INFO.examples.snapshot]
+@Test
+@Docs
+inputs={"url"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["url"]>}
 
 [app.func.GEOLOCATION_COUNTRIES_LIST]
 name="countries_list"
@@ -262,12 +266,13 @@ description="Optional ISO-2 country alias, uppercased by the code."
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/country"
 
 [app.func.GEOLOCATION_COUNTRIES_LIST.url.params.alias]
-data=<INPUT.alias>
+from=<INPUT.alias>
 description="Optional alias query parameter."
 
-[app.func.GEOLOCATION_COUNTRIES_LIST.examples]
-examples=[{"inputs"={}, "file"="../fixprice_api/tests/__snapshots__/ClassGeolocation.countries_list.json"}]
-test=true
+[app.func.GEOLOCATION_COUNTRIES_LIST.examples.snapshot]
+@Test
+@Docs
+inputs={}
 
 [app.func.GEOLOCATION_REGIONS_LIST]
 name="regions_list"
@@ -284,12 +289,13 @@ description="Optional country id filter."
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/region"
 
 [app.func.GEOLOCATION_REGIONS_LIST.url.params.countryId]
-data=<INPUT.country_id>
+from=<INPUT.country_id>
 description="Optional countryId query parameter."
 
-[app.func.GEOLOCATION_REGIONS_LIST.examples]
-examples=[{"inputs"={}, "file"="../fixprice_api/tests/__snapshots__/ClassGeolocation.regions_list.json"}]
-test=true
+[app.func.GEOLOCATION_REGIONS_LIST.examples.snapshot]
+@Test
+@Docs
+inputs={}
 
 [app.func.GEOLOCATION_CITIES_LIST]
 name="cities_list"
@@ -308,12 +314,13 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city"
 
 [app.func.GEOLOCATION_CITIES_LIST.url.params.countryId]
 @Required
-data=<INPUT.country_id>
+from=<INPUT.country_id>
 description="CountryId query parameter."
 
-[app.func.GEOLOCATION_CITIES_LIST.examples]
-examples=[{"inputs"={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>}, "file"="../fixprice_api/tests/__snapshots__/ClassGeolocation.cities_list.json"}]
-test=true
+[app.func.GEOLOCATION_CITIES_LIST.examples.snapshot]
+@Test
+@Docs
+inputs={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>}
 
 [app.func.GEOLOCATION_CITY_INFO]
 name="city_info"
@@ -330,9 +337,10 @@ description="City id used in the path."
 [app.func.GEOLOCATION_CITY_INFO.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city/"<INPUT.city_id>
 
-[app.func.GEOLOCATION_CITY_INFO.examples]
-examples=[{"inputs"={"city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[0]["id"]>}, "file"="../fixprice_api/tests/__snapshots__/ClassGeolocation.city_info.json"}]
-test=true
+[app.func.GEOLOCATION_CITY_INFO.examples.snapshot]
+@Test
+@Docs
+inputs={"city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[0]["id"]>}
 
 [app.func.GEOLOCATION_SHOP_SEARCH]
 name="search"
@@ -378,24 +386,25 @@ values=[{"value_in_url"="all", "default"=true}]
 description="Fixed showTemporarilyClosed parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.countryId]
-data=<INPUT.country_id>
+from=<INPUT.country_id>
 description="Optional countryId query parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.regionId]
-data=<INPUT.region_id>
+from=<INPUT.region_id>
 description="Optional regionId query parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.cityId]
-data=<INPUT.city_id>
+from=<INPUT.city_id>
 description="Optional cityId query parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.addressPart]
-data=<INPUT.search>
+from=<INPUT.search>
 description="Optional addressPart query parameter."
 
-[app.func.GEOLOCATION_SHOP_SEARCH.examples]
-examples=[{"inputs"={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>, "city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[85]["id"]>}, "file"="../fixprice_api/tests/__snapshots__/ShopService.search.json"}]
-test=true
+[app.func.GEOLOCATION_SHOP_SEARCH.examples.snapshot]
+@Test
+@Docs
+inputs={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>, "city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[85]["id"]>}
 
 [app.func.ADVERTISING_HOME_BRANDS_LIST]
 name="home_brands_list"
@@ -406,9 +415,10 @@ description="Returns the brand list used on the homepage."
 [app.func.ADVERTISING_HOME_BRANDS_LIST.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
 
-[app.func.ADVERTISING_HOME_BRANDS_LIST.examples]
-examples=[{"inputs"={}, "file"="../fixprice_api/tests/__snapshots__/ClassAdvertising.home_brands_list.json"}]
-test=true
+[app.func.ADVERTISING_HOME_BRANDS_LIST.examples.snapshot]
+@Test
+@Docs
+inputs={}
 
 [app.func.GENERAL_DOWNLOAD_IMAGE]
 name="download_image"

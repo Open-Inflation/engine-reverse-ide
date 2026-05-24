@@ -535,6 +535,7 @@ class Parser {
       true,
       nameToken.value,
       annotationHasArguments,
+      annotationRange,
     );
     if (this._check("NEWLINE")) {
       this._advance();
@@ -553,6 +554,8 @@ class Parser {
       required: "required",
       list: "list",
       readonly: "read_only",
+      test: "test",
+      docs: "docs",
       humanize: "humanize",
       blockimages: "block_images",
       sniffheaders: "headers_sniffer",
@@ -561,7 +564,7 @@ class Parser {
     return annotationMap[normalized] || null;
   }
 
-  _registerAssignment(keyToken, value, quoted = false, annotation = false, annotationName = null, annotationHasArguments = false) {
+  _registerAssignment(keyToken, value, quoted = false, annotation = false, annotationName = null, annotationHasArguments = false, annotationRange = null) {
     const key = keyToken.value;
     const keyRange = keyToken.range;
     const assignmentRange = new Range(keyRange.start, value ? value.range.end : this._previous().range.end);
@@ -583,6 +586,7 @@ class Parser {
       annotation,
       annotationName,
       annotationHasArguments,
+      annotationRange,
     );
     if (this.assignments.has(assignmentIdentityKey)) {
       this._error(

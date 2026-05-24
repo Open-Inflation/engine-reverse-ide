@@ -71,7 +71,7 @@
         request_url = {{ url_expr }}
         query_params = []
 {% for param in query_params %}
-{% if param.kind == "data" and param.has_value_map %}
+{% if param.kind == "from" and param.has_value_map %}
 {% if param.is_list %}
         {{ param.temp_list_name }} = {{ param.source_expr }}
         if {{ param.temp_list_name }} in (None, []):
@@ -112,7 +112,7 @@
                 raise ValueError("`{{ param.source_name }}` must be one of {{ param.selectable_values_expr }}")
             query_params.append(({{ param.name_expr }}, {{ param.value_map_expr }}[{{ param.temp_name }}]))
 {% endif %}
-{% elif param.kind == "data" %}
+{% elif param.kind == "from" %}
 {% if param.is_list %}
         if {{ param.value_expr }}:
 {% if param.list_style_style == "repeat" %}

@@ -52,6 +52,10 @@ test("example document stays valid and keeps the documented path", () => {
     hasTablePath(document, ["app", "func", "A3A417", "url", "params", "from_global", "params", "text"]),
     "expected the nested url params table from the example file to be indexed",
   );
+  assert.ok(
+    hasTablePath(document, ["app", "func", "A3A417", "examples", "smoke"]),
+    "expected the named example table from the example file to be indexed",
+  );
 });
 
 test("fixprice document stays valid", () => {
@@ -398,7 +402,7 @@ test("regex actions reject unknown action names and missing replace arguments", 
   assert.match(missingWithDiagnostic.message, /replace/);
 });
 
-test("nested example, values, list_style, and types structures are validated strictly", () => {
+test("nested example tables, values, list_style, and types structures are validated strictly", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
@@ -413,7 +417,8 @@ test("nested example, values, list_style, and types structures are validated str
     'type=string',
     "",
     "[app.func.A3A417.examples]",
-    'examples=[{"test"=false}]',
+    "[app.func.A3A417.examples.smoke]",
+    "@Docs",
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///strict-nested-structures.msra");
@@ -429,31 +434,63 @@ test("nested example, values, list_style, and types structures are validated str
   assert.ok(badDelimiter, "expected a non-string delimiter inside list_style to be rejected");
   assert.ok(unknownListStyleKey, "expected unexpected list_style keys to be rejected");
   assert.ok(unknownValuesKey, "expected unexpected values keys to be rejected");
-  assert.ok(missingExampleInputs, "expected examples items to require inputs");
+  assert.ok(missingExampleInputs, "expected named example tables to require inputs");
 });
 
-test("examples items accept missing file when inputs are present", () => {
+test("example tables accept @Docs and @Test annotations", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     "type=string",
     "[app.func.A3A417.examples]",
-    'examples=[{"inputs"={"query"="example"}, "test"=false}]',
+    "[app.func.A3A417.examples.smoke]",
+    "@Test",
+    "@Docs",
+    'inputs={"query"="example"}',
+    "[app.func.A3A417.examples.alt_query]",
+    "@Docs",
+    'inputs={"query"="example2"}',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///example-item-file-optional.msra");
+  const document = parseDocument(text, "file:///example-item-annotations.msra");
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
-test("examples inputs must reference declared function inputs", () => {
+test("example tables reject legacy file and test keys", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "type=string",
+    "[app.func.A3A417.examples]",
+    "[app.func.A3A417.examples.smoke]",
+    'inputs={"query"="example"}',
+    'file="local1.json"',
+    "test=true",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///legacy-example-keys.msra");
+  const analysis = analyzeDocument(document);
+  const unknownKey = analysis.diagnostics.find((item) => item.code === "unknown-assignment-key");
+  const annotationRequired = analysis.diagnostics.find((item) => item.code === "annotation-required");
+
+  assert.ok(unknownKey, "expected file to be rejected in the new examples contract");
+  assert.match(unknownKey.message, /file/);
+  assert.ok(annotationRequired, "expected test=true to require the @Test annotation");
+  assert.match(annotationRequired.message, /@Test/);
+});
+
+test("example tables reject undeclared function inputs", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.examples]",
-    'examples=[{"inputs"={"query"="example"}, "file"="local1.json"}]',
+    "[app.func.A3A417.examples.smoke]",
+    "@Docs",
+    'inputs={"query"="example"}',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///missing-example-input.msra");
@@ -464,14 +501,16 @@ test("examples inputs must reference declared function inputs", () => {
   assert.match(diagnostic.message, /query/);
 });
 
-test("examples inputs must match declared function input types", () => {
+test("example tables inputs must match declared function input types", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     "type=string",
     "[app.func.A3A417.examples]",
-    'examples=[{"inputs"={"query"=1}, "file"="local1.json"}]',
+    "[app.func.A3A417.examples.smoke]",
+    "@Docs",
+    'inputs={"query"=1}',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-example-input-type.msra");
@@ -735,7 +774,7 @@ test("url param values reject dynamic value references", () => {
   assert.match(diagnostic.message, /reference/i);
 });
 
-test("list url params with data require at least one selectable value", () => {
+test("list url params with from require at least one selectable value", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
@@ -744,7 +783,7 @@ test("list url params with data require at least one selectable value", () => {
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     "@List",
-    "data=<INPUT.url>",
+    "from=<INPUT.url>",
     'values=[{"value_in_url"="/searchSuggestions/search/", "default"=true}, {"value_in_url"="/searchSuggestions/search/", "default"=true}]',
     "",
   ].join("\n");
@@ -752,7 +791,7 @@ test("list url params with data require at least one selectable value", () => {
   const analysis = analyzeDocument(document);
   const diagnostic = analysis.diagnostics.find((item) => item.code === "missing-url-param-selectable-value");
 
-  assert.ok(diagnostic, "expected list url params with data to require at least one selectable value");
+  assert.ok(diagnostic, "expected list url params with from to require at least one selectable value");
   assert.match(diagnostic.message, /default=true/);
   assert.match(diagnostic.message, /revalue/);
 });
@@ -766,7 +805,7 @@ test("list url params with revalue can omit selectable values", () => {
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     "@List",
-    "data=<INPUT.url>",
+    "from=<INPUT.url>",
     "revalue={from=1, to=27}",
     "",
   ].join("\n");
@@ -777,7 +816,7 @@ test("list url params with revalue can omit selectable values", () => {
   assert.ok(!diagnostic, "expected revalue to make selectable values optional");
 });
 
-test("list url params reject non-list inputs in data", () => {
+test("list url params reject non-list inputs in from", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
@@ -786,7 +825,7 @@ test("list url params reject non-list inputs in data", () => {
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     "@List",
-    "data=<INPUT.query>",
+    "from=<INPUT.query>",
     'values=[{"value_in_url"="/search", "value"="search"}]',
     "",
   ].join("\n");
@@ -794,12 +833,12 @@ test("list url params reject non-list inputs in data", () => {
   const analysis = analyzeDocument(document);
   const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-url-param-list-input-type");
 
-  assert.ok(diagnostic, "expected list url params to reject non-list inputs in data");
+  assert.ok(diagnostic, "expected list url params to reject non-list inputs in from");
   assert.match(diagnostic.message, /@List/);
   assert.match(diagnostic.message, /INPUT\.query/);
 });
 
-test("list url params accept list-typed inputs in data", () => {
+test("list url params accept list-typed inputs in from", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
@@ -808,7 +847,7 @@ test("list url params accept list-typed inputs in data", () => {
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     "@List",
-    "data=<INPUT.query>",
+    "from=<INPUT.query>",
     'values=[{"value_in_url"="/search", "value"="search"}]',
     "",
   ].join("\n");
@@ -1094,7 +1133,7 @@ test("non-multipart bodies cannot define a boundary", () => {
     "[app.func.A3A417.body]",
     'type="application/json"',
     'boundary="oops"',
-    'data={"key"="value"}',
+    'from={"key"="value"}',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///unexpected-boundary.msra");
@@ -1105,7 +1144,7 @@ test("non-multipart bodies cannot define a boundary", () => {
   assert.match(boundaryDiagnostic.message, /multipart\/form-data/);
 });
 
-test("urlencoded bodies require data or a nested url table", () => {
+test("urlencoded bodies require from or a nested url table", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
@@ -1117,8 +1156,8 @@ test("urlencoded bodies require data or a nested url table", () => {
   const analysis = analyzeDocument(document);
   const payloadDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-body-payload");
 
-  assert.ok(payloadDiagnostic, "expected x-www-form-urlencoded bodies to require data or a url table");
-  assert.match(payloadDiagnostic.message, /data/);
+  assert.ok(payloadDiagnostic, "expected x-www-form-urlencoded bodies to require from or a url table");
+  assert.match(payloadDiagnostic.message, /from/);
   assert.match(payloadDiagnostic.message, /url/);
 });
 
@@ -1254,7 +1293,7 @@ test("virtual variable references must resolve to declared variables", () => {
     "[app.func.A3A417.body]",
     "[app.func.A3A417.body.ANYNAME]",
     'type="application/json"',
-    "data=<VARIABLES.ity_id>",
+    "from=<VARIABLES.ity_id>",
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///unresolved-variable.msra");
@@ -1289,14 +1328,19 @@ test("annotation-only flags reject explicit arguments", () => {
     "[app.func.A3A417.input.query]",
     "type=string",
     "@Required(false)",
+    "[app.func.A3A417.examples]",
+    "[app.func.A3A417.examples.smoke]",
+    "@Test(false)",
+    "@Docs(false)",
+    'inputs={"query"="example"}',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-annotation-arguments.msra");
   const analysis = analyzeDocument(document);
   const diagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-annotation-argument");
 
-  assert.strictEqual(diagnostics.length, 3);
-  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@Required/.test(diagnostic.message)));
+  assert.strictEqual(diagnostics.length, 5);
+  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@Required|@Test|@Docs/.test(diagnostic.message)));
 });
 
 test("legacy boolean toggles are rejected in favor of annotations", () => {
@@ -1483,8 +1527,8 @@ test("grammar highlights annotations separately from assignment keys", () => {
   assert.strictEqual(annotationPatterns.length, 1);
   assert.strictEqual(annotationPatterns[0].name, "meta.annotation.msra");
   assert.match(annotationPatterns[0].match, /@/);
-  assert.strictEqual(annotationPatterns[0].captures[1].name, "punctuation.definition.annotation.msra");
-  assert.strictEqual(annotationPatterns[0].captures[2].name, "entity.name.tag.annotation.msra");
+  assert.strictEqual(annotationPatterns[0].captures[1].name, "punctuation.whitespace.leading.msra");
+  assert.strictEqual(annotationPatterns[0].captures[2].name, "keyword.other.annotation.msra");
   assert.notStrictEqual(annotationPatterns[0].captures[2].name, grammar.repository.assignments.patterns[0].name);
 });
 
@@ -1522,8 +1566,9 @@ test("package contributes a stable MSRA palette", () => {
   assert.strictEqual(semanticRules["property.msra"].foreground, "#E5C07B");
   assert.strictEqual(semanticRules["enumMember.msra"].foreground, "#98C379");
   assert.strictEqual(semanticRules["literal.msra"].foreground, "#D19A66");
+  assert.strictEqual(semanticRules["decorator.msra"].foreground, "#E06C75");
   assert.strictEqual(scopeToColor.get("keyword.other.attribute-name.msra"), "#E5C07B");
-  assert.strictEqual(scopeToColor.get("entity.name.tag.annotation.msra"), "#C678DD");
+  assert.strictEqual(scopeToColor.get("keyword.other.annotation.msra"), "#E06C75");
   assert.strictEqual(scopeToColor.get("entity.name.variable.prefix.msra"), "#C678DD");
   assert.strictEqual(scopeToColor.get("support.type.property-name.msra"), "#98C379");
   assert.strictEqual(scopeToColor.get("constant.other.bare-value.msra"), "#D19A66");
@@ -1542,7 +1587,7 @@ test("semantic tokens separate path segments, assignment keys, and inline table 
     "[app.func.A3A417.body.ANYNAME]",
     'type="application/json"',
     "return_name=true",
-    'data={"key": <VARIABLES.city_id>, "key2": "value", "key3": <INPUT.query>}',
+    'from={"key": <VARIABLES.city_id>, "key2": "value", "key3": <INPUT.query>}',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///semantic-tokens.msra");
@@ -1560,7 +1605,7 @@ test("semantic tokens separate path segments, assignment keys, and inline table 
   for (const needle of ["A3A417", "ANYNAME", "city_id", "query"]) {
     assert.ok(findToken(needle, "parameter"), `expected ${needle} to be classified as a path/user segment`);
   }
-  for (const needle of ["type", "return_name", "data"]) {
+  for (const needle of ["type", "return_name", "from"]) {
     assert.ok(findToken(needle, "property"), `expected ${needle} to be classified as an assignment key`);
   }
   for (const needle of ["key", "key2", "key3"]) {
@@ -1632,6 +1677,36 @@ test("semantic tokens keep prefix definitions custom without parent-dependent re
   assert.ok(findToken("BASE_API", "parameter"), "expected the prefix reference to behave like a normal path segment");
   assert.strictEqual(findTokens("ORIGIN", "variable").length, 1, "expected ORIGIN to be classified as a custom prefix variable");
   assert.ok(findToken("timeout_ms", "property"), "expected timeout_ms to remain a fixed assignment key");
+});
+
+test("semantic tokens classify annotations as decorators", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "@Required",
+    "type=string",
+    "",
+    "[app.func.A3A417.url.params.url]",
+    "@SubUrl",
+    'from="x"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///annotation-semantic-tokens.msra");
+  const tokens = collectSemanticTokens(document);
+
+  const findToken = (needle, tokenType) => tokens.find((token) => {
+    if (token.tokenType !== tokenType) {
+      return false;
+    }
+    const start = document.offsetAt({ line: token.line, character: token.character });
+    const end = start + token.length;
+    return text.slice(start, end) === needle;
+  });
+
+  assert.ok(findToken("@Required", "decorator"), "expected @Required to be classified as a decorator");
+  assert.ok(findToken("@SubUrl", "decorator"), "expected @SubUrl to be classified as a decorator");
+  assert.strictEqual(tokens.filter((token) => token.tokenType === "decorator").length, 2);
 });
 
 test("semantic tokens color bare field values as literals", () => {

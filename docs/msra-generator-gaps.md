@@ -9,7 +9,7 @@
 
 ```msra
 [app.func.A3A417.url.params.from_global.params.text]
-data=<INPUT.query>
+from=<INPUT.query>
 revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>
 ```
 
@@ -24,7 +24,7 @@ revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>
 
 ## 2. `body` учитывается только частично
 
-В `example.msra` у body есть не только `type` и `data`, но и:
+В `example.msra` у body есть не только `type` и `from`, но и:
 
 - `charset`
 - `boundary`
@@ -46,10 +46,10 @@ boundary="abc"
 [app.func.A3A417.body.ANYNAME]
 type="application/json"
 return_name=true
-data={"key": <VARIABLES.city_id>, "key3": <INPUT.query>}
+from={"key": <VARIABLES.city_id>, "key3": <INPUT.query>}
 ```
 
-Сейчас генератор берет из body только `type` и `data`, а шаблон функции сводит это к `json_body = ...`.
+Сейчас генератор берет из body только `type` и `from`, а шаблон функции сводит это к `json_body = ...`.
 Из-за этого:
 
 - `multipart/form-data` не получает полноценного кода сборки multipart;
@@ -102,16 +102,21 @@ humanize_action={from=1000, to=3000}
 В `example.msra` у функции есть примеры:
 
 ```msra
-[app.func.A3A417.examples]
-examples=[{"inputs"={"query"="example"}, "test"=false, "file"="local1.json"}, {"inputs"={"query"="example"}}]
-test=true
+[app.func.A3A417.examples.smoke]
+@Test
+@Docs
+inputs={"query"="example"}
+
+[app.func.A3A417.examples.alt_query]
+@Docs
+inputs={"query"="example2"}
 ```
 
 Сейчас это полезно для валидации и анализа контракта, но в Python-пакет codegen не добавляет:
 
 - fixtures для этих примеров;
 - generated contract tests;
-- отдельную runtime-логику, которая бы использовала `test=true`.
+- отдельную runtime-логику, которая бы использовала `@Test`.
 
 То есть `examples` остаются частью описания API, но не превращаются в код, который можно запустить как часть generated package.
 
@@ -128,7 +133,7 @@ test=true
 Важно именно это ограничение:
 
 - codegen пока не умеет генерировать runtime-логику для `FUNCRESULT`;
-- LSP принимает такую ссылку только внутри `[app.func.*.examples.examples]` в значениях `inputs.<key>`;
+- LSP принимает такую ссылку только внутри `[app.func.*.examples.<name>]` в значениях `inputs.<key>.value`;
 - синтаксис должен содержать result-kind сегмент `JSON`, `TEXT` или `IMAGE`, то есть `<FUNCRESULT.<function>.JSON|TEXT|IMAGE>`;
 - если выбран `JSON`, после него можно продолжать путь к конкретным элементам через `["..."]` и `[0]`;
 - вне этого блока ссылка должна продолжать считаться ошибочной.

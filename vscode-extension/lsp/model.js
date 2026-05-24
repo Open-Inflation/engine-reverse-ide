@@ -170,6 +170,7 @@ class AssignmentDef {
     annotation = false,
     annotationName = null,
     annotationHasArguments = false,
+    annotationRange = null,
   ) {
     this.tablePath = tablePath;
     this.key = key;
@@ -184,6 +185,7 @@ class AssignmentDef {
     this.annotation = annotation;
     this.annotationName = annotationName;
     this.annotationHasArguments = annotationHasArguments;
+    this.annotationRange = annotationRange;
   }
 }
 

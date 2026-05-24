@@ -110,6 +110,9 @@
           "literal.msra": {
             "foreground": "#D19A66"
           },
+          "decorator.msra": {
+            "foreground": "#E06C75"
+          },
           "variable.msra": {
             "foreground": "#C678DD"
           }
@@ -131,9 +134,9 @@
             }
           },
           {
-            "scope": "entity.name.tag.annotation.msra",
+            "scope": "keyword.other.annotation.msra",
             "settings": {
-              "foreground": "#C678DD"
+              "foreground": "#E06C75"
             }
           },
           {

@@ -196,6 +196,10 @@ function matchesInputPath(path) {
   return path.length === 5 && path[0] === "app" && path[1] === "func" && path[3] === "input";
 }
 
+function matchesExampleItemPath(path) {
+  return path.length === 5 && path[0] === "app" && path[1] === "func" && path[3] === "examples";
+}
+
 function annotationRequirementForAssignment(tablePath, key) {
   if (matchesWarmupPath(tablePath)) {
     if (key === "humanize") {
@@ -223,6 +227,14 @@ function annotationRequirementForAssignment(tablePath, key) {
     }
     if (key === "list") {
       return { kind: "flag", label: "@List", legacyLabel: "list" };
+    }
+  }
+  if (matchesExampleItemPath(tablePath)) {
+    if (key === "test") {
+      return { kind: "flag", label: "@Test", legacyLabel: "test" };
+    }
+    if (key === "docs") {
+      return { kind: "flag", label: "@Docs", legacyLabel: "docs" };
     }
   }
   return null;
@@ -266,8 +278,8 @@ const EXAMPLE_ITEM_SPEC = objectShape(
     inputs: EXAMPLE_INPUTS_SPEC,
   },
   {
-    file: STRINGISH,
     test: BOOLEAN,
+    docs: BOOLEAN,
   },
 );
 
@@ -665,7 +677,7 @@ const TABLE_SCHEMAS = [
     required: BOOLEAN,
     default: ANY,
     values: ARRAY,
-    data: ANY,
+    from: ANY,
     revalue: REVALUE_SPEC,
   }, {
     rules: [
@@ -681,7 +693,7 @@ const TABLE_SCHEMAS = [
     boundary: STRINGISH,
     return_name: BOOLEAN,
     filename: ANY,
-    data: ANY,
+    from: ANY,
   }),
   makeFixedSchema(matchesBodyUrlPath, {
     base: STRINGISH,
@@ -697,7 +709,7 @@ const TABLE_SCHEMAS = [
     list_style: LIST_STYLE_SPEC,
     values: arrayOf(URL_PARAM_VALUE_SPEC),
     description: STRINGISH,
-    data: ANY,
+    from: ANY,
     revalue: REVALUE_SPEC,
   }, {
     rules: [
@@ -707,9 +719,11 @@ const TABLE_SCHEMAS = [
       }),
     ],
   }),
-  makeFixedSchema(exactPath(["app", "func", "*", "examples"]), {
-    examples: arrayOf(EXAMPLE_ITEM_SPEC),
+  makeFixedSchema(exactPath(["app", "func", "*", "examples"]), {}),
+  makeFixedSchema(exactPath(["app", "func", "*", "examples", "*"]), {
+    inputs: EXAMPLE_INPUTS_SPEC,
     test: BOOLEAN,
+    docs: BOOLEAN,
   }),
 ];
 

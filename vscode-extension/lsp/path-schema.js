@@ -326,7 +326,10 @@ function validateFuncTable(segments, index) {
     return validateUrlNamespace(segments, index + 1);
   }
   if (segment.value === "examples" && !segment.quoted) {
-    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
+    if (index === segments.length - 1) {
+      return { valid: true };
+    }
+    return validateExampleNamespace(segments, index + 1, `"${renderPath(segments, index + 1)}"`);
   }
   if (segment.value === "postprocess" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
@@ -336,6 +339,20 @@ function validateFuncTable(segments, index) {
     index,
     `Invalid child table "${renderSegment(segment)}" under "${renderPath(segments, index)}". Expected "input", "body", "headers", "url", "examples", or "postprocess".`,
     ["input", "body", "headers", "url", "examples", "postprocess"],
+  );
+}
+
+function validateExampleNamespace(segments, index, parentLabel) {
+  if (index >= segments.length) {
+    return { valid: true };
+  }
+  if (index === segments.length - 1) {
+    return { valid: true };
+  }
+  return invalidPath(
+    segments,
+    index + 1,
+    `Table path "${renderPath(segments)}" is rooted at ${parentLabel} and only allows a single example table name under "examples".`,
   );
 }
 

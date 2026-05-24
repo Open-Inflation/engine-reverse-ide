@@ -9,13 +9,12 @@
 @BlockImages # по умолч false
 @SniffHeaders
 
-1.5 Убрать test поле и file параметр
-[app.func.GEOLOCATION_REGIONS_LIST.examples]
-test=true
+1.5 Examples теперь именованные таблицы
+[app.func.GEOLOCATION_REGIONS_LIST.examples.default]
+@Docs
+inputs={}
 
-2. Переименовать data в from
-
-3. Вместо
+2. Вместо
 pipeline=[
     {action=wait_network, state=networkidle},
     {action=wait_sniffer, source=request, what="X-Key"},

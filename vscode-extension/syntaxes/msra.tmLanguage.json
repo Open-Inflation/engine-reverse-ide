@@ -42,13 +42,13 @@
       "patterns": [
         {
           "name": "meta.annotation.msra",
-          "match": "^[ \\t]*(@)([A-Za-z_][A-Za-z0-9_-]*)",
+          "match": "^(\\s*)(@[A-Za-z_][A-Za-z0-9_-]*)",
           "captures": {
             "1": {
-              "name": "punctuation.definition.annotation.msra"
+              "name": "punctuation.whitespace.leading.msra"
             },
             "2": {
-              "name": "entity.name.tag.annotation.msra"
+              "name": "keyword.other.annotation.msra"
             }
           }
         }

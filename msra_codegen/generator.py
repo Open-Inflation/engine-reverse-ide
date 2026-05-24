@@ -339,7 +339,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         if body_table:
             func["body"] = {
                 "type": str(get_plain_value(get_assignment(body_table, "type", "application/json"))),
-                "data": get_assignment(body_table, "data"),
+                "from": get_assignment(body_table, "from"),
             }
 
         func_headers_table = get_table(prefix + ["headers"])
@@ -406,7 +406,7 @@ def build_url_param_spec(table: dict[str, Any], get_assignment) -> dict[str, Any
             "delimiter": str(list_style.get("delimiter", ",") or ","),
             "indexed": bool(list_style.get("indexed", False)),
         },
-        "data": get_assignment(table, "data"),
+        "from": get_assignment(table, "from"),
         "values": get_assignment(table, "values"),
         "description": str(get_plain_value(get_assignment(table, "description", ""))),
     }
@@ -686,7 +686,7 @@ def build_function_context(
             "credentials_expr": render_request_credentials(headers_spec, default_if_missing=False),
             "headers_expr": render_request_headers(headers_spec, default_if_missing=False),
         },
-        "body_expr": render_expr(body.get("data"), self_ref="self._parent") if body else None,
+        "body_expr": render_expr(body.get("from"), self_ref="self._parent") if body else None,
         "body_type": body.get("type") if body else None,
         "validation": build_input_validation_context({"inputs": inputs}),
         "query_params": build_query_param_context(func),
@@ -747,15 +747,15 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
     for param in params:
         param_name = param["name"]
         list_style = param.get("list_style") or {}
-        data_expr = param.get("data")
+        from_expr = param.get("from")
         values = get_plain_value(param.get("values"))
-        source_input_name = ref_input_name(data_expr)
+        source_input_name = ref_input_name(from_expr)
         matched_input = inputs.get(normalize_name(source_input_name)) if source_input_name else inputs.get(normalize_name(param_name))
         item: dict[str, Any] = {
             "name": param_name,
             "name_expr": render_simple_value(param_name),
             "source_name": source_input_name or param_name,
-            "source_expr": render_expr(data_expr, self_ref="self._parent") if data_expr is not None else None,
+            "source_expr": render_expr(from_expr, self_ref="self._parent") if from_expr is not None else None,
             "is_list": bool(param.get("list", False)) or bool(matched_input and is_list_type_expr(matched_input.get("type"))),
             "has_value_map": False,
             "selectable_values_expr": None,
@@ -768,8 +768,8 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
             "temp_name": f"_{normalize_name(param_name)}_value",
             "temp_list_name": f"_{normalize_name(param_name)}_values",
         }
-        if data_expr is not None:
-            item["kind"] = "data"
+        if from_expr is not None:
+            item["kind"] = "from"
             if isinstance(values, list) and values and all(isinstance(entry, dict) for entry in values):
                 selectable_entries = [entry for entry in values if entry.get("value") is not None]
                 default_entries = [entry for entry in values if entry.get("default")]
@@ -789,7 +789,7 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
                     else:
                         item["value_expr"] = render_simple_value(default_entries[0]["value_in_url"])
             else:
-                item["value_expr"] = render_expr(data_expr, self_ref="self._parent")
+                item["value_expr"] = render_expr(from_expr, self_ref="self._parent")
             result.append(item)
             continue
         if isinstance(values, list) and values and all(isinstance(entry, dict) for entry in values):
@@ -822,7 +822,7 @@ def build_input_allowed_values_map(func: dict[str, Any]) -> dict[str, list[Any]]
     params = url_spec.get("params") or []
     result: dict[str, list[Any]] = {}
     for param in params:
-        source_input_name = ref_input_name(param.get("data"))
+        source_input_name = ref_input_name(param.get("from"))
         if not source_input_name or param.get("revalue") is not None:
             continue
         values = get_plain_value(param.get("values"))

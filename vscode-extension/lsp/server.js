@@ -857,7 +857,16 @@ class MsraLanguageServer {
     if (key === "url" && pathMatches(tablePath, ["app", "warmup"])) {
       return ["DOCUMENT.PREFIXES"];
     }
-    if (key === "data") {
+    if (key === "from" && pathMatches(tablePath, ["app", "variables", "*"])) {
+      return [
+        "UNSTANDARD_HEADERS",
+        "CAPTURED_URLS",
+        "COOKIES",
+        "LOCAL_STORAGE",
+        "SESSION_STORAGE",
+      ];
+    }
+    if (key === "from") {
       if (pathStartsWith(tablePath, ["app", "func", "*", "url", "params"]) || pathStartsWith(tablePath, ["app", "func", "*", "body"])) {
         return [
           "INPUT",
@@ -878,15 +887,6 @@ class MsraLanguageServer {
     }
     if (isFuncResultReferenceContext(tablePath, valuePathSegments)) {
       return EXAMPLE_INPUT_REFERENCE_ROOTS;
-    }
-    if (key === "from" && pathMatches(tablePath, ["app", "variables", "*"])) {
-      return [
-        "UNSTANDARD_HEADERS",
-        "CAPTURED_URLS",
-        "COOKIES",
-        "LOCAL_STORAGE",
-        "SESSION_STORAGE",
-      ];
     }
     return null;
   }

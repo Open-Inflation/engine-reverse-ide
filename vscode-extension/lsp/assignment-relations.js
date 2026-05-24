@@ -231,7 +231,7 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
     }
 
     const boundaryAssignment = getAssignment(assignmentIndex, tablePath, "boundary");
-    const dataAssignment = getAssignment(assignmentIndex, tablePath, "data");
+    const fromAssignment = getAssignment(assignmentIndex, tablePath, "from");
     const hasUrlChild = hasUnquotedChildTable(tableIndex, tablePath, "url");
     const isMultipart = type === "multipart/form-data";
     const isFormEncoded = type === "application/x-www-form-urlencoded";
@@ -260,10 +260,10 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
       );
     }
 
-    if (!isMultipart && !dataAssignment && !(isFormEncoded && hasUrlChild)) {
+    if (!isMultipart && !fromAssignment && !(isFormEncoded && hasUrlChild)) {
       diagnostics.push(
         new Diagnostic(
-          `Body item [${pathLabel(tablePath)}] requires "data" or a nested "url" table when type="${type}".`,
+          `Body item [${pathLabel(tablePath)}] requires "from" or a nested "url" table when type="${type}".`,
           getAssignment(assignmentIndex, tablePath, "type")?.keyRange || table.headerRange,
           "error",
           "msra",
@@ -306,7 +306,7 @@ function validateUrlParamValueRelations(assignmentsByTable) {
 
     const valuesAssignment = assignments.find((assignment) => assignment.key === "values");
     const listAssignment = assignments.find((assignment) => assignment.key === "list");
-    const dataAssignment = assignments.find((assignment) => assignment.key === "data");
+    const fromAssignment = assignments.find((assignment) => assignment.key === "from");
     const revalueAssignment = assignments.find((assignment) => assignment.key === "revalue");
 
     if (
@@ -315,9 +315,9 @@ function validateUrlParamValueRelations(assignmentsByTable) {
       listAssignment &&
       listAssignment.value instanceof BoolExpr &&
       listAssignment.value.value === true &&
-      dataAssignment
+      fromAssignment
     ) {
-      diagnostics.push(...validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAssignment));
+      diagnostics.push(...validateListUrlParamFromRelations(assignmentsByTable, tablePath, fromAssignment));
     }
 
     if (
@@ -326,14 +326,14 @@ function validateUrlParamValueRelations(assignmentsByTable) {
       listAssignment &&
       listAssignment.value instanceof BoolExpr &&
       listAssignment.value.value === true &&
-      dataAssignment &&
+      fromAssignment &&
       !revalueAssignment &&
       !hasSelectableUrlParamValues(valuesAssignment)
     ) {
       diagnostics.push(
         new Diagnostic(
-          `URL parameter [${pathLabel(tablePath)}] with @List and data requires at least one selectable "value" entry in "values"; entries with only default=true are fallback choices and do not count. Use revalue instead if the parameter should accept arbitrary values.`,
-          (valuesAssignment && valuesAssignment.keyRange) || dataAssignment.keyRange,
+          `URL parameter [${pathLabel(tablePath)}] with @List and from requires at least one selectable "value" entry in "values"; entries with only default=true are fallback choices and do not count. Use revalue instead if the parameter should accept arbitrary values.`,
+          (valuesAssignment && valuesAssignment.keyRange) || fromAssignment.keyRange,
           "error",
           "msra",
           "missing-url-param-selectable-value",
@@ -379,62 +379,66 @@ function validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsB
   const diagnostics = [];
   const availableInputsByFunction = collectInputsByFunction(tableIndex);
 
-  for (const assignment of assignmentIndex.values()) {
-    if (!isFunctionExamplesAssignment(assignment)) {
+  for (const table of tableIndex.values()) {
+    if (!isExampleItemTable(table.path || [])) {
       continue;
     }
 
-    const functionPath = assignment.tablePath.slice(0, 3);
+    const functionPath = table.path.slice(0, 3);
     const availableInputs = availableInputsByFunction.get(functionPath[2]) || new Map();
-    if (!(assignment.value instanceof ArrayExpr)) {
+    const inputsAssignment = getTableAssignment(assignmentsByTable, table.path, "inputs");
+    if (!inputsAssignment) {
+      diagnostics.push(
+        new Diagnostic(
+          `Missing required key "inputs" in table [${pathLabel(table.path)}].`,
+          table.headerRange || table.pathRange || null,
+          "error",
+          "msra",
+          "missing-inline-table-key",
+        ),
+      );
       continue;
     }
 
-    for (const item of assignment.value.items) {
-      if (!(item instanceof InlineTableExpr)) {
+    if (!(inputsAssignment.value instanceof InlineTableExpr)) {
+      continue;
+    }
+
+    for (const inputEntry of inputsAssignment.value.items) {
+      if (!availableInputs.has(inputEntry.key)) {
+        diagnostics.push(
+          new Diagnostic(
+            buildMissingExampleInputMessage(functionPath, table.path, inputEntry.key, availableInputs),
+            inputEntry.keyRange,
+            "error",
+            "msra",
+            "missing-example-input",
+          ),
+        );
         continue;
       }
-      const inputsEntry = item.items.find((entry) => entry.key === "inputs");
-      if (!inputsEntry || !(inputsEntry.value instanceof InlineTableExpr)) {
+
+      const typeAssignment = getTableAssignment(assignmentsByTable, [...functionPath, "input", inputEntry.key], "type");
+      const expectedSpec = getExampleInputValueSpec(typeAssignment && typeAssignment.value);
+      if (!expectedSpec) {
         continue;
       }
 
-      for (const inputEntry of inputsEntry.value.items) {
-        if (!availableInputs.has(inputEntry.key)) {
-          diagnostics.push(
-            new Diagnostic(
-              buildMissingExampleInputMessage(functionPath, inputEntry.key, availableInputs),
-              inputEntry.keyRange,
-              "error",
-              "msra",
-              "missing-example-input",
-            ),
-          );
-          continue;
-        }
+      if (isFuncResultReferenceValue(inputEntry.value)) {
+        continue;
+      }
 
-        const typeAssignment = getTableAssignment(assignmentsByTable, [...functionPath, "input", inputEntry.key], "type");
-        const expectedSpec = getExampleInputValueSpec(typeAssignment && typeAssignment.value);
-        if (!expectedSpec) {
-          continue;
-        }
-
-        if (isFuncResultReferenceValue(inputEntry.value)) {
-          continue;
-        }
-
-        const message = validateValueSpec(inputEntry.value, expectedSpec, { range: inputEntry.value.range });
-        if (message) {
-          diagnostics.push(
-            new Diagnostic(
-              `Input "${inputEntry.key}" in table [${pathLabel([...functionPath, "examples"])}] must match the declared type: ${message}.`,
-              inputEntry.value.range || inputEntry.keyRange,
-              "error",
-              "msra",
-              "invalid-example-input-type",
-            ),
-          );
-        }
+      const message = validateValueSpec(inputEntry.value, expectedSpec, { range: inputEntry.value.range });
+      if (message) {
+        diagnostics.push(
+          new Diagnostic(
+            `Input "${inputEntry.key}" in table [${pathLabel(table.path)}] must match the declared type: ${message}.`,
+            inputEntry.value.range || inputEntry.keyRange,
+            "error",
+            "msra",
+            "invalid-example-input-type",
+          ),
+        );
       }
     }
   }
@@ -609,20 +613,18 @@ function collectInputsByFunction(tableIndex) {
   return inputsByFunction;
 }
 
-function isFunctionExamplesAssignment(assignment) {
+function isExampleItemTable(tablePath) {
   return (
-    assignment.key === "examples"
-    && assignment.tablePath.length === 4
-    && assignment.tablePath[0] === "app"
-    && assignment.tablePath[1] === "func"
-    && assignment.tablePath[3] === "examples"
+    tablePath.length === 5
+    && tablePath[0] === "app"
+    && tablePath[1] === "func"
+    && tablePath[3] === "examples"
   );
 }
 
-function buildMissingExampleInputMessage(functionPath, inputName, availableInputs) {
-  const examplesPath = [...functionPath, "examples"];
+function buildMissingExampleInputMessage(functionPath, examplePath, inputName, availableInputs) {
   const functionLabel = pathLabel(functionPath);
-  const exampleLabel = pathLabel(examplesPath);
+  const exampleLabel = pathLabel(examplePath);
   const inputNames = [...availableInputs.keys()].sort();
 
   if (!inputNames.length) {
@@ -711,14 +713,14 @@ function getBareTypeName(value) {
   return null;
 }
 
-function validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAssignment) {
+function validateListUrlParamFromRelations(assignmentsByTable, tablePath, fromAssignment) {
   const diagnostics = [];
   const functionId = currentFunctionId(tablePath);
   if (!functionId) {
     return diagnostics;
   }
 
-  for (const inputRef of collectInputRefs(dataAssignment.value)) {
+  for (const inputRef of collectInputRefs(fromAssignment.value)) {
     const inputName = inputRef.path[1];
     if (!inputName) {
       continue;
@@ -732,7 +734,7 @@ function validateListUrlParamDataRelations(assignmentsByTable, tablePath, dataAs
 
     diagnostics.push(
       new Diagnostic(
-        `URL parameter [${pathLabel(tablePath)}] with @List requires data to reference INPUT.${inputName} as a list type (${pathLabel(inputPath)}).`,
+        `URL parameter [${pathLabel(tablePath)}] with @List requires from to reference INPUT.${inputName} as a list type (${pathLabel(inputPath)}).`,
         inputRef.range,
         "error",
         "msra",

@@ -46,11 +46,11 @@ function pathStartsWith(pathSegments, prefix) {
 }
 
 function isExampleInputsValuePath(tablePath, valuePathSegments) {
-  return pathMatches(tablePath, ["app", "func", "*", "examples"]) && pathStartsWith(valuePathSegments, ["examples", "inputs"]);
+  return pathMatches(tablePath, ["app", "func", "*", "examples", "*"]) && pathStartsWith(valuePathSegments, ["inputs"]);
 }
 
 function isFuncResultReferenceContext(tablePath, valuePathSegments) {
-  return isExampleInputsValuePath(tablePath, valuePathSegments) && normalizePathSegments(valuePathSegments).length >= 3;
+  return isExampleInputsValuePath(tablePath, valuePathSegments) && normalizePathSegments(valuePathSegments).length >= 2;
 }
 
 function parseFuncResultReference(ref, tablePath, valuePathSegments) {
@@ -63,7 +63,7 @@ function parseFuncResultReference(ref, tablePath, valuePathSegments) {
     return {
       valid: false,
       code: "invalid-funcresult-reference",
-      message: 'FUNCRESULT references are only allowed inside [app.func.*.examples.examples] inputs.<key>.value.',
+      message: 'FUNCRESULT references are only allowed inside [app.func.*.examples.<name>] inputs.<key>.value.',
       range: ref.range || null,
     };
   }

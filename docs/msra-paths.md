@@ -27,6 +27,7 @@ app
       ├─ url
       │  └─ params
       ├─ examples
+      │  └─ <name>
       └─ postprocess
 ```
 
