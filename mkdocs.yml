@@ -6,6 +6,7 @@ theme:
 nav:
   - Home: index.md
   - Пути: msra-paths.md
+  - Ограничения генератора: msra-generator-gaps.md
 markdown_extensions:
   - tables
   - admonition
