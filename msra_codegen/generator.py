@@ -217,6 +217,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     table_index: dict[tuple[str, ...], dict[str, Any]] = {
         tuple(table["path"]): table for table in tables
     }
+    examples_by_function: dict[str, list[dict[str, Any]]] = {}
 
     def get_table(path: list[str] | tuple[str, ...]) -> dict[str, Any] | None:
         return table_index.get(tuple(path))
@@ -313,6 +314,17 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     functions: list[dict[str, Any]] = []
     for table in tables:
         path = table["path"]
+        if len(path) == 5 and path[0] == "app" and path[1] == "func" and path[3] == "examples":
+            func_id = path[2]
+            examples_by_function.setdefault(func_id, []).append(
+                {
+                    "name": path[4],
+                    "docs": bool(get_plain_value(get_assignment(table, "docs", False))),
+                    "test": bool(get_plain_value(get_assignment(table, "test", False))),
+                    "inputs": get_assignment(table, "inputs"),
+                }
+            )
+            continue
         if len(path) != 3 or path[0] != "app" or path[1] != "func":
             continue
         func_id = path[2]
@@ -335,6 +347,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
                 "body": None,
                 "headers": None,
                 "extractor": None,
+                "examples": examples_by_function.get(func_id, []),
             }
         )
 
@@ -381,6 +394,9 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
                 "script": get_plain_value(get_assignment(extractor_table, "script", "")),
                 "goto_pipeline": goto_pipeline,
             }
+
+    for func in functions:
+        func["examples"] = examples_by_function.get(func["id"], [])
 
     return {
         "source_path": str(msra_path.resolve()),

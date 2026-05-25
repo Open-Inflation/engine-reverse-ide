@@ -1242,6 +1242,9 @@ test("python codegen generates both bundled msra documents without failing", () 
         encoding: "utf8",
       });
       assert.strictEqual(mergedCheck.status, 0, mergedCheck.stderr || mergedCheck.stdout);
+      const readmeText = readFileSync(path.join(testCase.outputDir, "README.md"), "utf8");
+      assert.match(readmeText, /pip install [a-z0-9_]+/i);
+      assert.match(readmeText, /async with [A-Za-z0-9_]+\(\) as api:/);
       const packageDir = path.join(testCase.outputDir, testCase.packageName);
       const compileResult = spawnSync("python", ["-m", "compileall", "-q", packageDir], {
         cwd: repoRoot,
@@ -1268,6 +1271,10 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(productModule, /from \.goto_pipeline import pipeline as goto_pipeline_runner/);
         assert.match(productModule, /await goto_pipeline_runner\(warmup\)/);
         assert.match(productModule, /extractors\/catalog-product-info\.js/);
+        assert.match(readmeText, /api\.Catalog\.tree\(\)/);
+        assert.match(readmeText, /api\.Catalog\.products_list\(/);
+        assert.match(readmeText, /api\.Geolocation\.cities_list\(/);
+        assert.match(readmeText, /Functions without an `examples` block are omitted/);
       }
       for (const filePath of collectPythonFiles(packageDir)) {
         const source = readFileSync(filePath, "utf8");
