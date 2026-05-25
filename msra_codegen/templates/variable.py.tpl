@@ -1,6 +1,8 @@
     @property
     def {{ name }}(self) -> {{ getter_return }}:
+{% if description %}
         """{{ description }}"""
+{% endif %}
         return self.{{ backing_name }}
 
 {% if setter_enabled %}

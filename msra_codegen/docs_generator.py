@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import textwrap
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,13 @@ def generate_docs_project(
         output_dir / "README.md",
         render_template("README.md.tpl", context),
     )
+    write_text(
+        output_dir / "example.py",
+        render_template("example.py.tpl", context),
+    )
+    stale_examples_dir = output_dir / "examples"
+    if stale_examples_dir.exists():
+        shutil.rmtree(stale_examples_dir)
     write_text(
         docs_root / "requirements.txt",
         render_template("docs/requirements.txt.tpl", context),
@@ -112,6 +120,7 @@ def build_docs_project_context(
     ]
     project_title = str(app["name"] or package_name)
     index_title = f"{project_title} documentation"
+    pipeline_script_code = build_readme_pipeline_code(project, package_name, client_class_name)
     return {
         "title": index_title,
         "title_underline": "=" * len(index_title),
@@ -154,8 +163,9 @@ def build_docs_project_context(
             "requires_camoufox": str(app.get("browser", "")) == "camoufox",
             "top_groups": top_groups,
         },
-        "readme_pipeline_code": build_readme_pipeline_code(project, package_name, client_class_name),
-        "readme_pipeline_note": build_readme_pipeline_note(project),
+        "pipeline_script_code": pipeline_script_code,
+        "pipeline_script_code_rst": textwrap.indent(pipeline_script_code, "    "),
+        "pipeline_note": build_readme_pipeline_note(project),
     }
 
 

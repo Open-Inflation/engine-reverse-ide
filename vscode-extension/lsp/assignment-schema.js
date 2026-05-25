@@ -365,6 +365,7 @@ const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
 const CREDENTIALS_SPEC = enumOf(["omit", "same-origin", "include"]);
 const APP_NAME_SPEC = patternOf(/^\S+$/, "string without spaces");
 const PACKAGE_NAME_SPEC = patternOf(/^[a-z][a-z0-9_]*$/, "lowercase Python package name like fixprice_api");
+const MIN_REQUIRED_PYTHON_SPEC = patternOf(/^\d+\.\d+$/, "minimum required Python version like 3.10");
 const AUTHOR_EMAIL_SPEC = patternOf(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "email address");
 const LICENSE_SPEC = patternOf(/^[A-Za-z0-9][A-Za-z0-9.+-]*$/, "license abbreviation");
 const AUTHOR_ITEM_SPEC = objectShape(
@@ -580,9 +581,11 @@ const TABLE_SCHEMAS = [
     name: APP_NAME_SPEC,
     package_name: PACKAGE_NAME_SPEC,
     authors: arrayOf(AUTHOR_ITEM_SPEC),
+    keywords: arrayOf(STRING),
     description: STRING,
     license: LICENSE_SPEC,
     version: STRINGISH,
+    min_required_python: MIN_REQUIRED_PYTHON_SPEC,
     timeout_ms: integerAtLeast(0),
     browser: BROWSER_SPEC,
     humanize: HUMANIZE_SPEC,

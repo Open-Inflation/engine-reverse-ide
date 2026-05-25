@@ -1,5 +1,3 @@
-"""Generated endpoints for {{ group_name }}."""
-
 from __future__ import annotations
 
 import json
@@ -21,7 +19,9 @@ if TYPE_CHECKING:
 
 
 class {{ class_name }}:
+{% if description %}
     """{{ description }}"""
+{% endif %}
 
     def __init__(self, parent: "{{ root_client_name }}"):
         self._parent = parent

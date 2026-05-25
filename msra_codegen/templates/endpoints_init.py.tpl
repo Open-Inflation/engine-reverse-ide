@@ -1,5 +1,3 @@
-"""Generated endpoint packages."""
-
 {% for group in top_groups %}
 from . import {{ group.package_name }}
 {% endfor %}

@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from functools import lru_cache
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
+
+from packaging.version import Version
 
 try:
     from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -239,6 +242,8 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         "package_name": str(get_plain_value(get_assignment(app_table, "package_name", ""))),
         "authors": get_plain_value(get_assignment(app_table, "authors", [])),
         "license": str(get_plain_value(get_assignment(app_table, "license", "MIT"))),
+        "keywords": get_plain_value(get_assignment(app_table, "keywords", [])),
+        "min_required_python": str(get_plain_value(get_assignment(app_table, "min_required_python", "3.10"))),
         "description": str(get_plain_value(get_assignment(app_table, "description", ""))),
         "version": str(get_plain_value(get_assignment(app_table, "version", "0.1.0"))),
         "timeout_ms": int(get_plain_value(get_assignment(app_table, "timeout_ms", 35000))),
@@ -542,11 +547,15 @@ def generate_project(
 def render_pyproject(project: dict[str, Any], package_name: str) -> str:
     client_class_name = root_client_class_name(project)
     authors = project["app"].get("authors", [])
+    min_required_python = str(project["app"].get("min_required_python", "3.10") or "3.10").strip()
     return render_template(
         "pyproject.toml.tpl",
         {
             "authors_block": render_authors_block(authors),
             "license": project["app"].get("license", "MIT"),
+            "keywords_block": render_keywords_block(project["app"].get("keywords", [])),
+            "classifiers_block": render_classifiers_block(min_required_python),
+            "requires_python": f">={min_required_python}",
             "package_name": package_name,
             "autotest_start_class": f"{package_name}.{client_class_name}",
         },
@@ -567,6 +576,108 @@ def render_authors_block(authors: Any) -> str:
     if not items:
         return "authors = []"
     return "authors = [\n" + ",\n".join(items) + "\n]"
+
+
+def render_keywords_block(keywords: Any) -> str:
+    return render_toml_string_list("keywords", keywords)
+
+
+PYTHON_RELEASES_API_URL = "https://www.python.org/api/v2/downloads/release/"
+PYTHON_RELEASES_API_TIMEOUT_SECONDS = 15.0
+
+
+@lru_cache(maxsize=1)
+def latest_supported_python_minor() -> int:
+    families = load_python_release_families()
+    if len(families) < 2:
+        raise RuntimeError(
+            "Could not determine the penultimate Python 3 minor family from the python.org releases API."
+        )
+    return families[1][1]
+
+
+def load_python_release_families() -> list[tuple[int, int]]:
+    try:
+        with urlopen(PYTHON_RELEASES_API_URL, timeout=PYTHON_RELEASES_API_TIMEOUT_SECONDS) as response:
+            data = json.load(response)
+    except OSError as exc:  # pragma: no cover - depends on network availability
+        raise RuntimeError(
+            "Failed to load python.org releases API."
+        ) from exc
+    if not isinstance(data, list):
+        raise RuntimeError("Unexpected response format from python.org releases API.")
+
+    families = {
+        (version.major, version.minor)
+        for version in extract_python_release_versions(data)
+    }
+    return sorted(families, reverse=True)
+
+
+def extract_python_release_versions(data: Any) -> list[Version]:
+    versions: list[Version] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", ""))
+        if not name.startswith("Python "):
+            continue
+        raw_version = name.removeprefix("Python ").strip()
+        try:
+            version = Version(raw_version)
+        except Exception:
+            continue
+        if version.major != 3:
+            continue
+        if version.is_prerelease or version.is_devrelease:
+            continue
+        versions.append(version)
+    return versions
+
+
+def render_classifiers_block(min_required_python: str) -> str:
+    match = re.fullmatch(r"(\d+)\.(\d+)", min_required_python.strip())
+    if not match:
+        version_labels = [f"Programming Language :: Python :: {min_required_python.strip()}"]
+    else:
+        major = int(match.group(1))
+        start_minor = int(match.group(2))
+        version_labels = [f"Programming Language :: Python :: {major}"]
+        if major == 3:
+            end_minor = max(start_minor, latest_supported_python_minor())
+            version_labels.extend(
+                f"Programming Language :: Python :: 3.{minor}"
+                for minor in range(start_minor, end_minor + 1)
+            )
+        else:
+            version_labels.append(f"Programming Language :: Python :: {major}.{start_minor}")
+    version_labels.extend(
+        [
+            "Operating System :: Microsoft :: Windows",
+            "Operating System :: POSIX :: Linux",
+            "Intended Audience :: Developers",
+            "Intended Audience :: Information Technology",
+            "Topic :: Software Development :: Libraries :: Python Modules",
+            "Topic :: Internet",
+            "Topic :: Utilities",
+        ]
+    )
+    return render_toml_string_list("classifiers", version_labels)
+
+
+def render_toml_string_list(key: str, values: Any) -> str:
+    items: list[str] = []
+    if isinstance(values, list):
+        for value in values:
+            text = str(value).strip()
+            if not text:
+                continue
+            items.append(json.dumps(text))
+    if not items:
+        return f"{key} = []"
+    if len(items) == 1:
+        return f"{key} = [{items[0]}]"
+    return f"{key} = [\n    " + ",\n    ".join(items) + "\n]"
 
 
 def write_root_license(output_dir: Path, project: dict[str, Any]) -> None:
@@ -677,7 +788,7 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
     has_null = nullable or "null" in type_names or (match_values is not None and any(value is None for value in match_values))
     return {
         "name": variable["name"],
-        "description": escape_docstring(variable["description"] or variable["name"]),
+        "description": escape_docstring(variable["description"]) if variable["description"] else "",
         "backing_name": f"_{variable['name']}",
         "capture_expr": render_expr(variable.get("from"), self_ref="self"),
         "capture_kind": primary_type_name(non_null_type_names) or "string",
@@ -811,16 +922,9 @@ def build_function_context(
         url_input = next((input_spec["name"] for input_spec in inputs if input_spec["name"] == "url"), None)
         if url_input:
             url_expr = url_input
-    direct_args: list[str] = []
-    if any(input_spec["name"] == "retry_attempts" for input_spec in inputs):
-        direct_args.append("retry_attempts=retry_attempts")
-    if any(input_spec["name"] == "timeout" for input_spec in inputs):
-        direct_args.append("timeout=timeout")
-    if not direct_args:
-        direct_args = ["retry_attempts=3", "timeout=10"]
     return {
         "method_name": method_name,
-        "description": escape_docstring(func.get("description") or method_name),
+        "description": escape_docstring(func.get("description")) if func.get("description") else "",
         "signature": ", ".join(signature_parts),
         "signature_specs": signature_specs,
         "return_annotation": render_return_annotation(func),
@@ -837,7 +941,6 @@ def build_function_context(
         "body_type": body.get("type") if body else None,
         "validation": build_input_validation_context({"inputs": inputs}),
         "query_params": build_query_param_context(func),
-        "direct_args": direct_args,
         "extractor": {
             "render_html": bool(extractor.get("render_html", False)),
             "script_path_expr": (
@@ -1017,7 +1120,7 @@ def build_manager_context(
     return {
         "client_class_name": root_client_class_name(project),
         "app": app,
-        "app_name_doc": escape_docstring(app["name"]),
+        "app_description": escape_docstring(app["description"]) if app.get("description") else "",
         "package_name": package_name,
         "prefixes": [
             {
@@ -1032,7 +1135,7 @@ def build_manager_context(
                 "field_name": field_name_for_group(group["path"]),
                 "class_name": class_name_for_group(group["path"]),
                 "module_name": module_import_name_for_group(group),
-                "description": escape_docstring(group.get("description") or group["name"]),
+                "description": escape_docstring(group.get("description")) if group.get("description") else "",
             }
             for group in top_groups
         ],
@@ -1077,15 +1180,12 @@ def build_group_context(
         "class_name": class_name_for_group(group_node["path"]),
         "module_name": module_file_name_for_group(group_node["path"]),
         "module_stem": module_file_name_for_group(group_node["path"])[:-3],
-        "description": escape_docstring(group_node.get("description") or "Generated API group."),
+        "description": escape_docstring(group_node.get("description")) if group_node.get("description") else "",
         "child_imports": [
             {
                 "package_name": module_import_name_for_group(child),
                 "class_name": class_name_for_group(child["path"]),
-                "description": escape_docstring(
-                    child.get("description")
-                    or class_name_for_group(child["path"])
-                ),
+                "description": escape_docstring(child.get("description")) if child.get("description") else "",
             }
             for child in child_nodes
         ],
@@ -1093,10 +1193,7 @@ def build_group_context(
             {
                 "field_name": field_name_for_group(child["path"]),
                 "class_name": class_name_for_group(child["path"]),
-                "description": escape_docstring(
-                    child.get("description")
-                    or class_name_for_group(child["path"])
-                ),
+                "description": escape_docstring(child.get("description")) if child.get("description") else "",
             }
             for child in child_nodes
         ],

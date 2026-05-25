@@ -9,6 +9,8 @@
 | `authors` | Список авторов | Попадает в package metadata. Каждый элемент содержит `name` и `email`. |
 | `description` | Краткое описание проекта | Используется в документации и в метаданных сгенерированного пакета. |
 | `license` | Идентификатор лицензии | Попадает в package metadata и в корневой `LICENSE` сгенерированного проекта. |
+| `keywords` | Список ключевых слов | Попадает в `project.keywords` в `pyproject.toml` и помогает классифицировать пакет на PyPI. |
+| `min_required_python` | Минимально поддерживаемая версия Python | Попадает в `requires-python` и используется для генерации Python version classifiers в `pyproject.toml`. Верхняя граница classifiers определяется по официальному `python.org/api/v2/downloads/release/`: генератор берёт предпоследний стабильный `3.x` family и включает его полностью. |
 | `version` | Версия клиента или API-контракта | Копируется в generated package и используется как версия артефакта. Значение должно быть статическим. |
 | `timeout_ms` | Глобальный таймаут по умолчанию | Становится базовым лимитом для runtime-операций и используется, если локальный блок не переопределяет timeout. |
 | `browser` | Браузер по умолчанию | Определяет, какой движок запустит runtime для warmup и browser-backed функций. Если не указан, runtime использует `camoufox` по умолчанию. |
@@ -40,6 +42,8 @@
 - Если значение не задано, runtime и generated client используют `camoufox` как дефолтный режим.
 - `package_name` задаёт имя generated Python-пакета; generator больше не пытается выводить его из `name`.
 - `license` используется и для `pyproject.toml`, и для корневого `LICENSE` в сгенерированном проекте, как делает GitHub для репозиториев с лицензией.
+- `keywords` попадает в `project.keywords` без дополнительной трансформации.
+- `min_required_python` задаёт нижнюю границу `requires-python`; generator также расширяет его в Python version classifiers, поднимая верхнюю границу по официальному `python.org/api/v2/downloads/release/` и беря предпоследний стабильный `3.x` family как включительный предел.
 - Для `MIT` generator подставляет текущий год и список copyright holders из `authors` в стандартный шаблон.
 
 ## Аннотации

@@ -1,6 +1,8 @@
     @autotest
     async def {{ method_name }}(self{% if signature %}, {{ signature }}{% endif %}) -> {{ return_annotation }}:
+{% if description %}
         """{{ description }}"""
+{% endif %}
 {% for item in validation %}
 {% if item.has_checks %}
 {% if item.required %}
@@ -188,7 +190,7 @@
             request_url += "?" + urlencode(query_params, doseq=True)
 
 {% if transport == "direct" %}
-        return await self._parent._direct_request(request_url, {{ direct_args | join(", ") }})
+        return await self._parent._direct_request(request_url)
 {% elif transport == "goto" %}
         page = await self._parent.ctx.new_page()
 {% set has_goto_pipeline = extractor.goto_pipeline_module is not none and extractor.goto_pipeline_function is not none %}

@@ -6,9 +6,11 @@ name="FixPriceAPI"
 package_name="fixprice_api"
 version="0.2.4.1"
 authors=[
-    {name="Miskler", email="mail@miskler.ru"}
+    {name="Miskler", email="mail@miskler.ru"},
 ]
 license="MIT"
+keywords=["fixprice", "api", "browser", "catalog"]
+min_required_python="3.10"
 timeout_ms=35000
 browser=camoufox
 @Humanize

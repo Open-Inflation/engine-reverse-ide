@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
-const { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } = require("node:fs");
+const { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
@@ -19,6 +19,119 @@ function collectPythonFiles(dir) {
     }
   }
   return files;
+}
+
+function normalizeNewlines(text) {
+  return text.replace(/\r\n/g, "\n");
+}
+
+function extractMarkdownCodeFence(text, language = "py") {
+  const normalized = normalizeNewlines(text);
+  const startToken = `\`\`\`${language}\n`;
+  const start = normalized.indexOf(startToken);
+  if (start === -1) {
+    return null;
+  }
+  const end = normalized.indexOf("\n```", start + startToken.length);
+  if (end === -1) {
+    return null;
+  }
+  return normalized.slice(start + startToken.length, end);
+}
+
+function extractRstPythonCodeBlock(text) {
+  const lines = normalizeNewlines(text).split("\n");
+  const markerIndex = lines.findIndex((line) => line.trim() === ".. code-block:: python");
+  if (markerIndex === -1) {
+    return null;
+  }
+  let index = markerIndex + 1;
+  while (index < lines.length && lines[index].trim() === "") {
+    index += 1;
+  }
+  const block = [];
+  for (; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.startsWith("    ")) {
+      block.push(line.slice(4));
+      continue;
+    }
+    if (line.trim() === "") {
+      const nextLine = lines[index + 1];
+      if (nextLine != null && nextLine.startsWith("    ")) {
+        block.push("");
+        continue;
+      }
+    }
+    break;
+  }
+  return block.join("\n");
+}
+
+function createPythonReleasesApiFixture(workDir) {
+  const fixtureDir = path.join(workDir, "python-releases-fixture");
+  mkdirSync(fixtureDir, { recursive: true });
+  const fixturePath = path.join(fixtureDir, "python-releases.json");
+  const fixtureJson = [
+    { name: "Python 3.14.5" },
+    { name: "Python 3.14.4" },
+    { name: "Python 3.13.13" },
+    { name: "Python 3.13.12" },
+    { name: "Python 3.12.13" },
+    { name: "Python 3.15.0a1" },
+    { name: "Python 2.7.18" },
+  ];
+  writeFileSync(fixturePath, JSON.stringify(fixtureJson, null, 2), "utf8");
+  const sitecustomizePath = path.join(fixtureDir, "sitecustomize.py");
+  const sitecustomizeText = [
+    "from __future__ import annotations",
+    "",
+    "from pathlib import Path",
+    "from urllib.request import Request, urlopen as _urlopen",
+    "",
+    'TARGET_URL = "https://www.python.org/api/v2/downloads/release/"',
+    'FIXTURE_PATH = Path(__file__).with_name("python-releases.json")',
+    "",
+    "class _FixtureResponse:",
+    "    def __init__(self, text: str):",
+    "        self._data = text.encode(\"utf-8\")",
+    "",
+    "    def read(self):",
+    "        return self._data",
+    "",
+    "    def __enter__(self):",
+    "        return self",
+    "",
+    "    def __exit__(self, exc_type, exc, tb):",
+    "        return False",
+    "",
+    "def _patched_urlopen(url, *args, **kwargs):",
+    "    target = url.full_url if isinstance(url, Request) else str(url)",
+    "    if target == TARGET_URL:",
+    "        return _FixtureResponse(FIXTURE_PATH.read_text(encoding=\"utf-8\"))",
+    "    return _urlopen(url, *args, **kwargs)",
+    "",
+    "import urllib.request",
+    "urllib.request.urlopen = _patched_urlopen",
+    "",
+  ].join("\n");
+  writeFileSync(sitecustomizePath, sitecustomizeText, "utf8");
+  return fixtureDir;
+}
+
+function buildCodegenPythonPath(pythonReleasesFixtureDir) {
+  return {
+    ...process.env,
+    PYTHONPATH: pythonReleasesFixtureDir + (process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : ""),
+  };
+}
+
+function seedStaleOutput(outputDir) {
+  mkdirSync(outputDir, { recursive: true });
+  writeFileSync(path.join(outputDir, "stale.txt"), "stale", "utf8");
+  const nestedDir = path.join(outputDir, "legacy", "nested");
+  mkdirSync(nestedDir, { recursive: true });
+  writeFileSync(path.join(nestedDir, "old.py"), "print('old')\n", "utf8");
 }
 
 function createMultiFileFixture({ invalidPrefix = false } = {}) {
@@ -59,6 +172,7 @@ test("generator wires external warmup scripts into the manager", () => {
   const inputPath = path.join(workDir, "warmup.msra");
   const outputDir = path.join(workDir, "generated");
   const packageName = "test_pkg";
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
   const text = [
     "[app]",
     'name="PipelineApp"',
@@ -89,6 +203,7 @@ test("generator wires external warmup scripts into the manager", () => {
     );
     const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
       cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
     });
     assert.strictEqual(result.status, 0, result.stderr || result.stdout);
@@ -116,6 +231,7 @@ test("python codegen generates both bundled msra documents without failing", () 
   const repoRoot = path.resolve(__dirname, "..");
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-codegen-"));
   const currentYear = new Date().getFullYear();
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
   const cases = [
     {
       inputPath: path.join(repoRoot, "examples", "example.msra"),
@@ -161,27 +277,57 @@ test("python codegen generates both bundled msra documents without failing", () 
 
   try {
     for (const testCase of cases) {
+      seedStaleOutput(testCase.outputDir);
       const result = spawnSync(
         "python",
         ["-m", "msra_codegen", testCase.inputPath, "-o", testCase.outputDir],
         {
           cwd: repoRoot,
+          env: buildCodegenPythonPath(pythonReleasesFixturePath),
           encoding: "utf8",
         },
       );
       assert.strictEqual(result.status, 0, result.stderr || result.stdout);
-      const mergedCheck = spawnSync("node", [path.join(repoRoot, "bin", "msra.js"), "check", path.join(testCase.outputDir, "merged.msra")], {
-        cwd: repoRoot,
-        encoding: "utf8",
-      });
-      assert.strictEqual(mergedCheck.status, 0, mergedCheck.stderr || mergedCheck.stdout);
       const readmeText = readFileSync(path.join(testCase.outputDir, "README.md"), "utf8");
+      const exampleText = readFileSync(path.join(testCase.outputDir, "example.py"), "utf8");
+      const quickStartText = readFileSync(path.join(testCase.outputDir, "docs", "source", "quick_start.rst"), "utf8");
       const pyprojectText = readFileSync(path.join(testCase.outputDir, "pyproject.toml"), "utf8");
       const licenseText = readFileSync(path.join(testCase.outputDir, "LICENSE"), "utf8");
+      const readmePipelineCode = extractMarkdownCodeFence(readmeText);
+      const quickStartPipelineCode = extractRstPythonCodeBlock(quickStartText);
       assert.match(readmeText, /pip install [a-z0-9_]+/i);
-      assert.match(readmeText, /async with [A-Za-z0-9_]+\(\) as api:/);
+      assert.match(readmeText, /Use `example\.py` for the runnable example/);
+      assert.match(readmeText, /The same code is duplicated below and reused in the Sphinx quick start/);
+      assert.match(readmeText, /```py[\s\S]*async def main\(\):/);
+      assert.doesNotMatch(readmeText, /examples\/pipeline\.py/);
+      assert.ok(readmePipelineCode, "expected README to contain a python code block");
+      assert.ok(quickStartPipelineCode, "expected quick_start.rst to contain a python code block");
+      assert.strictEqual(normalizeNewlines(readmePipelineCode).trimEnd(), normalizeNewlines(exampleText).trimEnd());
+      assert.strictEqual(normalizeNewlines(quickStartPipelineCode).trimEnd(), normalizeNewlines(exampleText).trimEnd());
+      assert.match(quickStartText, /.. code-block:: python[\s\S]*async def main\(\):/);
+      assert.match(exampleText, /async def main\(\):/);
+      assert.match(exampleText, /async with [A-Za-z0-9_]+\(\) as api:/);
+      assert.doesNotMatch(exampleText, /\bpass\b/);
+      assert.ok(!existsSync(path.join(testCase.outputDir, "merged.msra")), "expected merged.msra to be cleaned up by default");
+      assert.ok(!existsSync(path.join(testCase.outputDir, "stale.txt")), "expected stale root files to be removed by default");
+      assert.ok(!existsSync(path.join(testCase.outputDir, "legacy")), "expected stale nested directories to be removed by default");
+      assert.ok(!existsSync(path.join(testCase.outputDir, "examples")), "expected no separate examples/pipeline.py output directory");
       assert.match(pyprojectText, new RegExp(`^name = "${testCase.packageName}"$`, "m"));
+      assert.match(pyprojectText, /^requires-python = ">=3\.10"$/m);
       assert.ok(pyprojectText.includes(`license = "${testCase.license}"`));
+      assert.match(pyprojectText, /^keywords = \[/m);
+      assert.match(pyprojectText, /^classifiers = \[/m);
+      assert.match(pyprojectText, /Programming Language :: Python :: 3/);
+      assert.match(pyprojectText, /Programming Language :: Python :: 3\.10/);
+      assert.match(pyprojectText, /Programming Language :: Python :: 3\.13/);
+      assert.doesNotMatch(pyprojectText, /Programming Language :: Python :: 3\.14/);
+      assert.match(pyprojectText, /Operating System :: Microsoft :: Windows/);
+      assert.match(pyprojectText, /Topic :: Utilities/);
+      if (testCase.packageName === "fixprice_api") {
+        assert.match(pyprojectText, /keywords = \[\r?\n\s*"fixprice",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
+      } else {
+        assert.match(pyprojectText, /keywords = \[\r?\n\s*"ozon",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
+      }
       if (testCase.license === "MIT") {
         assert.match(licenseText, /MIT License/);
         assert.match(licenseText, new RegExp(`^Copyright \\(c\\) ${currentYear} `, "m"));
@@ -211,20 +357,33 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(productModule, /if _url_values in \(None, \[\]\):/);
         assert.match(productModule, /query_params\.append\(\('url', ','.join\(str\(__item\) for __item in _url_values\)\)\)/);
         assert.match(productModule, /query_params\.append\(\('from_global', 'true'\)\)/);
+        assert.match(readmeText, /Пример поиска по одному запросу/);
+        assert.match(readmeText, /feed = \(await api\.Catalog\.Product\.feed\(query='example'\)\)\.json\(\)/);
       } else if (testCase.packageName === "delimited_api") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
         assert.match(productModule, /query_params\.append\(\('url', '\|'\.join\(str\(__item\) for __item in _url_values\)\)\)/);
       } else if (testCase.packageName === "fixprice_api") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
+        const generalModule = readFileSync(path.join(packageDir, "endpoints", "general.py"), "utf8");
+        const managerModule = readFileSync(path.join(packageDir, "manager.py"), "utf8");
+        const regexesModule = readFileSync(path.join(packageDir, "abstraction", "regexes.py"), "utf8");
+        const catalogSortModule = readFileSync(path.join(packageDir, "abstraction", "catalog_sort.py"), "utf8");
         assert.match(productModule, /from \.goto_pipeline import pipeline as goto_pipeline_runner/);
         assert.match(productModule, /await goto_pipeline_runner\(warmup\)/);
         assert.match(productModule, /extractors\/catalog-product-info\.js/);
-        assert.match(readmeText, /python -m camoufox fetch/);
+        assert.match(generalModule, /async def download_image\(self, url: str\) -> abstraction\.Output:/);
+        assert.match(generalModule, /return await self\._parent\._direct_request\(request_url\)/);
+        assert.doesNotMatch(generalModule, /retry_attempts/);
+        assert.doesNotMatch(generalModule, /timeout/);
+        assert.match(exampleText, /Получаем дерево категорий/);
+        assert.match(exampleText, /Загрузка изображения по прямой ссылке/);
+        assert.match(exampleText, /Image\.open\(image_stream\)/);
         assert.match(readmeText, /Получаем дерево категорий/);
-        assert.match(readmeText, /Список товаров в выбранной категории/);
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
         assert.match(readmeText, /Image\.open\(image_stream\)/);
-        assert.doesNotMatch(readmeText, /Current city_id|api\.city_id =/);
+        assert.doesNotMatch(managerModule, /Async client generated from MSRA|Generated async client/);
+        assert.doesNotMatch(regexesModule, /Shared regex patterns and their validation messages/);
+        assert.doesNotMatch(catalogSortModule, /Generated sort helpers|Sort order helper|Most popular first|Cheapest first|Most expensive first/);
         assert.match(pyprojectText, /email = "mail@miskler\.ru"/);
       }
       for (const filePath of collectPythonFiles(packageDir)) {
@@ -261,6 +420,7 @@ test("readme pipeline uses example type=image instead of function name", () => {
   const inputPath = path.join(workDir, "image.msra");
   const outputDir = path.join(workDir, "generated");
   const packageName = "image_api";
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
   const text = [
     "[app]",
     'name="ImageAPI"',
@@ -295,16 +455,28 @@ test("readme pipeline uses example type=image instead of function name", () => {
     writeFileSync(inputPath, text, "utf8");
     const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
       cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
     });
     assert.strictEqual(result.status, 0, result.stderr || result.stdout);
 
+    const exampleText = readFileSync(path.join(outputDir, "example.py"), "utf8");
     const readmeText = readFileSync(path.join(outputDir, "README.md"), "utf8");
+    const quickStartText = readFileSync(path.join(outputDir, "docs", "source", "quick_start.rst"), "utf8");
+    assert.match(exampleText, /from PIL import Image/);
+    assert.match(exampleText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
+    assert.match(exampleText, /image_stream = await api\.General\.fetch_asset\(image_url\)/);
+    assert.match(exampleText, /with Image\.open\(image_stream\) as img:/);
     assert.match(readmeText, /from PIL import Image/);
     assert.match(readmeText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
     assert.match(readmeText, /image_stream = await api\.General\.fetch_asset\(image_url\)/);
     assert.match(readmeText, /with Image\.open\(image_stream\) as img:/);
-    assert.doesNotMatch(readmeText, /download_image/);
+    assert.match(quickStartText, /from PIL import Image/);
+    assert.match(quickStartText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
+    assert.match(quickStartText, /image_stream = await api\.General\.fetch_asset\(image_url\)/);
+    assert.match(quickStartText, /with Image\.open\(image_stream\) as img:/);
+    assert.ok(!existsSync(path.join(outputDir, "merged.msra")), "expected merged.msra to be cleaned up by default");
+    assert.ok(!existsSync(path.join(outputDir, "examples")), "expected no separate examples/pipeline.py output directory");
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -314,11 +486,17 @@ test("generator writes a merged intermediate msra file", () => {
   const repoRoot = path.resolve(__dirname, "..");
   const fixture = createMultiFileFixture();
   const outputDir = path.join(fixture.tmpDir, "generated");
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(fixture.tmpDir);
   try {
-    const result = spawnSync("python", ["-m", "msra_codegen.cli", fixture.parentPath, "-o", outputDir], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    });
+    const result = spawnSync(
+      "python",
+      ["-m", "msra_codegen.cli", fixture.parentPath, "-o", outputDir, "--no-cleanup"],
+      {
+        cwd: repoRoot,
+        env: buildCodegenPythonPath(pythonReleasesFixturePath),
+        encoding: "utf8",
+      },
+    );
 
     assert.strictEqual(result.status, 0, result.stderr || result.stdout);
     const mergedPath = path.join(outputDir, "merged.msra");

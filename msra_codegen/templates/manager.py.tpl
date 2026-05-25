@@ -1,5 +1,3 @@
-"""Async client generated from MSRA."""
-
 from collections import defaultdict
 from dataclasses import dataclass
 import re
@@ -32,7 +30,9 @@ class Warmup:
 
 
 class {{ client_class_name }}:
-    """Generated async client for {{ app_name_doc }}."""
+{% if app_description %}
+    """{{ app_description }}"""
+{% endif %}
 
     def __init__(
         self,
@@ -42,7 +42,6 @@ class {{ client_class_name }}:
         proxy: str | dict | Proxy | None = None,
         browser_opts: dict[str, Any] | None = None,
     ):
-        """Generated async client for {{ app_name_doc }}."""
         self.timeout_ms = timeout_ms
         self.headless = headless
         self.test_mode = test_mode
@@ -68,7 +67,6 @@ class {{ client_class_name }}:
         return self
 
     async def _warmup(self) -> None:
-        """Warm up the browser session and capture anti-bot headers."""
         px = self.proxy if isinstance(self.proxy, Proxy) else Proxy(self.proxy)
         br = await AsyncCamoufox(
             headless=self.headless,
@@ -217,7 +215,6 @@ class {{ client_class_name }}:
         referrer: str | None = None,
         headers: dict[str, Any] | None = None,
     ) -> abstraction.Output:
-        """Perform an HTTP request through the browser session."""
         request_headers = headers if headers is not None else {{ request.headers_expr }}
         response = await self.page.fetch(
             url=url,
@@ -238,7 +235,6 @@ class {{ client_class_name }}:
         retry_attempts: int = 3,
         timeout: float = 10,
     ) -> abstraction.Output:
-        """Download raw bytes with retries, used by direct transport functions."""
         start_t = perf_counter()
         retry_options = ExponentialRetry(
             attempts=retry_attempts, start_timeout=3.0, max_timeout=timeout

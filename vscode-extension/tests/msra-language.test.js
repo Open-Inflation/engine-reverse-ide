@@ -175,6 +175,8 @@ test("app metadata accepts authors description and license", () => {
     'authors=[{name="Miskler", email="miskler@gmail.com"}, {name="Another Author", email="author@example.com"}]',
     'description="Ozon API integration for catalog browsing and cart flows"',
     'license="GPL-3.0-or-later"',
+    'keywords=["ozon", "api", "browser", "catalog"]',
+    'min_required_python="3.10"',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///app-metadata.msra");
@@ -188,17 +190,21 @@ test("app metadata rejects malformed authors and license values", () => {
     "[app]",
     'authors=[{name="Miskler"}]',
     'license="GNU General Public License"',
+    'min_required_python="3.x"',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-app-metadata.msra");
   const analysis = analyzeDocument(document);
   const missingEmail = analysis.diagnostics.find((item) => item.code === "missing-inline-table-key");
   const invalidLicense = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+  const invalidPython = analysis.diagnostics.filter((item) => item.code === "invalid-assignment-value-type").find((item) => /minimum required Python version/.test(item.message));
 
   assert.ok(missingEmail, "expected authors entries to require an email");
   assert.match(missingEmail.message, /email/);
   assert.ok(invalidLicense, "expected app.license to require a short license identifier");
   assert.match(invalidLicense.message, /license abbreviation/);
+  assert.ok(invalidPython, "expected min_required_python to require a dotted version string");
+  assert.match(invalidPython.message, /3\.10/);
 });
 
 test("version and name cannot be dynamic", () => {

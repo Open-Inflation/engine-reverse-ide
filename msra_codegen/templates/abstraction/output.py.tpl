@@ -1,5 +1,3 @@
-"""Unified response wrapper generated from MSRA."""
-
 from __future__ import annotations
 
 import json
@@ -144,8 +142,6 @@ def _wrap_awaitable(value: Any) -> Any:
 
 @dataclass
 class Output:
-    """Unified response-like object for generated clients."""
-
     raw: bytes = field(repr=False)
     headers: dict[str, str] = field(default_factory=dict)
     url: str | None = None

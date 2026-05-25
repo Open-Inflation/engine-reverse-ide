@@ -1,5 +1,3 @@
-"""Shared generated constants and enums."""
-
 from .output import Output
 {% if has_regexes %}
 {% for regex in regexes %}

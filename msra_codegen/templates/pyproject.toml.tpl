@@ -7,9 +7,11 @@ name = "{{ package_name }}"
 dynamic = ["version"]
 description = "Generated async Python client from MSRA"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = "{{ requires_python }}"
 license = "{{ license }}"
 {{ authors_block }}
+{{ keywords_block }}
+{{ classifiers_block }}
 dependencies = [
     "camoufox[geoip]",
     "human_requests",

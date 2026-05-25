@@ -13,28 +13,10 @@ python -m camoufox fetch
 {% endif %}
 ```
 
-Import the client:
+Use `example.py` for the runnable example. The same code is duplicated below and reused in the Sphinx quick start.
 
 ```py
-import asyncio
-from {{ package_name }} import {{ client_class_name }}{% if quick_start.has_catalog_sort %}, CatalogSort{% endif %}
-
-async def main():
-    async with {{ client_class_name }}() as api:
-        pass
-
-if __name__ == "__main__":
-    asyncio.run(main())
+{{ pipeline_script_code }}
 ```
 
-## Usage
-
-```py
-{{ readme_pipeline_code }}
-```
-
-{% if readme_pipeline_note %}
-{{ readme_pipeline_note }}
-{% endif %}
-
-For more detailed information, see the generated docs in `docs/`.
+The generated docs are available in `docs/`.

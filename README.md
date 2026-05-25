@@ -62,6 +62,8 @@ This repo also includes a Python generator that turns an `.msra` document into a
 python -m msra_codegen .\examples\fixprice\fixprice.msra -o .\generated
 ```
 
+Use `--no-cleanup` if you want to keep the intermediate `merged.msra` file and preserve any existing files in the target directory.
+
 The generator uses Jinja2 templates, so install its Python dependency first if your environment does not already have it:
 
 ```powershell
@@ -83,6 +85,7 @@ The generator writes:
 - `docs/source/api.rst`
 - `docs/source/<package-name>.rst`
 - `docs/source/_api/*.rst`
+- `merged.msra` is written as a temporary intermediate file and is removed by default after generation.
 
 To build the generated docs locally:
 

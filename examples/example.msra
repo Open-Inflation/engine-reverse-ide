@@ -10,6 +10,8 @@ authors=[
 ]
 description="Ozon API integration for catalog browsing and cart flows"
 license="GPL-3.0-or-later"
+keywords=["ozon", "api", "browser", "catalog"]
+min_required_python="3.10"
 version="0.0.1"
 timeout_ms=35000
 browser=camoufox # доступно chromium, firefox, webkit, camoufox

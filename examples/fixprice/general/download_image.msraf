@@ -5,24 +5,12 @@ name="download_image"
 method=GET
 transport=direct
 group=<GROUPS.General>
-description="Direct HTTP retry helper for images; bypasses the browser request pipeline and returns Output with .image()."
+description="Direct image download helper; bypasses the browser request pipeline and returns Output with .image()."
 
 [GENERAL_DOWNLOAD_IMAGE.input.url]
 type=string
 @Required
 description="Direct image URL."
-
-[GENERAL_DOWNLOAD_IMAGE.input.retry_attempts]
-type=integer
-default=3
-match={from=1, to=2147483647}
-description="Retry attempts for the direct HTTP client."
-
-[GENERAL_DOWNLOAD_IMAGE.input.timeout]
-type=integer
-default=10
-match={from=1, to=2147483647}
-description="Timeout in seconds; the Python code accepts float seconds, but the public contract keeps integer seconds."
 
 [GENERAL_DOWNLOAD_IMAGE.examples.snapshot]
 @Test

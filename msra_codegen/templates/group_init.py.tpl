@@ -1,5 +1,3 @@
-"""{{ group_name }} endpoint package."""
-
 from . import {{ module_stem }}
 from .{{ module_stem }} import {{ class_name }}
 {% for child in child_imports %}
