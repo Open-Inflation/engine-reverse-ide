@@ -375,10 +375,10 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(generalModule, /return await self\._parent\._direct_request\(request_url\)/);
         assert.doesNotMatch(generalModule, /retry_attempts/);
         assert.doesNotMatch(generalModule, /timeout/);
-        assert.match(exampleText, /# 1\. tree/);
+        assert.doesNotMatch(exampleText, /^\s*# tree$/m);
         assert.match(exampleText, /Загрузка изображения по прямой ссылке/);
         assert.match(exampleText, /Image\.open\(download_image\)/);
-        assert.match(readmeText, /# 1\. tree/);
+        assert.doesNotMatch(readmeText, /^\s*# tree$/m);
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
         assert.match(readmeText, /Image\.open\(download_image\)/);
         assert.doesNotMatch(managerModule, /Async client generated from MSRA|Generated async client/);
@@ -467,18 +467,15 @@ test("readme pipeline uses example type=image instead of function name", () => {
     const exampleText = readFileSync(path.join(outputDir, "example.py"), "utf8");
     const readmeText = readFileSync(path.join(outputDir, "README.md"), "utf8");
     const quickStartText = readFileSync(path.join(outputDir, "docs", "source", "quick_start.rst"), "utf8");
-    assert.match(exampleText, /from PIL import Image/);
-    assert.match(exampleText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
-    assert.match(exampleText, /snapshot = await api\.General\.fetch_asset\(image_url\)/);
-    assert.match(exampleText, /with Image\.open\(snapshot\) as img:/);
-    assert.match(readmeText, /from PIL import Image/);
-    assert.match(readmeText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
-    assert.match(readmeText, /snapshot = await api\.General\.fetch_asset\(image_url\)/);
-    assert.match(readmeText, /with Image\.open\(snapshot\) as img:/);
-    assert.match(quickStartText, /from PIL import Image/);
-    assert.match(quickStartText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
-    assert.match(quickStartText, /snapshot = await api\.General\.fetch_asset\(image_url\)/);
-    assert.match(quickStartText, /with Image\.open\(snapshot\) as img:/);
+    assert.doesNotMatch(exampleText, /image_url =/);
+    assert.match(exampleText, /snapshot = \(await api\.General\.fetch_asset\(url=['"]https:\/\/example\.com\/image\.png['"]\)\)\.image\(\)/);
+    assert.doesNotMatch(exampleText, /Image\.open\(/);
+    assert.doesNotMatch(readmeText, /image_url =/);
+    assert.match(readmeText, /snapshot = \(await api\.General\.fetch_asset\(url=['"]https:\/\/example\.com\/image\.png['"]\)\)\.image\(\)/);
+    assert.doesNotMatch(readmeText, /Image\.open\(/);
+    assert.doesNotMatch(quickStartText, /image_url =/);
+    assert.match(quickStartText, /snapshot = \(await api\.General\.fetch_asset\(url=['"]https:\/\/example\.com\/image\.png['"]\)\)\.image\(\)/);
+    assert.doesNotMatch(quickStartText, /Image\.open\(/);
     assert.ok(!existsSync(path.join(outputDir, "merged.msra")), "expected merged.msra to be cleaned up by default");
     assert.ok(!existsSync(path.join(outputDir, "examples")), "expected no separate examples/pipeline.py output directory");
   } finally {
@@ -486,7 +483,7 @@ test("readme pipeline uses example type=image instead of function name", () => {
   }
 });
 
-test("readme pipeline emits a runtime error for non-doc FUNCRESULT dependencies", () => {
+test("readme pipeline fails generation for non-doc FUNCRESULT dependencies", () => {
   const script = [
     "import json, sys",
     "from msra_codegen.readme_pipeline import build_readme_pipeline_code",
@@ -551,11 +548,12 @@ test("readme pipeline emits a runtime error for non-doc FUNCRESULT dependencies"
     cwd: path.resolve(__dirname, ".."),
     encoding: "utf8",
   });
+  const combinedOutput = `${result.stdout || ""}${result.stderr || ""}`;
 
-  assert.strictEqual(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /_missing_readme_example_dependency\(/);
-  assert.match(result.stdout, /Referenced example \[app\.func\.SRC\.examples\.source_snapshot\] is not included in generated docs/);
-  assert.doesNotMatch(result.stdout, /source_snapshot =/);
+  assert.notStrictEqual(result.status, 0, "expected codegen to fail instead of emitting a runtime helper");
+  assert.match(combinedOutput, /Referenced example \[app\.func\.SRC\.examples\.source_snapshot\] is not included in generated docs/);
+  assert.doesNotMatch(combinedOutput, /_missing_readme_example_dependency\(/);
+  assert.doesNotMatch(combinedOutput, /source_snapshot =/);
 });
 
 test("generator writes a merged intermediate msra file", () => {

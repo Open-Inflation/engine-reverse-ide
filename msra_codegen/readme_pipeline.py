@@ -49,14 +49,7 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
     nodes_by_key = {node["key"]: node for node in selected_nodes}
     output_var_names: dict[str, str] = {}
     body_lines: list[str] = []
-    needs_image_helpers = any(
-        normalize_example_type(nodes_by_key[node_key]["example"]) == "image"
-        and str(nodes_by_key[node_key]["function"].get("transport") or "fetch").lower() == "direct"
-        for node_key in ordered_keys
-        if node_key in nodes_by_key
-    )
     current_group: str | None = None
-    step_index = 0
     for node_key in ordered_keys:
         node = nodes_by_key[node_key]
         func = node["function"]
@@ -64,7 +57,6 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
         function_id = node["function_id"]
         example_name = node["example_name"]
         example_type = normalize_example_type(example)
-        example_inputs = inline_table_items(example.get("inputs")) if example else []
         group_name = str(func.get("group") or "").split(".", 1)[0] or "Ungrouped"
         if group_name != current_group:
             current_group = group_name
@@ -72,51 +64,29 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
                 body_lines.append("")
             body_lines.append(f"        # {group_name}")
 
-        step_index += 1
-        comment_text = normalize_readme_comment(
-            example.get("description") or func.get("description") or func.get("name") or func["id"]
-        )
-        body_lines.append(f"        # {step_index}. {comment_text}")
+        comment_text = normalize_readme_comment(example.get("description")) if example.get("description") else ""
+        if comment_text:
+            body_lines.append(f"        # {comment_text}")
 
         call_path = build_readme_call_path(func)
-        transport = str(func.get("transport") or "fetch").lower()
         output_var = readme_output_var_name(example_name)
         call_args = build_readme_call_args(example.get("inputs"), output_var_names)
-        if example_type == "image" and transport == "direct" and example_inputs:
-            url_input = next((item for item in example_inputs if item.get("key") == "url"), None)
-            if url_input is not None:
-                body_lines.append(f"        image_url = {render_readme_expr(url_input['value'], output_var_names)}")
-                body_lines.append(f"        {output_var} = await {call_path}(image_url)")
-                body_lines.append(f"        with Image.open({output_var}) as img:")
-                body_lines.append('            print(f"Image format: {img.format}, size: {img.size}")')
-                output_var_names[node_key] = output_var
-                continue
-        if transport == "direct":
-            body_lines.append(
-                f"        {output_var} = await {call_path}({call_args})" if call_args else f"        {output_var} = await {call_path}()"
-            )
-        else:
-            response_suffix = ".json()"
-            if example_type == "text":
-                response_suffix = ".text()"
-            elif example_type == "image":
-                response_suffix = ".image()"
-            body_lines.append(
-                f"        {output_var} = (await {call_path}({call_args})){response_suffix}"
-                if call_args
-                else f"        {output_var} = (await {call_path}()){response_suffix}"
-            )
+        response_suffix = ".json()"
+        if example_type == "text":
+            response_suffix = ".text()"
+        elif example_type == "image":
+            response_suffix = ".image()"
+        body_lines.append(
+            f"        {output_var} = (await {call_path}({call_args})){response_suffix}"
+            if call_args
+            else f"        {output_var} = (await {call_path}()){response_suffix}"
+        )
         output_var_names[node_key] = output_var
 
     lines = ["import asyncio"]
-    if needs_image_helpers:
-        lines.append("from PIL import Image")
     lines.extend(
         [
             f"from {package_name} import {client_class_name}",
-            "",
-            "def _missing_readme_example_dependency(message: str):",
-            "    raise RuntimeError(message)",
             "",
             "async def main():",
             f"    async with {client_class_name}() as api:",
@@ -428,7 +398,10 @@ def render_readme_ref(expr: dict[str, Any], output_var_names: dict[str, str]) ->
     function_id, example_name, _result_kind, tail_parts = parse_funcresult_reference(expr)
     base = output_var_names.get(readme_example_key(function_id, example_name))
     if base is None:
-        return _missing_readme_example_dependency_call(function_id, example_name)
+        raise ValueError(
+            f"Referenced example [app.func.{function_id}.examples.{example_name}] is not included in generated docs. "
+            f"Mark it @Docs or remove the FUNCRESULT reference."
+        )
     rendered = base
 
     for tail_part in tail_parts:
@@ -438,12 +411,3 @@ def render_readme_ref(expr: dict[str, Any], output_var_names: dict[str, str]) ->
         elif tail_kind == "name":
             rendered += f".{tail_part.get('value')}"
     return rendered
-
-
-def _missing_readme_example_dependency_call(function_id: str, example_name: str) -> str:
-    return (
-        "_missing_readme_example_dependency("
-        f"\"Referenced example [app.func.{function_id}.examples.{example_name}] is not included in generated docs. "
-        f"Mark it @Docs or remove the FUNCRESULT reference.\""
-        ")"
-    )
