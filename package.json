@@ -10,6 +10,8 @@
   "scripts": {
     "check": "node ./bin/msra.js check examples/example.msra",
     "serve": "node ./bin/msra.js serve",
-    "test": "npm test --workspace vscode-extension"
+    "test:vscode": "npm test --workspace vscode-extension",
+    "test:codegen": "node --test tests/codegen.test.js",
+    "test": "npm run test:vscode && npm run test:codegen"
   }
 }
