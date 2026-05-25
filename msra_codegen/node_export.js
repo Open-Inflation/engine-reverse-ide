@@ -9,6 +9,7 @@ const {
   CallExpr,
   InlineEntry,
   InlineTableExpr,
+  IdentExpr,
   MergeExpr,
   NamedArg,
   NullExpr,
@@ -97,6 +98,7 @@ function serializeExpr(expr) {
       kind: "string",
       value: expr.value,
       raw: expr.raw,
+      quoted: Boolean(expr.quoted),
       range: serializeRange(expr.range),
     };
   }
@@ -118,6 +120,13 @@ function serializeExpr(expr) {
   if (expr instanceof NullExpr) {
     return {
       kind: "null",
+      range: serializeRange(expr.range),
+    };
+  }
+  if (expr instanceof IdentExpr) {
+    return {
+      kind: "ident",
+      value: expr.name,
       range: serializeRange(expr.range),
     };
   }

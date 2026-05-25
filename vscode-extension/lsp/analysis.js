@@ -329,10 +329,16 @@ function resolveStaticPath(path, result) {
 function collectDefinitionLocations(result) {
   const locations = new Map();
   for (const [key, table] of result.tableIndex.entries()) {
-    locations.set(key, table.headerRange);
+    locations.set(key, {
+      sourcePath: table.sourcePath || null,
+      range: table.headerRange,
+    });
   }
   for (const [key, assignment] of result.assignmentIndex.entries()) {
-    locations.set(key, assignment.keyRange);
+    locations.set(key, {
+      sourcePath: assignment.sourcePath || null,
+      range: assignment.keyRange,
+    });
   }
   return locations;
 }

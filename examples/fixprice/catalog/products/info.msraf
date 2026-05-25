@@ -1,0 +1,38 @@
+!root("../../fixprice.msra")
+
+[CATALOG_PRODUCT_INFO]
+name="info"
+transport=goto
+group=<GROUPS.Catalog.Products>
+description="Loads the product page, extracts window.__NUXT__, and overrides resp.json to return the product payload."
+
+# Either url or (category, product_id, slug) must be provided; MSRA cannot encode the Python overload exactly.
+[CATALOG_PRODUCT_INFO.input.url]
+type=string
+description="Relative catalog URL appended after /catalog/."
+
+[CATALOG_PRODUCT_INFO.input.category]
+type=string
+description="Category slug for the structured overload."
+
+[CATALOG_PRODUCT_INFO.input.product_id]
+type=integer
+match={from=1, to=2147483647}
+description="Product id for the structured overload."
+
+[CATALOG_PRODUCT_INFO.input.slug]
+type=string
+description="Slug for the structured overload."
+
+[CATALOG_PRODUCT_INFO.url]
+base=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>"/catalog/"
+
+[CATALOG_PRODUCT_INFO.extractor]
+@RenderHtml
+script="extractors/catalog-product-info.js"
+goto_pipeline="./goto_pipeline.py:pipeline"
+
+[CATALOG_PRODUCT_INFO.examples.snapshot]
+@Test
+@Docs
+inputs={"url"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["url"]>}

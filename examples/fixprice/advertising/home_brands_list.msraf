@@ -1,4 +1,4 @@
-!root("./fixprice.msra")
+!root("../fixprice.msra")
 
 [ADVERTISING_HOME_BRANDS_LIST]
 name="home_brands_list"
@@ -13,5 +13,3 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
 @Test
 @Docs
 inputs={}
-
-

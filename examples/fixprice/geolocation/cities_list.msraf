@@ -1,0 +1,25 @@
+!root("../fixprice.msra")
+
+[GEOLOCATION_CITIES_LIST]
+name="cities_list"
+method=GET
+group=<GROUPS.Geolocation>
+description="Lists cities for a country."
+
+[GEOLOCATION_CITIES_LIST.input.country_id]
+type=integer
+@Required
+match={from=1, to=2147483647}
+description="Country id used by the cities endpoint."
+
+[GEOLOCATION_CITIES_LIST.url]
+base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city"
+
+[GEOLOCATION_CITIES_LIST.url.params.countryId]
+from=<INPUT.country_id>
+description="CountryId query parameter."
+
+[GEOLOCATION_CITIES_LIST.examples.snapshot]
+@Test
+@Docs
+inputs={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>}

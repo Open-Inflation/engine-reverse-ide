@@ -1,0 +1,24 @@
+!root("../fixprice.msra")
+
+[GEOLOCATION_COUNTRIES_LIST]
+name="countries_list"
+method=GET
+group=<GROUPS.Geolocation>
+description="Lists countries and supports an optional ISO-2 alias filter."
+
+[GEOLOCATION_COUNTRIES_LIST.input.alias]
+type=string
+match=<DOCUMENT.REGEXES.COUNTRY_ALIAS>
+description="Optional ISO-2 country alias, uppercased by the code."
+
+[GEOLOCATION_COUNTRIES_LIST.url]
+base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/country"
+
+[GEOLOCATION_COUNTRIES_LIST.url.params.alias]
+from=<INPUT.alias>
+description="Optional alias query parameter."
+
+[GEOLOCATION_COUNTRIES_LIST.examples.snapshot]
+@Test
+@Docs
+inputs={}

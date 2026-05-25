@@ -1,0 +1,24 @@
+!root("../fixprice.msra")
+
+[GEOLOCATION_REGIONS_LIST]
+name="regions_list"
+method=GET
+group=<GROUPS.Geolocation>
+description="Lists regions and can optionally filter by country id."
+
+[GEOLOCATION_REGIONS_LIST.input.country_id]
+type=integer
+match={from=1, to=2147483647}
+description="Optional country id filter."
+
+[GEOLOCATION_REGIONS_LIST.url]
+base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/region"
+
+[GEOLOCATION_REGIONS_LIST.url.params.countryId]
+from=<INPUT.country_id>
+description="Optional countryId query parameter."
+
+[GEOLOCATION_REGIONS_LIST.examples.snapshot]
+@Test
+@Docs
+inputs={}

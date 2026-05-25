@@ -1222,6 +1222,11 @@ test("python codegen generates both bundled msra documents without failing", () 
         },
       );
       assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+      const mergedCheck = spawnSync("node", [path.join(repoRoot, "bin", "msra.js"), "check", path.join(testCase.outputDir, "merged.msra")], {
+        cwd: repoRoot,
+        encoding: "utf8",
+      });
+      assert.strictEqual(mergedCheck.status, 0, mergedCheck.stderr || mergedCheck.stdout);
       const packageDir = path.join(testCase.outputDir, testCase.packageName);
       const compileResult = spawnSync("python", ["-m", "compileall", "-q", packageDir], {
         cwd: repoRoot,
@@ -2259,6 +2264,38 @@ test("multi-file include/root projects resolve child msraf tables and parent ref
     completion.items.some((item) => item.label === "GROUPS.Catalog"),
     "expected child completions to see parent group tables through the merged project",
   );
+});
+
+test("multi-file msraf references navigate to parent definitions", () => {
+  const fixture = createMultiFileFixture();
+  const server = new MsraLanguageServer({
+    onRequest() {},
+    onNotification() {},
+    listen() {},
+    sendNotification() {},
+  });
+  const parentUri = pathToFileURL(fixture.parentPath).href;
+  const childUri = pathToFileURL(fixture.childPath).href;
+  server._updateDocument({ textDocument: { uri: parentUri, text: fixture.parentText } }, false);
+  server._updateDocument({ textDocument: { uri: childUri, text: fixture.childText } }, false);
+
+  const lines = fixture.childText.split(/\r?\n/);
+  const lineIndex = lines.findIndex((line) => line.includes("<GROUPS.Catalog>"));
+  assert.ok(lineIndex >= 0, "expected the child fixture to reference GROUPS.Catalog");
+
+  const definition = server._definition({
+    textDocument: { uri: childUri },
+    position: {
+      line: lineIndex,
+      character: lines[lineIndex].indexOf("GROUPS.Catalog") + 1,
+    },
+  });
+
+  assert.ok(Array.isArray(definition) && definition.length > 0, "expected a definition location");
+  assert.strictEqual(definition[0].uri, parentUri);
+  const parentLines = fixture.parentText.split(/\r?\n/);
+  const parentLineIndex = parentLines.findIndex((line) => line === "[app.groups.Catalog]");
+  assert.strictEqual(definition[0].range.start.line, parentLineIndex);
 });
 
 test("msraf files reject explicit app.func prefixes", () => {

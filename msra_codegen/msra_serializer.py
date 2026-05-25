@@ -96,6 +96,8 @@ def render_expr(expr: Any) -> str:
 
     kind = expr.get("kind")
     if kind == "string":
+        if not bool(expr.get("quoted", True)):
+            return str(expr.get("value", ""))
         return json.dumps(expr.get("value", ""), ensure_ascii=False)
     if kind == "number":
         raw = expr.get("raw")
@@ -106,6 +108,8 @@ def render_expr(expr: Any) -> str:
         return "true" if expr.get("value") else "false"
     if kind == "null":
         return "null"
+    if kind in {"ident", "identifier"}:
+        return str(expr.get("value", ""))
     if kind == "ref":
         return render_ref(expr)
     if kind == "array":
@@ -122,6 +126,9 @@ def render_expr(expr: Any) -> str:
         return f"{{{rendered}}}"
     if kind == "sequence":
         items = expr.get("items", [])
+        list_rendered = render_list_type_sequence(items)
+        if list_rendered is not None:
+            return list_rendered
         return " + ".join(render_expr(item) for item in items if item is not None)
     if kind == "merge":
         parts = expr.get("parts", [])
@@ -138,6 +145,29 @@ def render_expr(expr: Any) -> str:
 def render_named_arg(arg: dict[str, Any]) -> str:
     name = render_assignment_key(str(arg.get("name", "")))
     return f"{name}={render_expr(arg.get('value'))}"
+
+
+def render_list_type_sequence(items: list[Any]) -> str | None:
+    if len(items) != 2:
+      return None
+    prefix, suffix = items
+    if not is_bare_list_prefix(prefix):
+        return None
+    if not isinstance(suffix, dict) or suffix.get("kind") != "array":
+        return None
+    rendered_items = ", ".join(render_expr(item) for item in suffix.get("items", []) if item is not None)
+    return f"list[{rendered_items}]"
+
+
+def is_bare_list_prefix(expr: Any) -> bool:
+    if not isinstance(expr, dict):
+        return False
+    kind = expr.get("kind")
+    if kind == "ident":
+        return str(expr.get("value", "")) == "list"
+    if kind == "string":
+        return not bool(expr.get("quoted", True)) and str(expr.get("value", "")) == "list"
+    return False
 
 
 def render_ref(expr: dict[str, Any]) -> str:

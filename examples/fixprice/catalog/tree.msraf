@@ -1,0 +1,15 @@
+!root("../fixprice.msra")
+
+[CATALOG_TREE]
+name="tree"
+method=GET
+group=<GROUPS.Catalog>
+description="Fetches the catalog tree from /v1/category."
+
+[CATALOG_TREE.url]
+base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/category"
+
+[CATALOG_TREE.examples.snapshot]
+@Test
+@Docs
+inputs={}

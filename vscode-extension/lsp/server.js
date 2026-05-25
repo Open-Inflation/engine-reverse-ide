@@ -1,5 +1,5 @@
 const fs = require("fs");
-const { fileURLToPath } = require("url");
+const { fileURLToPath, pathToFileURL } = require("url");
 const {
   createMessageConnection,
   StreamMessageReader,
@@ -1068,12 +1068,15 @@ class MsraLanguageServer {
     const locations = collectDefinitionLocations(document.analyzed);
     for (const ref of document.parsed.references) {
       if (this._contains(ref.range, position) && ref.resolvedPath) {
-        const targetRange = locations.get(ref.resolvedPathKey || pathKey(ref.resolvedPath));
-        if (targetRange !== undefined) {
+        const targetLocation = locations.get(ref.resolvedPathKey || pathKey(ref.resolvedPath));
+        if (targetLocation !== undefined) {
+          const targetUri = targetLocation.sourcePath
+            ? pathToFileURL(targetLocation.sourcePath).href
+            : uri;
           return [
             {
-              uri,
-              range: this._rangeToLsp(targetRange),
+              uri: targetUri,
+              range: this._rangeToLsp(targetLocation.range),
             },
           ];
         }
