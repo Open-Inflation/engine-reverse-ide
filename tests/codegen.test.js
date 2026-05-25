@@ -245,7 +245,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       outputDir: path.join(workDir, "fixprice"),
       packageOwner: "Open-Inflation",
       packageName: "fixprice_api",
-      license: "MIT",
+      license: "GPL-3.0",
     },
   ];
   const delimitedInputPath = path.join(workDir, "example-delimited.msra");
