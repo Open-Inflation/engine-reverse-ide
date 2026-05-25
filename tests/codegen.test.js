@@ -245,7 +245,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       outputDir: path.join(workDir, "fixprice"),
       packageOwner: "Open-Inflation",
       packageName: "fixprice_api",
-      license: "GPL-3.0",
+      license: "MIT",
     },
   ];
   const delimitedInputPath = path.join(workDir, "example-delimited.msra");
@@ -312,7 +312,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       const readmePipelineCode = extractMarkdownCodeFence(readmeText);
       const quickStartPipelineCode = extractRstPythonCodeBlock(quickStartText);
       assert.match(readmeText, /# Usage/);
-      assert.match(readmeText, /## Автотесты API \(pytest \+ snapshots\)/);
+      assert.doesNotMatch(readmeText, /## Автотесты API \(pytest \+ snapshots\)/);
       assert.match(readmeText, /### Принцип работы/);
       assert.match(readmeText, /```py[\s\S]*async def main\(\):/);
       assert.doesNotMatch(readmeText, /examples\/pipeline\.py/);
@@ -434,7 +434,9 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
         assert.match(readmeText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
         assert.doesNotMatch(readmeText, /Image\.open\(download_image\)/);
-        assert.match(readmeText, /FixPrice API - https:\/\/fix-price\.com\//);
+        assert.match(readmeText, /^# FixPriceAPI$/m);
+        assert.doesNotMatch(readmeText, /FixPrice API - https:\/\/fix-price\.com\//);
+        assert.doesNotMatch(readmeText, /https:\/\/fix-price\.com\//);
         assert.match(readmeText, /https:\/\/t\.me\/miskler_dev/);
         assert.match(readmeText, /https:\/\/discord\.gg\/UnJnGHNbBp/);
         assert.match(readmeText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import shutil
 import textwrap
-import re
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -179,20 +178,13 @@ def build_readme_context(
     package_name_slug = package_name.replace("_", "-")
     repo_url = f"https://github.com/{package_owner}/{package_name}"
     docs_url = f"https://{package_owner_lower}.github.io/{package_name}/quick_start"
-    homepage_url = (
-        str(project.get("prefixes", {}).get("MAIN_SITE_ORIGIN") or "").strip()
-        or str(project.get("prefixes", {}).get("ORIGIN") or "").strip()
-        or str(project.get("prefixes", {}).get("MAIN_SITE_URL") or "").strip()
-    )
     workflow_url = f"{repo_url}/actions/workflows/tests.yml"
     workflow_runs_url = f"https://api.github.com/repos/{package_owner}/{package_name}/actions/workflows/tests.yml/runs?per_page=1&status=completed"
-    display_title = format_readme_title(str(app.get("name") or package_name), package_name)
-    project_line = display_title if not homepage_url else f"{display_title} - {homepage_url}"
+    display_title = str(app.get("name") or package_name).strip() or package_name
     socials = build_readme_social_links(app.get("social"))
     return {
         "title": display_title,
-        "project_line": project_line,
-        "homepage_url": homepage_url,
+        "project_line": display_title,
         "package_owner": package_owner,
         "package_owner_lower": package_owner_lower,
         "package_name": package_name,
@@ -218,11 +210,6 @@ def build_readme_context(
         "principle_text": "Библиотека полностью повторяет сетевую работу обычного пользователя на сайте.",
         "pipeline_script_code": pipeline_script_code,
     }
-
-
-def format_readme_title(app_name: str, fallback: str) -> str:
-    title = str(app_name or "").strip() or fallback
-    return re.sub(r"(?<!\s)API$", " API", title)
 
 
 def build_readme_social_links(social: Any) -> list[dict[str, Any]]:
