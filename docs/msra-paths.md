@@ -31,7 +31,7 @@ app
       │  └─ params
       ├─ examples
       │  └─ <name>
-      └─ postprocess
+      └─ extractor
 ```
 
 `app.defaults.func.headers` хранит общие defaults для request policy всех функций.

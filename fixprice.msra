@@ -238,9 +238,10 @@ description="Slug for the structured overload."
 [app.func.CATALOG_PRODUCT_INFO.url]
 base=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>"/catalog/"
 
-[app.func.CATALOG_PRODUCT_INFO.postprocess]
-render_html=true
-evaluate="postprocess/catalog-product-info.evaluate.js"
+[app.func.CATALOG_PRODUCT_INFO.extractor]
+@RenderHtml
+script="extractors/catalog-product-info.js"
+goto_pipeline="./goto_pipeline.py:pipeline"
 
 [app.func.CATALOG_PRODUCT_INFO.examples.snapshot]
 @Test

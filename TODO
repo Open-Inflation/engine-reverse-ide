@@ -1,9 +1,5 @@
 # Язык
 1. новый const="metro" заменяющий конструкцию values=[{value_in_url="metro", default=true}] и для списков const=["metro", "ortem"] для values=[{value_in_url="metro", default=true}, {value_in_url="ortem", default=true}] - предполагается что юзер их не может задать, параметр константный (т.е. const и values и match конфликтные)
-2. вместо postprocessing
-[app.func.CATALOG_PRODUCT_INFO.extractor]
-@RenderHtml
-script="extractors/catalog-product-info.js"
 
 # Кодогенерация
 1. Сделать тесты

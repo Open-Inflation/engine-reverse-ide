@@ -24,7 +24,7 @@ dependencies = [
 include-package-data = true
 
 [tool.setuptools.package-data]
-{{ package_name }} = ["postprocess/*.js"]
+{{ package_name }} = ["extractors/*.js", "extractors/**/*.js"]
 
 [tool.setuptools.dynamic]
 version = { attr = "{{ package_name }}.__version__" }

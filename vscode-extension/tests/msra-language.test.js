@@ -232,31 +232,23 @@ test("description fields cannot be dynamic", () => {
   assert.ok(regexRaiseDiagnostic, "expected regex raise to reject dynamic references");
 });
 
-test("goto_pipeline and regex action fields cannot be dynamic", () => {
+test("regex action fields cannot be dynamic", () => {
   const text = [
     "[app]",
     "[app.regexes.TEXT_REQUEST]",
     'regex="^[a-z]+$"',
     'actions=[{action=replace, what=<INPUT.what>, with=<INPUT.with>}]',
     "raise=<INPUT.raise>",
-    "[app.func.A3A417]",
-    "transport=goto",
-    "[app.func.A3A417.postprocess]",
-    'goto_pipeline=[{action=wait_sniffer, source=request, what=<INPUT.what>, raise=<INPUT.raise>}, {action=wait_element, state=visible, what=<INPUT.selector>, raise=<INPUT.raise>}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///dynamic-pipeline-and-actions.msra");
   const analysis = analyzeDocument(document);
   const actionWhatDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-regex-action-what-dynamic");
   const actionWithDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-regex-action-with-dynamic");
-  const pipelineWhatDiagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-pipeline-what-dynamic");
-  const pipelineRaiseDiagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-pipeline-raise-dynamic");
   const regexRaiseDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-regex-raise-dynamic");
 
   assert.ok(actionWhatDiagnostic, "expected regex action what to reject dynamic references");
   assert.ok(actionWithDiagnostic, "expected regex action with to reject dynamic references");
-  assert.strictEqual(pipelineWhatDiagnostics.length, 2, "expected both pipeline what fields to reject dynamic references");
-  assert.strictEqual(pipelineRaiseDiagnostics.length, 2, "expected both pipeline raise fields to reject dynamic references");
   assert.ok(regexRaiseDiagnostic, "expected regex raise to reject dynamic references");
 });
 
@@ -328,15 +320,16 @@ test("function transport validates its enum and forbids method for goto", () => 
   assert.match(unexpectedMethod.message, /method/);
 });
 
-test("render_html is only valid inside postprocess", () => {
+test("render_html is only valid inside extractor", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     'transport=fetch',
     'render_html=true',
     "",
-    "[app.func.A3A417.postprocess]",
-    "render_html=true",
+    "[app.func.A3A417.extractor]",
+    "@RenderHtml",
+    'script="extractors/catalog-product-info.js"',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///render-html-placement.msra");
@@ -347,27 +340,43 @@ test("render_html is only valid inside postprocess", () => {
   assert.match(rootDiagnostic.message, /render_html/);
 });
 
-test("function postprocess validates goto_pipeline and evaluate context", () => {
+test("goto_pipeline must be a Python script reference", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
-    'transport=fetch',
-    "[app.func.A3A417.postprocess]",
-    "render_html=false",
+    'transport=goto',
+    "[app.func.A3A417.extractor]",
+    "@RenderHtml",
+    'script="extractors/catalog-product-info.js"',
     'goto_pipeline=[{action=wait_network, state=networkidle}]',
-    'evaluate="script.js"',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///function-postprocess-context.msra");
+  const document = parseDocument(text, "file:///function-extractor-context.msra");
   const analysis = analyzeDocument(document);
 
-  const gotoPipelineDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unexpected-function-goto-pipeline");
-  const evaluateDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-function-render-html");
+  const gotoPipelineDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
 
-  assert.ok(gotoPipelineDiagnostic, "expected goto_pipeline to be rejected outside transport=goto");
-  assert.match(gotoPipelineDiagnostic.message, /goto_pipeline/);
-  assert.ok(evaluateDiagnostic, "expected evaluate to require render_html=true for fetch/direct transports");
-  assert.match(evaluateDiagnostic.message, /render_html=true/);
+  assert.ok(gotoPipelineDiagnostic, "expected inline goto_pipeline DSL to be rejected");
+  assert.match(gotoPipelineDiagnostic.message, /Python script reference/);
+});
+
+test("function extractor requires a script", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    'transport=goto',
+    "[app.func.A3A417.extractor]",
+    "@RenderHtml",
+    'goto_pipeline="./goto_pipeline.py:pipeline"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///function-extractor-script.msra");
+  const analysis = analyzeDocument(document);
+
+  const extractorDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-function-extractor-script");
+
+  assert.ok(extractorDiagnostic, "expected extractor to require a script");
+  assert.match(extractorDiagnostic.message, /extractor/);
 });
 
 test("regex actions validate action enums and replace arguments", () => {
@@ -696,84 +705,40 @@ test("inline regex object match syntax is rejected in favor of reference or nume
   assert.match(diagnostic.message, /reference <\.\.\.>|numeric range/i);
 });
 
-test("goto_pipeline state is validated in the context of action", () => {
+test("goto_pipeline script references are accepted in extractor tables", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "transport=goto",
-    "[app.func.A3A417.postprocess]",
-    'goto_pipeline=[{action=wait_sniffer, source=request, what="X-Key"}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=domcontentloaded}, {action=wait_network, state=networkidle}]',
+    "[app.func.A3A417.extractor]",
+    "@RenderHtml",
+    'script="extractors/catalog-product-info.js"',
+    'goto_pipeline="./goto_pipeline.py:pipeline"',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///valid-pipeline-state.msra");
+  const document = parseDocument(text, "file:///valid-extractor-goto-pipeline.msra");
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
-test("goto_pipeline state rejects legacy idle for wait_network", () => {
+test("goto_pipeline script references are rejected when transport is fetch", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
-    "transport=goto",
-    "[app.func.A3A417.postprocess]",
-    'goto_pipeline=[{action=wait_network, state=idle}]',
+    'transport=fetch',
+    "[app.func.A3A417.extractor]",
+    "@RenderHtml",
+    'script="extractors/catalog-product-info.js"',
+    'goto_pipeline="./goto_pipeline.py:pipeline"',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///legacy-idle-pipeline-state.msra");
+  const document = parseDocument(text, "file:///invalid-extractor-goto-pipeline-transport.msra");
   const analysis = analyzeDocument(document);
-  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+  const invalidStateDiagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "unexpected-function-extractor");
 
-  assert.ok(diagnostic, "expected legacy idle to be rejected in pipeline wait_network state");
-});
-
-test("goto_pipeline state rejects values that do not match the action context", () => {
-  const text = [
-    "[app]",
-    "[app.func.A3A417]",
-    "transport=goto",
-    "[app.func.A3A417.postprocess]",
-    'goto_pipeline=[{action=wait_sniffer, source=request, state=visible}, {action=wait_element, state=idle, what="div.page-content"}, {action=wait_network, state=visible}]',
-    "",
-  ].join("\n");
-  const document = parseDocument(text, "file:///invalid-pipeline-state.msra");
-  const analysis = analyzeDocument(document);
-  const invalidStateDiagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-assignment-value-type");
-
-  assert.strictEqual(invalidStateDiagnostics.length, 3, "expected each pipeline item to fail validation when the state does not match its action context");
-  assert.ok(invalidStateDiagnostics.every((diagnostic) => /Expected one of:/.test(diagnostic.message)));
-});
-
-test("goto_pipeline wait_sniffer requires source", () => {
-  const text = [
-    "[app]",
-    "[app.func.A3A417]",
-    "transport=goto",
-    "[app.func.A3A417.postprocess]",
-    'goto_pipeline=[{action=wait_sniffer, what="X-Key"}]',
-    "",
-  ].join("\n");
-  const document = parseDocument(text, "file:///missing-wait-sniffer-source.msra");
-  const analysis = analyzeDocument(document);
-  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
-
-  assert.ok(diagnostic, "expected wait_sniffer to require a source");
-  assert.match(diagnostic.message, /source/);
-});
-
-test("goto_pipeline wait_sniffer accepts response source", () => {
-  const text = [
-    "[app]",
-    "[app.func.A3A417]",
-    "transport=goto",
-    "[app.func.A3A417.postprocess]",
-    'goto_pipeline=[{action=wait_sniffer, source=response, what="X-Key"}]',
-    "",
-  ].join("\n");
-  const document = parseDocument(text, "file:///response-wait-sniffer-source.msra");
-  const analysis = analyzeDocument(document);
-
-  assert.deepStrictEqual(analysis.diagnostics, []);
+  assert.strictEqual(invalidStateDiagnostics.length, 1, "expected extractor tables to be rejected for non-goto transports");
+  assert.ok(/extractor/.test(invalidStateDiagnostics[0].message));
 });
 
 test("url param values require value unless default=true is present", () => {
@@ -1154,6 +1119,11 @@ test("python codegen generates both bundled msra documents without failing", () 
       } else if (testCase.packageName === "delimitedapi") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
         assert.match(productModule, /query_params\.append\(\('url', '\|'\.join\(str\(__item\) for __item in _url_values\)\)\)/);
+      } else if (testCase.packageName === "fixpriceapi") {
+        const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
+        assert.match(productModule, /from \.goto_pipeline import pipeline as goto_pipeline_runner/);
+        assert.match(productModule, /await goto_pipeline_runner\(warmup\)/);
+        assert.match(productModule, /extractors\/catalog-product-info\.js/);
       }
       for (const filePath of collectPythonFiles(packageDir)) {
         const source = readFileSync(filePath, "utf8");
@@ -1174,6 +1144,8 @@ test("python codegen generates both bundled msra documents without failing", () 
       if (testCase.packageName === "fixpriceapi") {
         assert.match(managerModule, /allowed_values = \['store', 'pickup', 'courier'\]/);
         assert.match(managerModule, /if value not in allowed_values:/);
+        assert.match(readFileSync(path.join(packageDir, "goto_pipeline.py"), "utf8"), /async def pipeline\(warmup: Warmup\)/);
+        assert.match(readFileSync(path.join(packageDir, "extractors", "catalog-product-info.js"), "utf8"), /window\.__NUXT__=/);
       }
     }
   } finally {
@@ -2049,7 +2021,7 @@ test("completion is field-aware for groups enums and static values", () => {
   assert.deepStrictEqual(new Set(transportLabels), new Set(["direct", "fetch", "goto"]));
 });
 
-test("completion narrows nested inline table values by field", () => {
+test("completion narrows inline table values by field", () => {
   const server = new MsraLanguageServer({
     onRequest() {},
     onNotification() {},
@@ -2058,18 +2030,6 @@ test("completion narrows nested inline table values by field", () => {
   });
 
   const cases = [
-    {
-      text: [
-        "[app]",
-        "[app.func.X]",
-        "transport=goto",
-        "[app.func.X.postprocess]",
-        "goto_pipeline=[{for_tests=true, action=}]",
-        "",
-      ].join("\n"),
-      needle: "action=",
-      expected: new Set(["wait_sniffer", "wait_element", "element", "wait_network", "always"]),
-    },
     {
       text: [
         "[app]",
@@ -2093,18 +2053,6 @@ test("completion narrows nested inline table values by field", () => {
       ].join("\n"),
       needle: "to=",
       expected: new Set(),
-    },
-    {
-      text: [
-        "[app]",
-        "[app.func.X]",
-        "transport=goto",
-        "[app.func.X.postprocess]",
-        "goto_pipeline=[{action=wait_network, state=}]",
-        "",
-      ].join("\n"),
-      needle: "state=",
-      expected: new Set(["load", "domcontentloaded", "networkidle", "commit"]),
     },
   ];
 

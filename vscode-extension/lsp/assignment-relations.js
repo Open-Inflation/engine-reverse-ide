@@ -31,7 +31,7 @@ function validateAssignmentRelations(tableIndex, assignmentIndex) {
 
   diagnostics.push(...validateValuesMatchConflicts(assignmentsByTable));
   diagnostics.push(...validateFuncTransportRelations(assignmentsByTable));
-  diagnostics.push(...validateFuncPostprocessRelations(tableIndex, assignmentIndex));
+  diagnostics.push(...validateFuncExtractorRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateWarmupRelations(assignmentIndex));
   diagnostics.push(...validateBodyRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateUrlParamValueRelations(assignmentsByTable));
@@ -128,47 +128,42 @@ function validateFuncTransportRelations(assignmentsByTable) {
   return diagnostics;
 }
 
-function validateFuncPostprocessRelations(tableIndex, assignmentIndex) {
+function validateFuncExtractorRelations(tableIndex, assignmentIndex) {
   const diagnostics = [];
   for (const table of tableIndex.values()) {
     const tablePath = table.path || [];
-    if (!isFuncPostprocessTable(tablePath)) {
+    if (!isFuncExtractorTable(tablePath)) {
       continue;
     }
 
     const funcPath = tablePath.slice(0, 3);
     const transport = getEnumAssignmentValue(assignmentIndex, funcPath, "transport");
-    const renderHtml = getBooleanAssignmentValue(assignmentIndex, tablePath, "render_html");
+    const script = getAssignment(assignmentIndex, tablePath, "script");
     const gotoPipeline = getAssignment(assignmentIndex, tablePath, "goto_pipeline");
-    const evaluate = getAssignment(assignmentIndex, tablePath, "evaluate");
 
-    if (gotoPipeline && transport !== "goto") {
+    if (transport !== "goto") {
       diagnostics.push(
         new Diagnostic(
-          `Function [${pathLabel(funcPath)}] with transport="${transport || "direct/fetch"}" cannot define "goto_pipeline".`,
-          gotoPipeline.keyRange,
+          `Function [${pathLabel(funcPath)}] with transport="${transport || "direct/fetch"}" cannot define "extractor".`,
+          script ? script.keyRange : (gotoPipeline ? gotoPipeline.keyRange : table.headerRange),
           "error",
           "msra",
-          "unexpected-function-goto-pipeline",
+          "unexpected-function-extractor",
         ),
       );
+      continue;
     }
 
-    if (evaluate) {
-      if (transport === "goto") {
-        continue;
-      }
-      if (renderHtml !== true) {
-        diagnostics.push(
-          new Diagnostic(
-            `Function [${pathLabel(funcPath)}] with transport="${transport || "direct/fetch"}" can define "evaluate" only when postprocess.render_html=true.`,
-            evaluate.keyRange,
-            "error",
-            "msra",
-            "missing-function-render-html",
-          ),
-        );
-      }
+    if (!script) {
+      diagnostics.push(
+        new Diagnostic(
+          `Function [${pathLabel(funcPath)}] with transport="goto" requires an extractor "script".`,
+          table.headerRange,
+          "error",
+          "msra",
+          "missing-function-extractor-script",
+        ),
+      );
     }
   }
   return diagnostics;
@@ -921,12 +916,12 @@ function isBodyItemTable(path) {
     && path[path.length - 1] !== "url";
 }
 
-function isFuncPostprocessTable(path) {
+function isFuncExtractorTable(path) {
   return Array.isArray(path)
     && path.length === 4
     && path[0] === "app"
     && path[1] === "func"
-    && path[3] === "postprocess";
+    && path[3] === "extractor";
 }
 
 function isFuncRootTable(path) {

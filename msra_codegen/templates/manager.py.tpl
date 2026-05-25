@@ -95,19 +95,7 @@ class {{ client_class_name }}:
         sniffer = None
 
 {% endif %}
-        warmup = Warmup(
-            browser=self.session,
-            context=self.ctx,
-            page=self.page,
-            sniffer=sniffer,
-            timeout_ms=self.timeout_ms,
-            test_mode=self.test_mode,
-            prefixes={
-{% for prefix in prefixes %}
-                {{ prefix.name | tojson }}: self.{{ prefix.attr_name }},
-{% endfor %}
-            },
-        )
+        warmup = self._make_warmup_context(page=self.page, sniffer=sniffer)
 
 {% if warmup.script_module and warmup.script_function and warmup.script_path_expr %}
         from .{{ warmup.script_module }} import {{ warmup.script_function }} as warmup_runner
@@ -141,6 +129,33 @@ class {{ client_class_name }}:
 
     async def close(self):
         await self.session.close()
+
+    def _make_warmup_context(
+        self,
+        *,
+        page: HumanPage,
+        sniffer: HeaderAnomalySniffer | None,
+    ) -> Warmup:
+        return Warmup(
+            browser=self.session,
+            context=self.ctx,
+            page=page,
+            sniffer=sniffer,
+            timeout_ms=self.timeout_ms,
+            test_mode=self.test_mode,
+            prefixes={
+{% for prefix in prefixes %}
+                {{ prefix.name | tojson }}: self.{{ prefix.attr_name }},
+{% endfor %}
+            },
+        )
+
+    async def _create_pipeline_sniffer(self) -> HeaderAnomalySniffer:
+        sniffer = HeaderAnomalySniffer(
+            include_subresources=True,
+        )
+        await sniffer.start(self.ctx)
+        return sniffer
 
     @staticmethod
     def _coerce_variable_value(

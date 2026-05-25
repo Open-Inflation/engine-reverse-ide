@@ -21,7 +21,7 @@ const FUNC_CHILD_SEGMENTS = new Set([
   "headers",
   "url",
   "examples",
-  "postprocess",
+  "extractor",
 ]);
 
 function normalizePathSegments(pathSegments) {
@@ -392,14 +392,14 @@ function validateFuncTable(segments, index) {
     }
     return validateExampleNamespace(segments, index + 1, `"${renderPath(segments, index + 1)}"`);
   }
-  if (segment.value === "postprocess" && !segment.quoted) {
+  if (segment.value === "extractor" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
   return invalidPath(
     segments,
     index,
-    `Invalid child table "${renderSegment(segment)}" under "${renderPath(segments, index)}". Expected "input", "body", "headers", "url", "examples", or "postprocess".`,
-    ["input", "body", "headers", "url", "examples", "postprocess"],
+    `Invalid child table "${renderSegment(segment)}" under "${renderPath(segments, index)}". Expected "input", "body", "headers", "url", "examples", or "extractor".`,
+    ["input", "body", "headers", "url", "examples", "extractor"],
   );
 }
 

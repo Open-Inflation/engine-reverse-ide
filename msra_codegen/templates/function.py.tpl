@@ -1,4 +1,3 @@
-{% from "pipeline_macros.tpl" import render_pipeline_steps %}
     @autotest
     async def {{ method_name }}(self{% if signature %}, {{ signature }}{% endif %}) -> {{ return_annotation }}:
         """{{ description }}"""
@@ -192,20 +191,27 @@
         return await self._parent._direct_request(request_url, {{ direct_args | join(", ") }})
 {% elif transport == "goto" %}
         page = await self._parent.ctx.new_page()
+{% set has_goto_pipeline = extractor.goto_pipeline_module is not none and extractor.goto_pipeline_function is not none %}
+        pipeline_sniffer = None
         try:
+{% if has_goto_pipeline %}
+            pipeline_sniffer = await self._parent._create_pipeline_sniffer()
+{% endif %}
             resp = await page.goto(request_url, wait_until="domcontentloaded")
             if resp is None:
                 raise RuntimeError("page.goto() returned None")
             json_override = None
             text_override = None
-{% if postprocess.render_html %}
+{% if extractor.render_html %}
             await page.wait_for_load_state("networkidle")
 {% endif %}
-{% if postprocess.goto_pipeline %}
-{{ render_pipeline_steps(postprocess.goto_pipeline, "            ", "page", none, none) }}
+{% if has_goto_pipeline %}
+            warmup = self._parent._make_warmup_context(page=page, sniffer=pipeline_sniffer)
+            from .{{ extractor.goto_pipeline_module }} import {{ extractor.goto_pipeline_function }} as goto_pipeline_runner
+            await goto_pipeline_runner(warmup)
 {% endif %}
-{% if postprocess.evaluate_path_expr %}
-            evaluate_script = (Path(__file__).resolve().parent / {{ postprocess.evaluate_path_expr }}).read_text(encoding="utf-8")
+{% if extractor.script_path_expr %}
+            evaluate_script = (Path(__file__).resolve().parent / {{ extractor.script_path_expr }}).read_text(encoding="utf-8")
             evaluate_result = await page.evaluate(evaluate_script)
             if isinstance(evaluate_result, dict):
                 result_type = str(evaluate_result.get("type", "")).lower()
@@ -221,7 +227,11 @@
                 text_override=text_override,
             )
         finally:
-            await page.close()
+            try:
+                if pipeline_sniffer is not None:
+                    await pipeline_sniffer.complete()
+            finally:
+                await page.close()
 {% else %}
 {% if body_expr is not none %}
         json_body = {{ body_expr }}

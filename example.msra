@@ -53,9 +53,6 @@ method=GET
 group=<GROUPS.Catalog.Product>
 description="Основной способ получения карточек каталога.\n\nНе настраивается напрямую, должен получить url запроса"
 
-[app.func.A3A417.postprocess]
-render_html=false # если пришел html, то он его отрендерит и вернет результат рендера.
-
 [app.func.A3A417.input.query]
 type=string # допустимо писать в массиве. Допустимые значения: string, integer, boolean, null, array, object
 description="Текст запроса для поиска товаров в каталоге"

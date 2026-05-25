@@ -557,6 +557,7 @@ class Parser {
       nullable: "nullable",
       test: "test",
       docs: "docs",
+      renderhtml: "render_html",
       humanize: "humanize",
       blockimages: "block_images",
       sniffheaders: "headers_sniffer",

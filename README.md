@@ -74,7 +74,7 @@ The generator writes:
 - `<package-name>/abstraction/__init__.py`
 - `<package-name>/abstraction/regexes.py`
 - `<package-name>/endpoints/*.py`
-- referenced `postprocess/*.js` assets
+- referenced `extractors/*.js` assets
 - `docs/requirements.txt`
 - `docs/source/conf.py`
 - `docs/source/index.rst`

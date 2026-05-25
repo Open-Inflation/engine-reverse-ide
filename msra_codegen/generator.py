@@ -334,7 +334,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
                 "url": None,
                 "body": None,
                 "headers": None,
-                "postprocess": None,
+                "extractor": None,
             }
         )
 
@@ -373,12 +373,13 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         if func_headers_table:
             func["headers"] = build_headers_spec(func_headers_table, get_assignment)
 
-        postprocess_table = get_table(prefix + ["postprocess"])
-        if postprocess_table:
-            func["postprocess"] = {
-                "render_html": bool(get_plain_value(get_assignment(postprocess_table, "render_html", False))),
-                "evaluate": get_plain_value(get_assignment(postprocess_table, "evaluate", "")),
-                "goto_pipeline": get_assignment(postprocess_table, "goto_pipeline"),
+        extractor_table = get_table(prefix + ["extractor"])
+        if extractor_table:
+            goto_pipeline = parse_script_reference(get_assignment(extractor_table, "goto_pipeline"))
+            func["extractor"] = {
+                "render_html": bool(get_plain_value(get_assignment(extractor_table, "render_html", False))),
+                "script": get_plain_value(get_assignment(extractor_table, "script", "")),
+                "goto_pipeline": goto_pipeline,
             }
 
     return {
@@ -453,10 +454,15 @@ def generate_project(
     package_root = output_dir / package_name
     abstraction_root = package_root / "abstraction"
     endpoints_root = package_root / "endpoints"
-    postprocess_root = package_root / "postprocess"
+    legacy_postprocess_root = package_root / "postprocess"
+    extractors_root = package_root / "extractors"
     package_root.mkdir(parents=True, exist_ok=True)
     abstraction_root.mkdir(parents=True, exist_ok=True)
-    postprocess_root.mkdir(parents=True, exist_ok=True)
+    if legacy_postprocess_root.exists():
+        shutil.rmtree(legacy_postprocess_root)
+    if extractors_root.exists():
+        shutil.rmtree(extractors_root)
+    extractors_root.mkdir(parents=True, exist_ok=True)
 
     write_text(
         output_dir / "pyproject.toml",
@@ -492,7 +498,7 @@ def generate_project(
     for group_node in top_level_groups(group_tree):
         write_group_package(group_node, project, package_name, endpoints_root)
 
-    for script in dict.fromkeys(collect_warmup_scripts(project) + collect_postprocess_scripts(project)):
+    for script in dict.fromkeys(collect_warmup_scripts(project) + collect_extractor_assets(project)):
         source = source_root / script
         target = package_root / script
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -691,7 +697,9 @@ def build_function_context(
     url_spec = func.get("url") or {}
     body = func.get("body")
     headers_spec = func.get("headers")
-    postprocess = func.get("postprocess") or {}
+    extractor = func.get("extractor") or {}
+    goto_pipeline = extractor.get("goto_pipeline") or {}
+    extractor_script = extractor.get("script")
     url_expr = render_expr(url_spec.get("base"), self_ref="self._parent")
     if url_expr == "None":
         url_input = next((input_spec["name"] for input_spec in inputs if input_spec["name"] == "url"), None)
@@ -724,19 +732,15 @@ def build_function_context(
         "validation": build_input_validation_context({"inputs": inputs}),
         "query_params": build_query_param_context(func),
         "direct_args": direct_args,
-        "postprocess": {
-            "render_html": bool(postprocess.get("render_html", False)),
-            "goto_pipeline": build_pipeline_steps_context(
-                postprocess.get("goto_pipeline"),
-                page_ref="page",
-                sniffer_ref=None,
-                test_mode_ref=None,
-            ),
-            "evaluate_path_expr": (
-                render_simple_value(str(get_plain_value(postprocess.get("evaluate"))))
-                if isinstance(postprocess.get("evaluate"), dict) or isinstance(postprocess.get("evaluate"), str)
+        "extractor": {
+            "render_html": bool(extractor.get("render_html", False)),
+            "script_path_expr": (
+                render_simple_value(str(get_plain_value(extractor_script)))
+                if extractor_script
                 else None
             ),
+            "goto_pipeline_module": goto_pipeline.get("module") if goto_pipeline else None,
+            "goto_pipeline_function": goto_pipeline.get("function") if goto_pipeline else None,
         },
     }
 
@@ -1258,15 +1262,20 @@ def infer_package_name(app_name: str) -> str:
     return cleaned or "generated_msra_client"
 
 
-def collect_postprocess_scripts(project: dict[str, Any]) -> list[str]:
+def collect_extractor_assets(project: dict[str, Any]) -> list[str]:
     scripts: list[str] = []
     for func in project["functions"]:
-        postprocess = func.get("postprocess")
-        if not postprocess:
+        extractor = func.get("extractor")
+        if not extractor:
             continue
-        evaluate = postprocess.get("evaluate")
-        if isinstance(evaluate, str) and evaluate:
-            scripts.append(evaluate)
+        script = extractor.get("script")
+        if isinstance(script, str) and script:
+            scripts.append(script)
+        goto_pipeline = extractor.get("goto_pipeline")
+        if isinstance(goto_pipeline, dict):
+            path = goto_pipeline.get("path")
+            if isinstance(path, str) and path:
+                scripts.append(path)
     return scripts
 
 

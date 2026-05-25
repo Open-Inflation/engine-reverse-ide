@@ -695,6 +695,7 @@ class MsraLanguageServer {
       ["url", "Function URL block"],
       ["params", "Function URL parameter namespace"],
       ["examples", "Function examples"],
+      ["extractor", "Function extractor block"],
       ["from_global", "Shared input binding"],
     ];
     const tablePaths = [...analyzed.tableIndex.values()]

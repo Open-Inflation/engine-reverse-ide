@@ -161,6 +161,10 @@ function matchesDefaultsFuncHeadersPath(path) {
   return path.length === 4 && path[0] === "app" && path[1] === "defaults" && path[2] === "func" && path[3] === "headers";
 }
 
+function matchesExtractorPath(path) {
+  return path.length === 4 && path[0] === "app" && path[1] === "func" && path[3] === "extractor";
+}
+
 function matchesUrlPath(path) {
   return path.length === 4 && path[0] === "app" && path[1] === "func" && path[3] === "url";
 }
@@ -248,6 +252,9 @@ function annotationRequirementForAssignment(tablePath, key) {
       return { kind: "flag", label: "@Docs", legacyLabel: "docs" };
     }
   }
+  if (matchesExtractorPath(tablePath) && key === "render_html") {
+    return { kind: "flag", label: "@RenderHtml", legacyLabel: "render_html" };
+  }
   return null;
 }
 
@@ -311,6 +318,14 @@ const NUMERIC_RANGE_SPEC = objectShape(
 
 const MATCH_SPEC = { kind: "match" };
 const VARIABLE_MATCH_SPEC = oneOf(MATCH_SPEC, arrayOf(SCALAR));
+const JS_SCRIPT_PATH_SPEC = patternOf(
+  /^(?:\.[\\/])?[A-Za-z0-9_.\/-]+\.js$/,
+  "JavaScript extractor path like extractors/catalog-product-info.js",
+);
+const PY_SCRIPT_REFERENCE_SPEC = patternOf(
+  /^(?:\.[\\/])?[A-Za-z_][A-Za-z0-9_]*\.py:[A-Za-z_][A-Za-z0-9_]*$/,
+  "Python script reference like ./goto_pipeline.py:pipeline",
+);
 
 const VARIABLE_TYPE_ITEM_SPEC = objectShape(
   {
@@ -541,10 +556,10 @@ const PIPELINE_ITEM_SPEC = oneOf(
   PIPELINE_ALWAYS_SPEC,
 );
 
-const POSTPROCESS_TABLE_KEYS = {
+const EXTRACTOR_TABLE_KEYS = {
   render_html: BOOLEAN,
-  goto_pipeline: arrayOf(PIPELINE_ITEM_SPEC),
-  evaluate: STRINGISH,
+  script: JS_SCRIPT_PATH_SPEC,
+  goto_pipeline: PY_SCRIPT_REFERENCE_SPEC,
 };
 
 const BODY_TYPE_SPEC = patternOf(
@@ -699,7 +714,7 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(matchesUrlPath, {
     base: STRINGISH,
   }),
-  makeFixedSchema(exactPath(["app", "func", "*", "postprocess"]), POSTPROCESS_TABLE_KEYS),
+  makeFixedSchema(exactPath(["app", "func", "*", "extractor"]), EXTRACTOR_TABLE_KEYS),
   makeFixedSchema(matchesUrlParamsPath, {
     sub_url: BOOLEAN,
     required: BOOLEAN,

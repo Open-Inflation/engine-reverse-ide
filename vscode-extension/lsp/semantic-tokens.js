@@ -45,7 +45,7 @@ const FUNC_CHILD_SEGMENTS = new Set([
   "url",
   "params",
   "examples",
-  "postprocess",
+  "extractor",
 ]);
 
 const DOCUMENT_CHILD_SEGMENTS = new Set([
@@ -214,7 +214,7 @@ function classifyTableSegment(segment, index, pathSegments) {
     if (funcChild === "url") {
       return classifyUrlParamsSegment(pathSegments, 3, index);
     }
-    if (funcChild === "input" || funcChild === "headers" || funcChild === "examples" || funcChild === "postprocess") {
+    if (funcChild === "input" || funcChild === "headers" || funcChild === "examples" || funcChild === "extractor") {
       return "parameter";
     }
     return "parameter";
