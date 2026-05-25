@@ -472,13 +472,11 @@ test("nested example tables, values, list_style, and types structures are valida
   const badDelimiter = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-assignment-value-type" && /delimiter|stringish|string/i.test(diagnostic.message));
   const unknownListStyleKey = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unknown-inline-table-key" && /extra/.test(diagnostic.message));
   const unknownValuesKey = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unknown-inline-table-key" && /foo/.test(diagnostic.message));
-  const missingExampleInputs = analysis.diagnostics.find((diagnostic) => diagnostic.code === "missing-inline-table-key" && /inputs/.test(diagnostic.message));
 
   assert.ok(missingType, "expected a missing type field inside app.variables.city_id.types");
   assert.ok(badDelimiter, "expected a non-string delimiter inside list_style to be rejected");
   assert.ok(unknownListStyleKey, "expected unexpected list_style keys to be rejected");
   assert.ok(unknownValuesKey, "expected unexpected values keys to be rejected");
-  assert.ok(missingExampleInputs, "expected named example tables to require inputs");
 });
 
 test("example tables accept @Docs and @Test annotations", () => {
@@ -498,6 +496,23 @@ test("example tables accept @Docs and @Test annotations", () => {
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///example-item-annotations.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("example tables allow omitted inputs as an empty default", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "type=string",
+    "[app.func.A3A417.examples]",
+    "[app.func.A3A417.examples.smoke]",
+    "@Docs",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///empty-example-inputs.msra");
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);

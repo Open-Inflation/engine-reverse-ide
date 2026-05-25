@@ -289,10 +289,9 @@ const EXAMPLE_INPUTS_SPEC = recordOf(ANY, {
   keyDescription: "input",
 });
 const EXAMPLE_ITEM_SPEC = objectShape(
+  {},
   {
     inputs: EXAMPLE_INPUTS_SPEC,
-  },
-  {
     test: BOOLEAN,
     docs: BOOLEAN,
   },

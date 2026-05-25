@@ -368,24 +368,15 @@ function validateExampleInputRelations(tableIndex, lookupTableIndex, lookupAssig
     const functionPath = table.path.slice(0, 3);
     const availableInputs = availableInputsByFunction.get(functionPath[2]) || new Map();
     const inputsAssignment = getTableAssignment(assignmentsByTable, table.path, "inputs");
-    if (!inputsAssignment) {
-      diagnostics.push(
-        new Diagnostic(
-          `Missing required key "inputs" in table [${pathLabel(table.path)}].`,
-          table.headerRange || table.pathRange || null,
-          "error",
-          "msra",
-          "missing-inline-table-key",
-        ),
-      );
+    if (inputsAssignment && !(inputsAssignment.value instanceof InlineTableExpr)) {
       continue;
     }
 
-    if (!(inputsAssignment.value instanceof InlineTableExpr)) {
-      continue;
-    }
+    const inputEntries = inputsAssignment && inputsAssignment.value instanceof InlineTableExpr
+      ? inputsAssignment.value.items
+      : [];
 
-    for (const inputEntry of inputsAssignment.value.items) {
+    for (const inputEntry of inputEntries) {
       if (!availableInputs.has(inputEntry.key)) {
         diagnostics.push(
           new Diagnostic(
