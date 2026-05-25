@@ -73,7 +73,7 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
         call_args = build_readme_call_args(example.get("inputs"), output_var_names)
         response_suffix = ".json()"
         if example_type == "text":
-            response_suffix = ".text()"
+            response_suffix = ".text"
         elif example_type == "image":
             response_suffix = ".image()"
         body_lines.append(

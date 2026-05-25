@@ -377,6 +377,8 @@ test("python codegen generates both bundled msra documents without failing", () 
       const outputModule = readFileSync(path.join(packageDir, "abstraction", "output.py"), "utf8");
       assert.match(outputModule, /class Output/);
       assert.match(outputModule, /def image\(/);
+      assert.doesNotMatch(outputModule, /_Awaitable/);
+      assert.doesNotMatch(outputModule, /_wrap_awaitable/);
       if (testCase.packageName === "ozon_api") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
         assert.match(productModule, /async def feed\(self, query: str \| None = None, url: list\[Literal\['\/searchSuggestions\/search\/'\]\] \| None = None, filename: str \| None = None\) -> abstraction\.Output:/);
@@ -420,9 +422,10 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(regexesModule, /return re\.fullmatch\(cls\.REGEX, str\(value\)\) is not None/);
         assert.doesNotMatch(geolocationModule, /re\.fullmatch\(/);
         assert.match(geolocationModule, /if not \(abstraction\.RegexCountryAlias\.match\(alias\)\):/);
-        const languageTagBlock = regexesModule.split("class RegexLanguageTag(RegexBase):")[1].split("class RegexDeliveryType(RegexBase):")[0];
-        assert.match(languageTagBlock, /^\r?\n    REGEX = /);
-        assert.doesNotMatch(languageTagBlock, /ERROR = None/);
+        const deliveryTypeBlock = regexesModule.split("class RegexDeliveryType(RegexBase):")[1].split("class RegexStoreId(RegexBase):")[0];
+        assert.match(deliveryTypeBlock, /^\r?\n    REGEX = /);
+        assert.doesNotMatch(deliveryTypeBlock, /\n\s*\n\s*REGEX = /);
+        assert.doesNotMatch(deliveryTypeBlock, /ERROR = /);
         assert.doesNotMatch(exampleText, /^\s*# tree$/m);
         assert.match(exampleText, /Загрузка изображения по прямой ссылке/);
         assert.match(exampleText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);

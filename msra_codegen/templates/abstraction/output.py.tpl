@@ -43,103 +43,6 @@ def _decode_text(raw: bytes, headers: dict[str, str]) -> str:
     return raw.decode(charset, errors="replace")
 
 
-class _AwaitableBytes(bytes):
-    def __new__(cls, value: bytes | bytearray | memoryview | str) -> "_AwaitableBytes":
-        return bytes.__new__(cls, _coerce_bytes(value))
-
-    def __call__(self) -> "_AwaitableBytes":
-        return self
-
-    def __await__(self):
-        async def _value() -> bytes:
-            return bytes(self)
-
-        return _value().__await__()
-
-
-class _AwaitableStr(str):
-    def __new__(cls, value: Any) -> "_AwaitableStr":
-        return str.__new__(cls, str(value))
-
-    def __call__(self) -> "_AwaitableStr":
-        return self
-
-    def __await__(self):
-        async def _value() -> str:
-            return str(self)
-
-        return _value().__await__()
-
-
-class _AwaitableList(list):
-    def __init__(self, value=()):
-        super().__init__(value)
-
-    def __call__(self) -> "_AwaitableList":
-        return self
-
-    def __await__(self):
-        async def _value() -> list[Any]:
-            return list(self)
-
-        return _value().__await__()
-
-
-class _AwaitableDict(dict):
-    def __init__(self, value=None):
-        super().__init__({} if value is None else value)
-
-    def __call__(self) -> "_AwaitableDict":
-        return self
-
-    def __await__(self):
-        async def _value() -> dict[str, Any]:
-            return dict(self)
-
-        return _value().__await__()
-
-
-class _AwaitableValue:
-    def __init__(self, value: Any):
-        self._value = value
-
-    def __call__(self) -> "_AwaitableValue":
-        return self
-
-    def __await__(self):
-        async def _value() -> Any:
-            return self._value
-
-        return _value().__await__()
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._value, name)
-
-    def __repr__(self) -> str:
-        return repr(self._value)
-
-    def __str__(self) -> str:
-        return str(self._value)
-
-    def __bool__(self) -> bool:
-        return bool(self._value)
-
-    def __eq__(self, other: Any) -> bool:
-        return self._value == other
-
-
-def _wrap_awaitable(value: Any) -> Any:
-    if isinstance(value, bytes):
-        return _AwaitableBytes(value)
-    if isinstance(value, str):
-        return _AwaitableStr(value)
-    if isinstance(value, list):
-        return _AwaitableList(value)
-    if isinstance(value, dict):
-        return _AwaitableDict(value)
-    return _AwaitableValue(value)
-
-
 @dataclass
 class Output:
     raw: bytes = field(repr=False)
@@ -258,17 +161,16 @@ class Output:
     @property
     def text(self) -> str:
         if self._text_override is not None:
-            return _AwaitableStr(self._text_override)
-        return _AwaitableStr(_decode_text(self.raw, self.headers))
+            return self._text_override
+        return _decode_text(self.raw, self.headers)
 
     def body(self) -> bytes:
-        return _AwaitableBytes(self.raw)
+        return self.raw
 
     def json(self) -> Any:
         if self._json_override is not None:
-            value = self._json_override() if callable(self._json_override) else self._json_override
-            return _wrap_awaitable(value)
-        return _wrap_awaitable(json.loads(str(self.text)))
+            return self._json_override() if callable(self._json_override) else self._json_override
+        return json.loads(self.text)
 
     def image(self):
         from PIL import Image
@@ -278,22 +180,22 @@ class Output:
         return image
 
     def all_headers(self) -> dict[str, str]:
-        return _AwaitableDict(self.headers)
+        return dict(self.headers)
 
     def header_value(self, name: str) -> str | None:
         value = self.headers.get(name.lower())
         if value is None:
             return None
-        return _AwaitableStr(value)
+        return value
 
     def header_values(self, name: str) -> list[str]:
         value = self.header_value(name)
         if value is None:
-            return _AwaitableList()
-        return _AwaitableList([value])
+            return []
+        return [value]
 
     def headers_array(self) -> list[dict[str, str]]:
-        return _AwaitableList([{"name": key, "value": value} for key, value in self.headers.items()])
+        return [{"name": key, "value": value} for key, value in self.headers.items()]
 
     def seconds_ago(self) -> float:
         if self.end_time is None:
