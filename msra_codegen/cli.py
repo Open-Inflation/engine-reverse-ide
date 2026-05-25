@@ -6,8 +6,9 @@ import sys
 from pathlib import Path
 
 from .bridge import load_msra_document
-from .generator import build_project, generate_project
 from .msra_serializer import write_merged_msra_document
+from .package_writer import generate_project
+from .project_model import build_project
 
 
 def build_parser() -> argparse.ArgumentParser:
