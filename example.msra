@@ -17,23 +17,8 @@ browser=camoufox # доступно chromium, firefox, webkit, camoufox
 # Доступно только когда браузер camoufox
 @Humanize # по умолч false, доступно float>0
 @BlockImages # по умолч false
-
-url=<DOCUMENT.PREFIXES.ORIGIN>
-pipeline=[ # timeout_ms возможно переопределить по желанию
-    # по мимо wait_element доступен element (моментальная проверка) и always (выполнить действие всегда, не дожидаясь условия)
-    {action=wait_sniffer, source=request, what="X-Key"}, # если ключ был получен ДО вызова действия, оно все равно считается успешным
-    {for_tests=true, action=wait_element, state=visible, what="div.selected-city > div.buttons > button.button.normal", then=click}, # then опционален
-    {for_tests=true, action=wait_element, state=visible, what="a.link.product-category", then=click}, # then допускает констукцию {action=click, what="a.link.product-category"}, если передано только действие, то селектор выбирается от того что ждали
-    {for_tests=true, action=wait_element, state=visible, what="div.page-content", timeout_ms=10000} # можно переопределить таймаут для конкретного действия,
-    [ # конкурирующие действия (шаг считается успешным, если выполнится хотя бы одно из действий, второе отменяется)
-        {raise="Требуется использовать RU-IP", action=wait_element, state=visible, what="body > div.con"}, # ошибка warmup
-        {action=wait_element, state=visible, what="body > div.con"}
-    ],
-    {for_tests=true, action=wait_network, state=load},
-    {if={action=element, state=visible, what="div.load-error"}, action=always, then={action=click, what="button#reload-button"}}
-    {action=wait_network, state=networkidle} # или domcontentloaded, networkidle, commit
-]
 @SniffHeaders
+warmup="./warmup.py:pipeline" # warmup.py копируется в generated package и вызывается с Warmup
 on_error_screenshot_path="screenshot.png" # по умолчанию скриншоты не делаются
 
 [app.variables.city_id]

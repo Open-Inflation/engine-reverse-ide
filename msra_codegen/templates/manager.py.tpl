@@ -1,6 +1,7 @@
 """Async client generated from MSRA."""
 
 from collections import defaultdict
+from dataclasses import dataclass
 import re
 from time import perf_counter, time
 from typing import Any
@@ -13,11 +14,23 @@ from human_requests.network_analyzer.anomaly_sniffer import (
     HeaderAnomalySniffer, WaitHeader, WaitSource
 )
 
-{% from "pipeline_macros.tpl" import render_pipeline_steps %}
 from . import abstraction
 {% for group in top_groups %}
 from .endpoints.{{ group.module_name }} import {{ group.class_name }}
 {% endfor %}
+
+
+@dataclass
+class Warmup:
+    browser: HumanBrowser
+    context: HumanContext
+    page: HumanPage
+    sniffer: HeaderAnomalySniffer | None
+    timeout_ms: int
+    test_mode: bool
+    prefixes: dict[str, str]
+
+
 class {{ client_class_name }}:
     """Generated async client for {{ app_name_doc }}."""
 
@@ -75,7 +88,6 @@ class {{ client_class_name }}:
 {% if warmup.headers_sniffer %}
         sniffer = HeaderAnomalySniffer(
             include_subresources=True,
-            url_filter=lambda u: u.startswith({{ warmup.url_expr }}),
         )
         await sniffer.start(self.ctx)
 
@@ -83,10 +95,23 @@ class {{ client_class_name }}:
         sniffer = None
 
 {% endif %}
-        await self.page.goto({{ warmup.url_expr }}, wait_until="domcontentloaded")
+        warmup = Warmup(
+            browser=self.session,
+            context=self.ctx,
+            page=self.page,
+            sniffer=sniffer,
+            timeout_ms=self.timeout_ms,
+            test_mode=self.test_mode,
+            prefixes={
+{% for prefix in prefixes %}
+                {{ prefix.name | tojson }}: self.{{ prefix.attr_name }},
+{% endfor %}
+            },
+        )
 
-{% if warmup.pipeline %}
-{{ render_pipeline_steps(warmup.pipeline, "        ", "self.page", "sniffer", "self.test_mode") }}
+{% if warmup.script_module and warmup.script_function and warmup.script_path_expr %}
+        from .{{ warmup.script_module }} import {{ warmup.script_function }} as warmup_runner
+        await warmup_runner(warmup)
 {% endif %}
 
         result_sniffer = await sniffer.complete() if sniffer else {"request": {}}

@@ -8,23 +8,13 @@ timeout_ms=35000
 browser=camoufox
 
 # Warmup mirrors FixPriceAPI._warmup():
-# MAIN_SITE_URL -> sniffer for X-Key -> optional test_mode clicks -> CATALOG_URL -> body > pre.
+# MAIN_SITE_URL or ORIGIN -> sniffer for X-Key -> optional test_mode clicks -> body > pre.
 # Camoufox is started with @Humanize, @BlockImages, exclude_addons=[UBO], and i_know_what_im_doing=True.
 [app.warmup]
 @Humanize
 @BlockImages
-url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>
-# Actual flow in code: MAIN_SITE_URL -> sniffer wait for X-Key -> optional test_mode clicks -> CATALOG_URL -> body > pre.
-pipeline=[
-    {action=wait_network, state=networkidle},
-    {action=wait_sniffer, source=request, what="X-Key"},
-    {for_tests=true, action=wait_element, state=visible, what="div.selected-city > div.buttons > button.button.normal", then=click},
-    {for_tests=true, action=wait_element, state=visible, what="a.link.product-category", then=click},
-    {for_tests=true, action=wait_element, state=visible, what="div.page-content"},
-    {for_tests=true, action=wait_network, state=load},
-    {action=wait_element, state=visible, what="body > pre"}
-]
 @SniffHeaders
+warmup="./warmup.py:pipeline"
 on_error_screenshot_path="screenshot.png"
 
 [app.variables.city_id]

@@ -551,6 +551,10 @@ const SCREENSHOT_PATH_SPEC = patternOf(
   /\.(?:jpe?g|png)$/i,
   "path ending in .jpg, .jpeg, or .png",
 );
+const WARMUP_SCRIPT_SPEC = patternOf(
+  /^(?:\.[\\/])?[A-Za-z_][A-Za-z0-9_]*\.py:[A-Za-z_][A-Za-z0-9_]*$/,
+  "Python script reference like ./warmup.py:pipeline",
+);
 
 const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["misklerreverseapi"]), {
@@ -582,8 +586,7 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["app", "warmup"]), {
     humanize: HUMANIZE_SPEC,
     block_images: BOOLEAN,
-    url: ANY,
-    pipeline: arrayOf(PIPELINE_ITEM_SPEC),
+    warmup: WARMUP_SCRIPT_SPEC,
     headers_sniffer: BOOLEAN,
     on_error_screenshot_path: SCREENSHOT_PATH_SPEC,
     timeout_ms: integerAtLeast(0),

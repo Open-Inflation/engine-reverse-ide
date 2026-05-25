@@ -184,6 +184,34 @@ def group_path_from_expr(expr: Any) -> str:
     return str(plain).strip() if plain is not None else ""
 
 
+def script_module_name_from_path(script_path: str) -> str:
+    normalized = script_path.strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    if normalized.endswith(".py"):
+        normalized = normalized[:-3]
+    normalized = normalized.strip("/")
+    return normalized.replace("/", ".") or "warmup"
+
+
+def parse_script_reference(expr: Any) -> dict[str, str] | None:
+    plain = get_plain_value(expr)
+    if not isinstance(plain, str):
+        return None
+    script_path, separator, function_name = plain.rpartition(":")
+    if not separator:
+        return None
+    script_path = script_path.strip()
+    function_name = function_name.strip()
+    if not script_path or not function_name:
+        return None
+    return {
+        "path": script_path,
+        "module": script_module_name_from_path(script_path),
+        "function": function_name,
+    }
+
+
 def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     tables = [table for table in ast.get("tables", [])]
     table_index: dict[tuple[str, ...], dict[str, Any]] = {
@@ -253,13 +281,13 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     warmup_table = get_table(["app", "warmup"])
     warmup_spec = None
     if warmup_table:
+        warmup_script = parse_script_reference(get_assignment(warmup_table, "warmup"))
         warmup_spec = {
             "humanize": bool(get_plain_value(get_assignment(warmup_table, "humanize", False))),
             "block_images": bool(get_plain_value(get_assignment(warmup_table, "block_images", False))),
-            "url": get_assignment(warmup_table, "url"),
             "headers_sniffer": bool(get_plain_value(get_assignment(warmup_table, "headers_sniffer", False))),
             "on_error_screenshot_path": get_plain_value(get_assignment(warmup_table, "on_error_screenshot_path", "")),
-            "pipeline": get_assignment(warmup_table, "pipeline"),
+            "script": warmup_script,
         }
 
     variable_tables = [
@@ -465,7 +493,7 @@ def generate_project(
     for group_node in top_level_groups(group_tree):
         write_group_package(group_node, project, package_name, endpoints_root)
 
-    for script in collect_postprocess_scripts(project):
+    for script in dict.fromkeys(collect_warmup_scripts(project) + collect_postprocess_scripts(project)):
         source = source_root / script
         target = package_root / script
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -857,6 +885,7 @@ def build_manager_context(
     app = project["app"]
     headers_spec = project.get("headers")
     warmup = project.get("warmup") or {}
+    warmup_script = warmup.get("script") or {}
     top_groups = top_level_groups(group_tree)
     return {
         "client_class_name": root_client_class_name(project),
@@ -890,17 +919,13 @@ def build_manager_context(
         "warmup": {
             "humanize": bool(warmup.get("humanize", True)),
             "block_images": bool(warmup.get("block_images", True)),
-            "url_expr": render_expr(warmup.get("url"), self_ref="self"),
             "headers_sniffer": bool(warmup.get("headers_sniffer", False)),
             "on_error_screenshot_path": render_simple_value(
                 warmup.get("on_error_screenshot_path", "screenshot.png")
             ),
-            "pipeline": build_pipeline_steps_context(
-                warmup.get("pipeline"),
-                page_ref="self.page",
-                sniffer_ref="sniffer",
-                test_mode_ref="self.test_mode",
-            ),
+            "script_path_expr": render_simple_value(warmup_script.get("path")) if warmup_script else None,
+            "script_module": warmup_script.get("module") if warmup_script else None,
+            "script_function": warmup_script.get("function") if warmup_script else None,
         },
         "request": {
             "referrer_expr": render_request_referrer(headers_spec, default_if_missing=True),
@@ -1213,6 +1238,15 @@ def collect_postprocess_scripts(project: dict[str, Any]) -> list[str]:
         if isinstance(evaluate, str) and evaluate:
             scripts.append(evaluate)
     return scripts
+
+
+def collect_warmup_scripts(project: dict[str, Any]) -> list[str]:
+    warmup = project.get("warmup") or {}
+    script = warmup.get("script") or {}
+    path = script.get("path")
+    if isinstance(path, str) and path:
+        return [path]
+    return []
 
 
 def write_text(path: Path, content: str) -> None:

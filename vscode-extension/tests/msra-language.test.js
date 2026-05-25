@@ -232,15 +232,17 @@ test("description fields cannot be dynamic", () => {
   assert.ok(regexRaiseDiagnostic, "expected regex raise to reject dynamic references");
 });
 
-test("pipeline and regex action fields cannot be dynamic", () => {
+test("goto_pipeline and regex action fields cannot be dynamic", () => {
   const text = [
     "[app]",
     "[app.regexes.TEXT_REQUEST]",
     'regex="^[a-z]+$"',
     'actions=[{action=replace, what=<INPUT.what>, with=<INPUT.with>}]',
     "raise=<INPUT.raise>",
-    "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, source=request, what=<INPUT.what>, raise=<INPUT.raise>}, {action=wait_element, state=visible, what=<INPUT.selector>, raise=<INPUT.raise>}]',
+    "[app.func.A3A417]",
+    "transport=goto",
+    "[app.func.A3A417.postprocess]",
+    'goto_pipeline=[{action=wait_sniffer, source=request, what=<INPUT.what>, raise=<INPUT.raise>}, {action=wait_element, state=visible, what=<INPUT.selector>, raise=<INPUT.raise>}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///dynamic-pipeline-and-actions.msra");
@@ -668,11 +670,13 @@ test("inline regex object revalue syntax is rejected in favor of reference or nu
   assert.match(diagnostic.message, /reference <\.\.\.>|numeric range/i);
 });
 
-test("pipeline state is validated in the context of action", () => {
+test("goto_pipeline state is validated in the context of action", () => {
   const text = [
     "[app]",
-    "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, source=request, what="X-Key"}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=domcontentloaded}, {action=wait_network, state=networkidle}]',
+    "[app.func.A3A417]",
+    "transport=goto",
+    "[app.func.A3A417.postprocess]",
+    'goto_pipeline=[{action=wait_sniffer, source=request, what="X-Key"}, {action=wait_element, state=visible, what="div.page-content"}, {action=wait_network, state=domcontentloaded}, {action=wait_network, state=networkidle}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///valid-pipeline-state.msra");
@@ -681,11 +685,13 @@ test("pipeline state is validated in the context of action", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
-test("pipeline state rejects legacy idle for wait_network", () => {
+test("goto_pipeline state rejects legacy idle for wait_network", () => {
   const text = [
     "[app]",
-    "[app.warmup]",
-    'pipeline=[{action=wait_network, state=idle}]',
+    "[app.func.A3A417]",
+    "transport=goto",
+    "[app.func.A3A417.postprocess]",
+    'goto_pipeline=[{action=wait_network, state=idle}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///legacy-idle-pipeline-state.msra");
@@ -695,11 +701,13 @@ test("pipeline state rejects legacy idle for wait_network", () => {
   assert.ok(diagnostic, "expected legacy idle to be rejected in pipeline wait_network state");
 });
 
-test("pipeline state rejects values that do not match the action context", () => {
+test("goto_pipeline state rejects values that do not match the action context", () => {
   const text = [
     "[app]",
-    "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, source=request, state=visible}, {action=wait_element, state=idle, what="div.page-content"}, {action=wait_network, state=visible}]',
+    "[app.func.A3A417]",
+    "transport=goto",
+    "[app.func.A3A417.postprocess]",
+    'goto_pipeline=[{action=wait_sniffer, source=request, state=visible}, {action=wait_element, state=idle, what="div.page-content"}, {action=wait_network, state=visible}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-pipeline-state.msra");
@@ -710,11 +718,13 @@ test("pipeline state rejects values that do not match the action context", () =>
   assert.ok(invalidStateDiagnostics.every((diagnostic) => /Expected one of:/.test(diagnostic.message)));
 });
 
-test("wait_sniffer requires source", () => {
+test("goto_pipeline wait_sniffer requires source", () => {
   const text = [
     "[app]",
-    "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, what="X-Key"}]',
+    "[app.func.A3A417]",
+    "transport=goto",
+    "[app.func.A3A417.postprocess]",
+    'goto_pipeline=[{action=wait_sniffer, what="X-Key"}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///missing-wait-sniffer-source.msra");
@@ -725,11 +735,13 @@ test("wait_sniffer requires source", () => {
   assert.match(diagnostic.message, /source/);
 });
 
-test("wait_sniffer accepts response source", () => {
+test("goto_pipeline wait_sniffer accepts response source", () => {
   const text = [
     "[app]",
-    "[app.warmup]",
-    'pipeline=[{action=wait_sniffer, source=response, what="X-Key"}]',
+    "[app.func.A3A417]",
+    "transport=goto",
+    "[app.func.A3A417.postprocess]",
+    'goto_pipeline=[{action=wait_sniffer, source=response, what="X-Key"}]',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///response-wait-sniffer-source.msra");
@@ -953,6 +965,19 @@ test("@Humanize accepts positive numbers when camoufox is enabled", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
+test("warmup accepts an external script reference", () => {
+  const text = [
+    "[app]",
+    "[app.warmup]",
+    'warmup="./warmup.py:pipeline"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///warmup-script-reference.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
 test("warmup rejects unsupported keys like wait_url", () => {
   const text = [
     "[app]",
@@ -984,10 +1009,10 @@ test("warmup rejects removed humanize_action key", () => {
   assert.match(diagnostic.message, /humanize_action/);
 });
 
-test("generator merges consecutive warmup test steps into a single test_mode guard", () => {
+test("generator wires external warmup scripts into the manager", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
-  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-pipeline-"));
-  const inputPath = path.join(workDir, "pipeline.msra");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-warmup-"));
+  const inputPath = path.join(workDir, "warmup.msra");
   const outputDir = path.join(workDir, "generated");
   const packageName = "testpkg";
   const text = [
@@ -1002,30 +1027,39 @@ test("generator merges consecutive warmup test steps into a single test_mode gua
     'MAIN_SITE_URL="https://example.com/"',
     "",
     "[app.warmup]",
+    "@Humanize",
+    "@BlockImages",
     "@SniffHeaders",
-    'url=<DOCUMENT.PREFIXES.MAIN_SITE_URL>',
-    'pipeline=[{action=wait_sniffer, source=response, what="X-Key"}, {for_tests=true, action=wait_network, state=load}, {for_tests=true, action=wait_element, state=visible, what="div.one", then=click}, {action=wait_network, state=networkidle}]',
+    'warmup="./warmup.py:pipeline"',
+    'on_error_screenshot_path="screenshot.png"',
     "",
   ].join("\n");
 
   try {
     writeFileSync(inputPath, text, "utf8");
+    writeFileSync(
+      path.join(workDir, "warmup.py"),
+      readFileSync(path.join(repoRoot, "warmup.py"), "utf8"),
+      "utf8",
+    );
     const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir, "-p", packageName], {
       cwd: repoRoot,
       encoding: "utf8",
     });
     assert.strictEqual(result.status, 0, result.stderr || result.stdout);
 
+    const packageDir = path.join(outputDir, packageName);
     const managerText = readFileSync(path.join(outputDir, packageName, "manager.py"), "utf8");
-    const guardCount = (managerText.match(/if self\.test_mode:/g) || []).length;
-    assert.strictEqual(guardCount, 1, "expected consecutive test-only steps to share a single test_mode guard");
-    assert.match(managerText, /self\._MAIN_SITE_URL = 'https:\/\/example\.com\/'/);
-    assert.match(managerText, /self\._MAIN_SITE_URL/);
-    assert.match(managerText, /source=WaitSource\.RESPONSE/);
-    assert.match(managerText, /wait_for_load_state\('load'\)/);
-    assert.match(managerText, /wait_for_selector\(/);
-    assert.match(managerText, /locator = self\.page\.locator\('div\.one'\)\.first/);
-    assert.match(managerText, /await locator\.click\(timeout=self\.timeout_ms\)/);
+    assert.match(managerText, /from \.warmup import pipeline as warmup_runner/);
+    assert.match(managerText, /await warmup_runner\(warmup\)/);
+    assert.match(managerText, /Warmup\(/);
+    assert.match(managerText, /sniffer=sniffer/);
+    assert.match(managerText, /prefixes=\{/);
+    assert.doesNotMatch(managerText, /render_pipeline_steps\(/);
+
+    const warmupModule = readFileSync(path.join(packageDir, "warmup.py"), "utf8");
+    assert.match(warmupModule, /async def pipeline\(warmup: Warmup\)/);
+    assert.match(warmupModule, /MAIN_SITE_URL/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -1051,6 +1085,11 @@ test("python codegen generates both bundled msra documents without failing", () 
     .replace("style=repeat,", "style=delimited,")
     .replace('delimiter=","', 'delimiter="|"');
   writeFileSync(delimitedInputPath, delimitedSource, "utf8");
+  writeFileSync(
+    path.join(workDir, "warmup.py"),
+    readFileSync(path.join(repoRoot, "warmup.py"), "utf8"),
+    "utf8",
+  );
   cases.push({
     inputPath: delimitedInputPath,
     outputDir: path.join(workDir, "delimited"),
@@ -1101,6 +1140,8 @@ test("python codegen generates both bundled msra documents without failing", () 
           assert.doesNotMatch(source, /\bBytesIO\b/);
         }
       }
+      const warmupModule = readFileSync(path.join(packageDir, "warmup.py"), "utf8");
+      assert.match(warmupModule, /async def pipeline\(warmup: Warmup\)/);
       assert.doesNotThrow(() => readFileSync(path.join(packageDir, "manager.py"), "utf8"));
     }
   } finally {
@@ -1940,8 +1981,10 @@ test("completion narrows nested inline table values by field", () => {
     {
       text: [
         "[app]",
-        "[app.warmup]",
-        "pipeline=[{for_tests=true, action=}]",
+        "[app.func.X]",
+        "transport=goto",
+        "[app.func.X.postprocess]",
+        "goto_pipeline=[{for_tests=true, action=}]",
         "",
       ].join("\n"),
       needle: "action=",
@@ -1974,8 +2017,10 @@ test("completion narrows nested inline table values by field", () => {
     {
       text: [
         "[app]",
-        "[app.warmup]",
-        "pipeline=[{action=wait_network, state=}]",
+        "[app.func.X]",
+        "transport=goto",
+        "[app.func.X.postprocess]",
+        "goto_pipeline=[{action=wait_network, state=}]",
         "",
       ].join("\n"),
       needle: "state=",
