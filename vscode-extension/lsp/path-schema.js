@@ -2,7 +2,7 @@ const SIMPLE_SEGMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 const TABLE_ROOT_SEGMENTS = new Set([
   "app",
-  "misklerreverseapi",
+  "msra",
 ]);
 
 const APP_CHILD_SEGMENTS = new Set([
@@ -81,7 +81,7 @@ function pathIdentityKey(pathSegments) {
     return JSON.stringify(tokens);
   }
 
-  if (segmentValue(root) === "misklerreverseapi" && !segmentQuoted(root)) {
+  if (segmentValue(root) === "msra" && !segmentQuoted(root)) {
     pushIdentityToken(tokens, "system", root);
     appendRemainingCustomIdentity(tokens, segments, 1);
     return JSON.stringify(tokens);
@@ -221,18 +221,18 @@ function validateTablePath(pathSegments) {
 
 function validateRootPath(segments) {
   const root = segments[0];
-  if (root.value === "misklerreverseapi" && !root.quoted) {
+  if (root.value === "msra" && !root.quoted) {
     if (segments.length === 1) {
       return { valid: true };
     }
-    return invalidPath(segments, 1, `Table path "${renderPath(segments)}" cannot declare child tables under "misklerreverseapi".`);
+    return invalidPath(segments, 1, `Table path "${renderPath(segments)}" cannot declare child tables under "msra".`);
   }
   if (root.value !== "app" || root.quoted) {
     return invalidPath(
       segments,
       0,
-      `Unknown root table "${renderSegment(root)}" in "${renderPath(segments)}". Expected "app" or "misklerreverseapi".`,
-      ["app", "misklerreverseapi"],
+      `Unknown root table "${renderSegment(root)}" in "${renderPath(segments)}". Expected "app" or "msra".`,
+      ["app", "msra"],
     );
   }
   if (segments.length === 1) {

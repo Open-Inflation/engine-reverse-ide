@@ -25,16 +25,16 @@
         if not isinstance(value, str):
             raise TypeError("`{{ name }}` must be str")
 {% endif %}
-{% if revalue_pattern %}
-        if re.fullmatch({{ revalue_pattern }}, str(value)) is None:
-{% if revalue_error %}
-            raise ValueError({{ revalue_error }})
+{% if match_pattern %}
+        if re.fullmatch({{ match_pattern }}, str(value)) is None:
+{% if match_error %}
+            raise ValueError({{ match_error }})
 {% else %}
             raise ValueError("`{{ name }}` does not match the expected format")
 {% endif %}
-{% elif revalue_range %}
-        if float(value) < {{ revalue_range[0] }} or float(value) > {{ revalue_range[1] }}:
-            raise ValueError("`{{ name }}` must be between {{ revalue_range[0] }} and {{ revalue_range[1] }}")
+{% elif match_range %}
+        if float(value) < {{ match_range[0] }} or float(value) > {{ match_range[1] }}:
+            raise ValueError("`{{ name }}` must be between {{ match_range[0] }} and {{ match_range[1] }}")
 {% endif %}
         self.{{ backing_name }} = value
 {% endif %}

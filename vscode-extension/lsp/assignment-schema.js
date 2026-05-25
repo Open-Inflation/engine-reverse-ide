@@ -188,6 +188,10 @@ function matchesWarmupPath(path) {
   return path.length === 2 && path[0] === "app" && path[1] === "warmup";
 }
 
+function matchesAppPath(path) {
+  return path.length === 1 && path[0] === "app";
+}
+
 function matchesVariablesPath(path) {
   return path.length === 3 && path[0] === "app" && path[1] === "variables";
 }
@@ -201,13 +205,15 @@ function matchesExampleItemPath(path) {
 }
 
 function annotationRequirementForAssignment(tablePath, key) {
-  if (matchesWarmupPath(tablePath)) {
+  if (matchesAppPath(tablePath)) {
     if (key === "humanize") {
       return { kind: "humanize", label: "@Humanize", legacyLabel: "humanize" };
     }
     if (key === "block_images") {
       return { kind: "flag", label: "@BlockImages", legacyLabel: "block_images" };
     }
+  }
+  if (matchesWarmupPath(tablePath)) {
     if (key === "headers_sniffer") {
       return { kind: "flag", label: "@SniffHeaders", legacyLabel: "headers_sniffer" };
     }
@@ -298,20 +304,20 @@ const NUMERIC_RANGE_SPEC = objectShape(
   },
 );
 
-const REVALUE_SPEC = { kind: "revalue" };
+const MATCH_SPEC = { kind: "match" };
 
 const VARIABLE_TYPE_ITEM_SPEC = objectShape(
   {
     type: enumOf(["string", "integer", "boolean", "null", "array", "object"]),
   },
   {
-    revalue: REVALUE_SPEC,
+    match: MATCH_SPEC,
     value: ANY,
   },
   {
     rules: [
-      forbidKeyWhenPresent("value", "revalue", {
-        message: 'Table item cannot define both "value" and "revalue".',
+      forbidKeyWhenPresent("value", "match", {
+        message: 'Table item cannot define both "value" and "match".',
       }),
     ],
   },
@@ -557,7 +563,7 @@ const WARMUP_SCRIPT_SPEC = patternOf(
 );
 
 const TABLE_SCHEMAS = [
-  makeFixedSchema(exactPath(["misklerreverseapi"]), {
+  makeFixedSchema(exactPath(["msra"]), {
     version: STRINGISH,
   }, {
     rules: [
@@ -575,6 +581,8 @@ const TABLE_SCHEMAS = [
     version: STRINGISH,
     timeout_ms: integerAtLeast(0),
     browser: BROWSER_SPEC,
+    humanize: HUMANIZE_SPEC,
+    block_images: BOOLEAN,
   }, {
     rules: [
       forbidDynamicValue("version", {
@@ -584,8 +592,6 @@ const TABLE_SCHEMAS = [
     ],
   }),
   makeFixedSchema(exactPath(["app", "warmup"]), {
-    humanize: HUMANIZE_SPEC,
-    block_images: BOOLEAN,
     warmup: WARMUP_SCRIPT_SPEC,
     headers_sniffer: BOOLEAN,
     on_error_screenshot_path: SCREENSHOT_PATH_SPEC,
@@ -665,7 +671,7 @@ const TABLE_SCHEMAS = [
     default: ANY,
     values: ARRAY,
     from: ANY,
-    revalue: REVALUE_SPEC,
+    match: MATCH_SPEC,
   }, {
     rules: [
       forbidDynamicValue("description", {
@@ -697,7 +703,7 @@ const TABLE_SCHEMAS = [
     values: arrayOf(URL_PARAM_VALUE_SPEC),
     description: STRINGISH,
     from: ANY,
-    revalue: REVALUE_SPEC,
+    match: MATCH_SPEC,
   }, {
     rules: [
       forbidDynamicValue("description", {
@@ -873,7 +879,7 @@ function collectValueDiagnostics(value, spec, fallbackRange = null, skipRules = 
     }
     return diagnostics;
   }
-  if (spec.kind === "revalue") {
+  if (spec.kind === "match") {
     if (value instanceof RefExpr) {
       return [];
     }
@@ -882,12 +888,12 @@ function collectValueDiagnostics(value, spec, fallbackRange = null, skipRules = 
       if (diagnostics.length > 0) {
         const keys = new Set(value.items.map((entry) => entry.key));
         if (keys.has("regex")) {
-          return [typeDiagnostic(fallbackRange || value.range, `Expected reference <...> or numeric range inline table for revalue but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+          return [typeDiagnostic(fallbackRange || value.range, `Expected reference <...> or numeric range inline table for match but got ${describeValue(value)}`, "invalid-assignment-value-type")];
         }
       }
       return diagnostics;
     }
-    return [typeDiagnostic(fallbackRange || value.range, `Expected reference <...> or numeric range inline table for revalue but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+    return [typeDiagnostic(fallbackRange || value.range, `Expected reference <...> or numeric range inline table for match but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
   if (spec.kind === "enum") {
     if (value instanceof StringExpr && value.quoted === false && spec.values.includes(value.value)) {
@@ -1235,7 +1241,7 @@ function describeSpec(spec) {
     }
     return `inline table with ${parts.join(" and ")}`;
   }
-  if (spec.kind === "revalue") {
+  if (spec.kind === "match") {
     return "reference <...> or numeric range inline table";
   }
   if (spec.kind === "enum") {

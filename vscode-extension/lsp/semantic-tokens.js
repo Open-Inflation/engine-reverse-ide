@@ -25,7 +25,7 @@ const SEMANTIC_TOKEN_MODIFIERS = [
 
 const TABLE_ROOT_SEGMENTS = new Set([
   "app",
-  "misklerreverseapi",
+  "msra",
 ]);
 
 const APP_CHILD_SEGMENTS = new Set([

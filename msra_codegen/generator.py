@@ -236,6 +236,8 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         "version": str(get_plain_value(get_assignment(app_table, "version", "0.1.0"))),
         "timeout_ms": int(get_plain_value(get_assignment(app_table, "timeout_ms", 35000))),
         "browser": str(get_plain_value(get_assignment(app_table, "browser", "camoufox"))),
+        "humanize": get_plain_value(get_assignment(app_table, "humanize", False)),
+        "block_images": bool(get_plain_value(get_assignment(app_table, "block_images", False))),
     }
 
     prefixes_table = get_table(["app", "prefixes"])
@@ -283,8 +285,6 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     if warmup_table:
         warmup_script = parse_script_reference(get_assignment(warmup_table, "warmup"))
         warmup_spec = {
-            "humanize": bool(get_plain_value(get_assignment(warmup_table, "humanize", False))),
-            "block_images": bool(get_plain_value(get_assignment(warmup_table, "block_images", False))),
             "headers_sniffer": bool(get_plain_value(get_assignment(warmup_table, "headers_sniffer", False))),
             "on_error_screenshot_path": get_plain_value(get_assignment(warmup_table, "on_error_screenshot_path", "")),
             "script": warmup_script,
@@ -302,7 +302,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
             {
                 "name": table["path"][2],
                 "types": types_expr,
-                "revalue": extract_variable_revalue(types_expr),
+                "match": extract_variable_match(types_expr),
                 "read_only": bool(get_plain_value(get_assignment(table, "read_only", False))),
                 "from": get_assignment(table, "from"),
                 "description": get_plain_value(get_assignment(table, "description", "")),
@@ -402,7 +402,7 @@ def build_input_spec(table: dict[str, Any], get_assignment) -> dict[str, Any]:
         "default": get_assignment(table, "default"),
         "required": bool(get_plain_value(get_assignment(table, "required", False))),
         "values": get_assignment(table, "values"),
-        "revalue": get_assignment(table, "revalue"),
+        "match": get_assignment(table, "match"),
         "read_only": bool(get_plain_value(get_assignment(table, "read_only", False))),
         "from": get_assignment(table, "from"),
         "description": str(get_plain_value(get_assignment(table, "description", ""))),
@@ -573,9 +573,9 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
         "has_string": "string" in type_names or not type_names,
         "has_null": "null" in type_names,
         "setter_enabled": should_render_setter(variable),
-        "revalue_pattern": revalue_to_pattern(variable.get("revalue")),
-        "revalue_error": revalue_to_error(variable.get("revalue")),
-        "revalue_range": revalue_to_range(variable.get("revalue")),
+        "match_pattern": match_to_pattern(variable.get("match")),
+        "match_error": match_to_error(variable.get("match")),
+        "match_range": match_to_range(variable.get("match")),
     }
 
 
@@ -747,7 +747,7 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
             values = get_plain_value(input_spec.get("values"))
         values = selectable_values_from_plain_values(values)
         has_type_checks = is_list or any(type_name in {"integer", "boolean", "number", "string"} for type_name in type_names)
-        has_value_checks = bool(input_spec.get("revalue") or values)
+        has_value_checks = bool(input_spec.get("match") or values)
         validations.append(
             {
                 "name": input_spec["name"],
@@ -755,11 +755,11 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
                 "type_names": sorted(type_names),
                 "item_type_names": sorted(type_names) if is_list else [],
                 "is_list": is_list,
-                "revalue_pattern": (
-                    revalue_to_pattern(input_spec.get("revalue"))
+                "match_pattern": (
+                    match_to_pattern(input_spec.get("match"))
                 ),
-                "revalue_error": revalue_to_error(input_spec.get("revalue")),
-                "revalue_range": revalue_to_range(input_spec.get("revalue")),
+                "match_error": match_to_error(input_spec.get("match")),
+                "match_range": match_to_range(input_spec.get("match")),
                 "values_expr": render_simple_value(values) if isinstance(values, list) and values and all(not isinstance(item, dict) for item in values) else None,
                 "has_checks": bool(input_spec.get("required", False)) or has_type_checks or has_value_checks,
             }
@@ -851,7 +851,7 @@ def build_input_allowed_values_map(func: dict[str, Any]) -> dict[str, list[Any]]
     result: dict[str, list[Any]] = {}
     for param in params:
         source_input_name = ref_input_name(param.get("from"))
-        if not source_input_name or param.get("revalue") is not None:
+        if not source_input_name or param.get("match") is not None:
             continue
         values = get_plain_value(param.get("values"))
         if not isinstance(values, list):
@@ -917,8 +917,6 @@ def build_manager_context(
             for variable in project["variables"]
         ],
         "warmup": {
-            "humanize": bool(warmup.get("humanize", True)),
-            "block_images": bool(warmup.get("block_images", True)),
             "headers_sniffer": bool(warmup.get("headers_sniffer", False)),
             "on_error_screenshot_path": render_simple_value(
                 warmup.get("on_error_screenshot_path", "screenshot.png")
@@ -1099,14 +1097,14 @@ def variable_type_names(variable: dict[str, Any]) -> set[str]:
     return set()
 
 
-def extract_variable_revalue(types_expr: dict[str, Any] | None) -> dict[str, Any] | None:
+def extract_variable_match(types_expr: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(types_expr, dict) or types_expr.get("kind") != "array":
         return None
     for item in types_expr.get("items", []):
         if not isinstance(item, dict) or item.get("kind") != "inline_table":
             continue
         for inline_item in item.get("items", []):
-            if inline_item.get("key") == "revalue":
+            if inline_item.get("key") == "match":
                 return inline_item.get("value")
     return None
 
@@ -1171,12 +1169,12 @@ def escape_docstring(text: str) -> str:
     return text.replace('"""', '\\"\\"\\"')
 
 
-def variable_revalue_pattern(variable: dict[str, Any]) -> str | None:
-    revalue = variable.get("revalue")
-    return revalue_to_pattern(revalue)
+def variable_match_pattern(variable: dict[str, Any]) -> str | None:
+    match = variable.get("match")
+    return match_to_pattern(match)
 
 
-def revalue_to_pattern(expr: dict[str, Any] | None) -> str | None:
+def match_to_pattern(expr: dict[str, Any] | None) -> str | None:
     if not expr:
         return None
     if expr.get("kind") == "string":
@@ -1188,7 +1186,7 @@ def revalue_to_pattern(expr: dict[str, Any] | None) -> str | None:
     return None
 
 
-def revalue_to_error(expr: dict[str, Any] | None) -> str | None:
+def match_to_error(expr: dict[str, Any] | None) -> str | None:
     if not expr or expr.get("kind") != "ref":
         return None
     parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
@@ -1197,7 +1195,7 @@ def revalue_to_error(expr: dict[str, Any] | None) -> str | None:
     return None
 
 
-def revalue_to_range(expr: dict[str, Any] | None) -> tuple[int, int] | None:
+def match_to_range(expr: dict[str, Any] | None) -> tuple[int, int] | None:
     if not expr or expr.get("kind") != "inline_table":
         return None
     values = inline_table_to_dict(expr)
@@ -1264,7 +1262,7 @@ def render_input_annotation(input_spec: dict[str, Any]) -> str:
     if values is None:
         values = get_plain_value(input_spec.get("values"))
     values = selectable_values_from_plain_values(values)
-    if input_spec.get("revalue") is None and values:
+    if input_spec.get("match") is None and values:
         literal_values = ", ".join(render_simple_value(item) for item in values)
         if base.startswith("list[") and base.endswith("]"):
             base = f"list[Literal[{literal_values}]]"

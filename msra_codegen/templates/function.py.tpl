@@ -44,16 +44,16 @@
 {{ indent }}    raise TypeError("`{{ item.name }}` must be str")
 {% endif %}
 {% endif %}
-{% if item.revalue_pattern and not item.is_list %}
-{{ indent }}if re.fullmatch({{ item.revalue_pattern }}, str({{ item.name }})) is None:
-{% if item.revalue_error %}
-{{ indent }}    raise ValueError({{ item.revalue_error }})
+{% if item.match_pattern and not item.is_list %}
+{{ indent }}if re.fullmatch({{ item.match_pattern }}, str({{ item.name }})) is None:
+{% if item.match_error %}
+{{ indent }}    raise ValueError({{ item.match_error }})
 {% else %}
 {{ indent }}    raise ValueError("`{{ item.name }}` does not match the expected format")
 {% endif %}
-{% elif item.revalue_range and not item.is_list %}
-{{ indent }}if float({{ item.name }}) < {{ item.revalue_range[0] }} or float({{ item.name }}) > {{ item.revalue_range[1] }}:
-{{ indent }}    raise ValueError("`{{ item.name }}` must be between {{ item.revalue_range[0] }} and {{ item.revalue_range[1] }}")
+{% elif item.match_range and not item.is_list %}
+{{ indent }}if float({{ item.name }}) < {{ item.match_range[0] }} or float({{ item.name }}) > {{ item.match_range[1] }}:
+{{ indent }}    raise ValueError("`{{ item.name }}` must be between {{ item.match_range[0] }} and {{ item.match_range[1] }}")
 {% endif %}
 {% if item.values_expr %}
 {% if item.is_list %}

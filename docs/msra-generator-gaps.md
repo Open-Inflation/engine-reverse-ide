@@ -10,7 +10,7 @@
 ```msra
 [app.func.A3A417.url.params.from_global.params.text]
 from=<INPUT.query>
-revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>
+match=<DOCUMENT.REGEXES.TEXT_REQUEST>
 ```
 
 Сейчас генератор собирает только таблицы прямого уровня `app.func.<id>.url.params`.

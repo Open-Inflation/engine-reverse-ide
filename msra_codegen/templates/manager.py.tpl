@@ -73,9 +73,9 @@ class {{ client_class_name }}:
         br = await AsyncCamoufox(
             headless=self.headless,
             proxy=px.as_dict(),
-            humanize={{ warmup.humanize }},
+            humanize={{ app.humanize }},
             **self.browser_opts,
-            block_images={{ warmup.block_images }},
+            block_images={{ app.block_images }},
             i_know_what_im_doing=True,
             exclude_addons=[DefaultAddons.UBO],
         ).start()
@@ -128,9 +128,9 @@ class {{ client_class_name }}:
             {{ variable.capture_expr }},
             label={{ variable.name | tojson }},
             kind={{ variable.capture_kind | tojson }},
-            pattern={{ variable.revalue_pattern if variable.revalue_pattern is not none else none }},
-            error_message={{ variable.revalue_error if variable.revalue_error is not none else none }},
-            range_value={{ variable.revalue_range if variable.revalue_range is not none else none }},
+            pattern={{ variable.match_pattern if variable.match_pattern is not none else none }},
+            error_message={{ variable.match_error if variable.match_error is not none else none }},
+            range_value={{ variable.match_range if variable.match_range is not none else none }},
         )
 {% endfor %}
         self.unstandard_urls = result_sniffer.get("request", {})

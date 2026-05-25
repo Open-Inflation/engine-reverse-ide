@@ -82,7 +82,7 @@ app
 
 Например:
 
-- корни таблиц: `app` и `misklerreverseapi` допустимы, quoted root - нет;
+- корни таблиц: `app` и `msra` допустимы, quoted root - нет;
 - в ветке `app` такие дети, как `warmup`, `variables`, `prefixes`, `regexes`, `groups`, `func`, должны идти без кавычек;
 - в ветке `url` unquoted `params` открывает namespace параметров, а quoted `"params"` уже не считается системным маркером и в этом слоте не подходит.
 

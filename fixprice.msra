@@ -1,4 +1,4 @@
-[misklerreverseapi]
+[msra]
 version="0.2.4.1"
 
 [app]
@@ -6,24 +6,24 @@ name="FixPriceAPI"
 version="0.2.4.1"
 timeout_ms=35000
 browser=camoufox
+@Humanize
+@BlockImages
 
 # Warmup mirrors FixPriceAPI._warmup():
 # MAIN_SITE_URL or ORIGIN -> sniffer for X-Key -> optional test_mode clicks -> body > pre.
 # Camoufox is started with @Humanize, @BlockImages, exclude_addons=[UBO], and i_know_what_im_doing=True.
 [app.warmup]
-@Humanize
-@BlockImages
 @SniffHeaders
 warmup="./warmup.py:pipeline"
 on_error_screenshot_path="screenshot.png"
 
 [app.variables.city_id]
-types=[{"type"=integer, "revalue"={from=1, to=2147483647}}, {"type"=null, "value"=null}]
+types=[{"type"=integer, "match"={from=1, to=2147483647}}, {"type"=null, "value"=null}]
 description="Current city id used by catalog and balance requests."
 from=<UNSTANDARD_HEADERS.REQUEST.x-city>
 
 [app.variables.language]
-types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.LANGUAGE_TAG>}, {"type"=null, "value"=null}]
+types=[{"type"=string, "match"=<DOCUMENT.REGEXES.LANGUAGE_TAG>}, {"type"=null, "value"=null}]
 description="Current language header value."
 from=<UNSTANDARD_HEADERS.REQUEST.x-language>
 
@@ -33,12 +33,12 @@ description="Access token captured by the warmup sniffer."
 from=<UNSTANDARD_HEADERS.REQUEST.x-key>
 
 [app.variables.delivery_type]
-types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.DELIVERY_TYPE>}, {"type"=null, "value"=null}]
+types=[{"type"=string, "match"=<DOCUMENT.REGEXES.DELIVERY_TYPE>}, {"type"=null, "value"=null}]
 description="Delivery mode used by the catalog."
 from=<UNSTANDARD_HEADERS.REQUEST.x-delivery-type>
 
 [app.variables.store_id]
-types=[{"type"=string, "revalue"=<DOCUMENT.REGEXES.STORE_ID>}, {"type"=null, "value"=null}]
+types=[{"type"=string, "match"=<DOCUMENT.REGEXES.STORE_ID>}, {"type"=null, "value"=null}]
 description="Store or PFM identifier."
 from=<UNSTANDARD_HEADERS.REQUEST.x-pfm>
 
@@ -121,13 +121,13 @@ description="Optional subcategory alias appended to the request path and body ca
 [app.func.CATALOG_PRODUCTS_LIST.input.page]
 type=integer
 default=1
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Page number for the listing."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.limit]
 type=integer
 default=24
-revalue={from=1, to=27}
+match={from=1, to=27}
 description="Page size for the listing; the Python code rejects values outside 1..27."
 
 [app.func.CATALOG_PRODUCTS_LIST.input.sort]
@@ -172,7 +172,7 @@ description="Checks store balance for a product in the current city."
 [app.func.CATALOG_PRODUCT_BALANCE.input.product_id]
 type=integer
 @Required
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Product id used in the balance path."
 
 [app.func.CATALOG_PRODUCT_BALANCE.input.in_stock]
@@ -222,7 +222,7 @@ description="Category slug for the structured overload."
 
 [app.func.CATALOG_PRODUCT_INFO.input.product_id]
 type=integer
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Product id for the structured overload."
 
 [app.func.CATALOG_PRODUCT_INFO.input.slug]
@@ -249,7 +249,7 @@ description="Lists countries and supports an optional ISO-2 alias filter."
 
 [app.func.GEOLOCATION_COUNTRIES_LIST.input.alias]
 type=string
-revalue=<DOCUMENT.REGEXES.COUNTRY_ALIAS>
+match=<DOCUMENT.REGEXES.COUNTRY_ALIAS>
 description="Optional ISO-2 country alias, uppercased by the code."
 
 [app.func.GEOLOCATION_COUNTRIES_LIST.url]
@@ -272,7 +272,7 @@ description="Lists regions and can optionally filter by country id."
 
 [app.func.GEOLOCATION_REGIONS_LIST.input.country_id]
 type=integer
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Optional country id filter."
 
 [app.func.GEOLOCATION_REGIONS_LIST.url]
@@ -296,7 +296,7 @@ description="Lists cities for a country."
 [app.func.GEOLOCATION_CITIES_LIST.input.country_id]
 type=integer
 @Required
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Country id used by the cities endpoint."
 
 [app.func.GEOLOCATION_CITIES_LIST.url]
@@ -321,7 +321,7 @@ description="Returns a single city by id."
 [app.func.GEOLOCATION_CITY_INFO.input.city_id]
 type=integer
 @Required
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="City id used in the path."
 
 [app.func.GEOLOCATION_CITY_INFO.url]
@@ -340,17 +340,17 @@ description="Searches stores by country, region, city, and address filters."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.country_id]
 type=integer
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Optional country id filter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.region_id]
 type=integer
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Optional region id filter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.city_id]
 type=integer
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Optional city id filter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.input.search]
@@ -425,11 +425,11 @@ description="Direct image URL."
 [app.func.GENERAL_DOWNLOAD_IMAGE.input.retry_attempts]
 type=integer
 default=3
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Retry attempts for the direct HTTP client."
 
 [app.func.GENERAL_DOWNLOAD_IMAGE.input.timeout]
 type=integer
 default=10
-revalue={from=1, to=2147483647}
+match={from=1, to=2147483647}
 description="Timeout in seconds; the Python code accepts float seconds, but the public contract keeps integer seconds."

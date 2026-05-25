@@ -681,7 +681,7 @@ class MsraLanguageServer {
   _tableCompletions(analyzed) {
     const suggestions = [
       ["app", "Top-level application namespace"],
-      ["misklerreverseapi", "Document root table"],
+      ["msra", "Document root table"],
       ["warmup", "Warmup settings"],
       ["variables", "Variable definitions"],
       ["prefixes", "Reusable prefixes"],

@@ -185,7 +185,7 @@ test("app metadata rejects malformed authors and license values", () => {
 
 test("version and name cannot be dynamic", () => {
   const text = [
-    "[misklerreverseapi]",
+    "[msra]",
     "version=<INPUT.version>",
     "[app]",
     "version=<INPUT.version>",
@@ -408,7 +408,7 @@ test("nested example tables, values, list_style, and types structures are valida
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"revalue"={from=1, to=27}}]',
+    'types=[{"match"={from=1, to=27}}]',
     "[app.func.A3A417]",
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
@@ -525,20 +525,20 @@ test("example tables inputs must match declared function input types", () => {
   assert.match(diagnostic.message, /integer/);
 });
 
-test("variable type items reject value and revalue together", () => {
+test("variable type items reject value and match together", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"=integer, "value"=null, "revalue"={from=1, to=27}}]',
+    'types=[{"type"=integer, "value"=null, "match"={from=1, to=27}}]',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///conflicting-variable-type-value-revalue.msra");
+  const document = parseDocument(text, "file:///conflicting-variable-type-value-match.msra");
   const analysis = analyzeDocument(document);
   const diagnostic = analysis.diagnostics.find((item) => item.code === "conflicting-inline-table-keys");
 
-  assert.ok(diagnostic, "expected value and revalue to conflict inside variable type items");
+  assert.ok(diagnostic, "expected value and match to conflict inside variable type items");
   assert.match(diagnostic.message, /value/);
-  assert.match(diagnostic.message, /revalue/);
+  assert.match(diagnostic.message, /match/);
 });
 
 test("@ReadOnly annotation on app.variables stays valid", () => {
@@ -575,49 +575,49 @@ test("@Required and @SubUrl annotations stay valid", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
-test("values and revalue cannot coexist in input and url params tables", () => {
+test("values and match cannot coexist in input and url params tables", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     'type=string',
     'values=["one", "two"]',
-    'revalue={from=1, to=27}',
+    'match={from=1, to=27}',
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     'values=[{"value_in_url"="/search", "value"="search"}]',
-    'revalue={from=1, to=27}',
+    'match={from=1, to=27}',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///conflicting-values-revalue.msra");
+  const document = parseDocument(text, "file:///conflicting-values-match.msra");
   const analysis = analyzeDocument(document);
   const conflictDiagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "conflicting-assignment-keys");
 
   assert.strictEqual(conflictDiagnostics.length, 2);
   assert.match(conflictDiagnostics[0].message, /values/);
-  assert.match(conflictDiagnostics[0].message, /revalue/);
+  assert.match(conflictDiagnostics[0].message, /match/);
   assert.match(conflictDiagnostics[1].message, /values/);
-  assert.match(conflictDiagnostics[1].message, /revalue/);
+  assert.match(conflictDiagnostics[1].message, /match/);
 });
 
-test("string revalue syntax is rejected in favor of reference or numeric range form", () => {
+test("string match syntax is rejected in favor of reference or numeric range form", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     'type=string',
-    'revalue="^[a-z]+$"',
+    'match="^[a-z]+$"',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///string-revalue-is-invalid.msra");
+  const document = parseDocument(text, "file:///string-match-is-invalid.msra");
   const analysis = analyzeDocument(document);
   const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
 
-  assert.ok(diagnostic, "expected string revalue syntax to be rejected");
+  assert.ok(diagnostic, "expected string match syntax to be rejected");
   assert.match(diagnostic.message, /reference <\.\.\.>|numeric range/i);
 });
 
-test("reference revalue syntax is accepted", () => {
+test("reference match syntax is accepted", () => {
   const text = [
     "[app]",
     "[app.regexes.TEXT_REQUEST]",
@@ -625,10 +625,10 @@ test("reference revalue syntax is accepted", () => {
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     'type=string',
-    'revalue=<DOCUMENT.REGEXES.TEXT_REQUEST>',
+    'match=<DOCUMENT.REGEXES.TEXT_REQUEST>',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///reference-revalue-is-valid.msra");
+  const document = parseDocument(text, "file:///reference-match-is-valid.msra");
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
@@ -642,7 +642,7 @@ test("legacy DOCUMENT.REGEX alias is no longer resolved", () => {
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     'type=string',
-    'revalue=<DOCUMENT.REGEX.TEXT_REQUEST>',
+    'match=<DOCUMENT.REGEX.TEXT_REQUEST>',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///legacy-document-regex-alias.msra");
@@ -653,16 +653,16 @@ test("legacy DOCUMENT.REGEX alias is no longer resolved", () => {
   assert.match(diagnostic.message, /DOCUMENT\.REGEX\.TEXT_REQUEST/);
 });
 
-test("inline regex object revalue syntax is rejected in favor of reference or numeric range form", () => {
+test("inline regex object match syntax is rejected in favor of reference or numeric range form", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     'type=string',
-    'revalue={regex="^[a-z]+$"}',
+    'match={regex="^[a-z]+$"}',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///inline-regex-revalue-is-invalid.msra");
+  const document = parseDocument(text, "file:///inline-regex-match-is-invalid.msra");
   const analysis = analyzeDocument(document);
   const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
 
@@ -805,10 +805,10 @@ test("list url params with from require at least one selectable value", () => {
 
   assert.ok(diagnostic, "expected list url params with from to require at least one selectable value");
   assert.match(diagnostic.message, /default=true/);
-  assert.match(diagnostic.message, /revalue/);
+  assert.match(diagnostic.message, /match/);
 });
 
-test("list url params with revalue can omit selectable values", () => {
+test("list url params with match can omit selectable values", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
@@ -818,14 +818,14 @@ test("list url params with revalue can omit selectable values", () => {
     "[app.func.A3A417.url.params.url]",
     "@List",
     "from=<INPUT.url>",
-    "revalue={from=1, to=27}",
+    "match={from=1, to=27}",
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///url-param-revalue-allows-missing-values.msra");
+  const document = parseDocument(text, "file:///url-param-match-allows-missing-values.msra");
   const analysis = analyzeDocument(document);
   const diagnostic = analysis.diagnostics.find((item) => item.code === "missing-url-param-selectable-value");
 
-  assert.ok(!diagnostic, "expected revalue to make selectable values optional");
+  assert.ok(!diagnostic, "expected match to make selectable values optional");
 });
 
 test("list url params reject non-list inputs in from", () => {
@@ -885,34 +885,34 @@ test("quoted list types are rejected for inputs", () => {
   assert.match(diagnostic.message, /list\[type\]/i);
 });
 
-test("numeric revalue ranges accept integer and float bounds", () => {
+test("numeric match ranges accept integer and float bounds", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.limit]",
     'type=integer',
-    'revalue={from=1, to=27}',
+    'match={from=1, to=27}',
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.ratio]",
-    'revalue={from=0.5, to=2.5}',
+    'match={from=0.5, to=2.5}',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///numeric-revalue-ranges.msra");
+  const document = parseDocument(text, "file:///numeric-match-ranges.msra");
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
-test("numeric revalue ranges require ordered bounds", () => {
+test("numeric match ranges require ordered bounds", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.limit]",
     'type=integer',
-    'revalue={from=27, to=1}',
+    'match={from=27, to=1}',
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///invalid-numeric-revalue-range.msra");
+  const document = parseDocument(text, "file:///invalid-numeric-match-range.msra");
   const analysis = analyzeDocument(document);
   const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-inline-table-value-order");
 
@@ -938,7 +938,6 @@ test("@Humanize and @BlockImages require camoufox browser", () => {
   const text = [
     "[app]",
     'browser=chromium',
-    "[app.warmup]",
     "@Humanize",
     "@BlockImages",
     "",
@@ -955,7 +954,6 @@ test("@Humanize accepts positive numbers when camoufox is enabled", () => {
   const text = [
     "[app]",
     'browser=camoufox',
-    "[app.warmup]",
     "@Humanize(0.5)",
     "",
   ].join("\n");
@@ -1022,13 +1020,13 @@ test("generator wires external warmup scripts into the manager", () => {
     "timeout_ms=1000",
     'browser=camoufox',
     'description=""',
+    "@Humanize(0.5)",
+    "@BlockImages",
     "",
     "[app.prefixes]",
     'MAIN_SITE_URL="https://example.com/"',
     "",
     "[app.warmup]",
-    "@Humanize",
-    "@BlockImages",
     "@SniffHeaders",
     'warmup="./warmup.py:pipeline"',
     'on_error_screenshot_path="screenshot.png"',
@@ -1053,6 +1051,8 @@ test("generator wires external warmup scripts into the manager", () => {
     assert.match(managerText, /from \.warmup import pipeline as warmup_runner/);
     assert.match(managerText, /await warmup_runner\(warmup\)/);
     assert.match(managerText, /Warmup\(/);
+    assert.match(managerText, /humanize=0\.5/);
+    assert.match(managerText, /block_images=True/);
     assert.match(managerText, /sniffer=sniffer/);
     assert.match(managerText, /prefixes=\{/);
     assert.doesNotMatch(managerText, /render_pipeline_steps\(/);
@@ -1341,7 +1341,7 @@ test("virtual variable references must resolve to declared variables", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"=integer, "revalue"={from=1, to=27}}, {"type"=null, "value"=null}]',
+    'types=[{"type"=integer, "match"={from=1, to=27}}, {"type"=null, "value"=null}]',
     'description="Идентификатор города"',
     'from=<UNSTANDARD_HEADERS.REQUEST.x-city>',
     "",
@@ -1377,7 +1377,6 @@ test("annotation-only flags reject explicit arguments", () => {
   const text = [
     "[app]",
     "browser=camoufox",
-    "[app.warmup]",
     "@Humanize(true)",
     "@BlockImages(false)",
     "[app.func.A3A417]",
@@ -1403,9 +1402,9 @@ test("legacy boolean toggles are rejected in favor of annotations", () => {
   const text = [
     "[app]",
     "browser=camoufox",
-    "[app.warmup]",
     "humanize=true",
     "block_images=true",
+    "[app.warmup]",
     "headers_sniffer=true",
     "[app.variables.city_id]",
     "read_only=true",
@@ -1516,7 +1515,7 @@ test("grammar splits table paths into system segments, user segments, dots, and 
 
   assert.match(assignmentPattern.match, /[:=]/);
   assert.match(headerPattern.begin, /app\\b/);
-  assert.match(headerPattern.begin, /misklerreverseapi\\b/);
+  assert.match(headerPattern.begin, /msra\\b/);
   assert.strictEqual(headerPattern.contentName, "meta.path.msra");
   assert.strictEqual(assignmentPattern.name, "keyword.other.attribute-name.msra");
   assert.deepStrictEqual(headerPattern.patterns.map((pattern) => pattern.include), [
@@ -1850,7 +1849,7 @@ test("reference completions insert angle brackets when the user has not typed th
     const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"=integer, "revalue"={from=1, to=2147483647}}, {"type"=null, "value"=null}]',
+    'types=[{"type"=integer, "match"={from=1, to=2147483647}}, {"type"=null, "value"=null}]',
     'description="Current city id used by catalog and balance requests."',
     lineText,
     "",
@@ -2008,7 +2007,7 @@ test("completion narrows nested inline table values by field", () => {
         "[app.func.X]",
         "[app.func.X.input.city_id]",
         "type=integer",
-        "revalue={from=1, to=}",
+        "match={from=1, to=}",
         "",
       ].join("\n"),
       needle: "to=",
@@ -2077,7 +2076,7 @@ test("cli check uses the same analyzer diagnostics", () => {
       "[app.func.A3A417]",
       "[app.func.A3A417.input.query]",
       'values=["one"]',
-      'revalue={from=1, to=27}',
+      'match={from=1, to=27}',
       "",
     ].join("\n"),
     "utf8",
@@ -2092,5 +2091,5 @@ test("cli check uses the same analyzer diagnostics", () => {
   assert.notStrictEqual(result.status, 0);
   assert.match(output, /conflicting-assignment-keys/);
   assert.match(output, /values/);
-  assert.match(output, /revalue/);
+  assert.match(output, /match/);
 });

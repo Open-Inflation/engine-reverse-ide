@@ -29,7 +29,7 @@ function validateAssignmentRelations(tableIndex, assignmentIndex) {
   const diagnostics = [];
   const assignmentsByTable = collectAssignmentsByTable(assignmentIndex);
 
-  diagnostics.push(...validateValuesRevalueConflicts(assignmentsByTable));
+  diagnostics.push(...validateValuesMatchConflicts(assignmentsByTable));
   diagnostics.push(...validateFuncTransportRelations(assignmentsByTable));
   diagnostics.push(...validateFuncPostprocessRelations(tableIndex, assignmentIndex));
   diagnostics.push(...validateWarmupRelations(assignmentIndex));
@@ -53,25 +53,25 @@ function collectAssignmentsByTable(assignmentIndex) {
   return assignmentsByTable;
 }
 
-function validateValuesRevalueConflicts(assignmentsByTable) {
+function validateValuesMatchConflicts(assignmentsByTable) {
   const diagnostics = [];
   for (const assignments of assignmentsByTable.values()) {
     if (!assignments.length) {
       continue;
     }
     const tablePath = assignments[0].tablePath || [];
-    if (!isValuesRevalueTable(tablePath)) {
+    if (!isValuesMatchTable(tablePath)) {
       continue;
     }
     const valuesAssignment = assignments.find((assignment) => assignment.key === "values");
-    const revalueAssignment = assignments.find((assignment) => assignment.key === "revalue");
-    if (!valuesAssignment || !revalueAssignment) {
+    const matchAssignment = assignments.find((assignment) => assignment.key === "match");
+    if (!valuesAssignment || !matchAssignment) {
       continue;
     }
     diagnostics.push(
       new Diagnostic(
-        `Table [${pathLabel(tablePath)}] cannot define both "values" and "revalue".`,
-        revalueAssignment.keyRange || valuesAssignment.keyRange,
+        `Table [${pathLabel(tablePath)}] cannot define both "values" and "match".`,
+        matchAssignment.keyRange || valuesAssignment.keyRange,
         "error",
         "msra",
         "conflicting-assignment-keys",
@@ -176,19 +176,20 @@ function validateFuncPostprocessRelations(tableIndex, assignmentIndex) {
 
 function validateWarmupRelations(assignmentIndex) {
   const diagnostics = [];
-  const warmupPath = ["app", "warmup"];
-  const browser = getEnumAssignmentValue(assignmentIndex, ["app"], "browser");
+  const appPath = ["app"];
+  const browser = getEnumAssignmentValue(assignmentIndex, ["app"], "browser") || "camoufox";
   const browserIsCamoufox = browser === "camoufox";
 
   for (const key of ["humanize", "block_images"]) {
-    const assignment = getAssignment(assignmentIndex, warmupPath, key);
+    const assignment = getAssignment(assignmentIndex, appPath, key);
     if (!assignment) {
       continue;
     }
     if (!browserIsCamoufox) {
+      const label = key === "humanize" ? "@Humanize" : "@BlockImages";
       diagnostics.push(
         new Diagnostic(
-          `Warmup option "${key}" is only available when app.browser="camoufox".`,
+          `App annotation "${label}" is only available when app.browser="camoufox".`,
           assignment.keyRange,
           "error",
           "msra",
@@ -284,14 +285,14 @@ function validateUrlParamValueRelations(assignmentsByTable) {
       continue;
     }
     const tablePath = assignments[0].tablePath || [];
-    if (!isValuesRevalueTable(tablePath)) {
+    if (!isValuesMatchTable(tablePath)) {
       continue;
     }
 
     const valuesAssignment = assignments.find((assignment) => assignment.key === "values");
     const listAssignment = assignments.find((assignment) => assignment.key === "list");
     const fromAssignment = assignments.find((assignment) => assignment.key === "from");
-    const revalueAssignment = assignments.find((assignment) => assignment.key === "revalue");
+    const matchAssignment = assignments.find((assignment) => assignment.key === "match");
 
     if (
       tablePath[3] === "url" &&
@@ -311,12 +312,12 @@ function validateUrlParamValueRelations(assignmentsByTable) {
       listAssignment.value instanceof BoolExpr &&
       listAssignment.value.value === true &&
       fromAssignment &&
-      !revalueAssignment &&
+      !matchAssignment &&
       !hasSelectableUrlParamValues(valuesAssignment)
     ) {
       diagnostics.push(
         new Diagnostic(
-          `URL parameter [${pathLabel(tablePath)}] with @List and from requires at least one selectable "value" entry in "values"; entries with only default=true are fallback choices and do not count. Use revalue instead if the parameter should accept arbitrary values.`,
+          `URL parameter [${pathLabel(tablePath)}] with @List and from requires at least one selectable "value" entry in "values"; entries with only default=true are fallback choices and do not count. Use match instead if the parameter should accept arbitrary values.`,
           (valuesAssignment && valuesAssignment.keyRange) || fromAssignment.keyRange,
           "error",
           "msra",
@@ -953,7 +954,7 @@ function hasUnquotedChildTable(tableIndex, parentPath, childName) {
   return false;
 }
 
-function isValuesRevalueTable(path) {
+function isValuesMatchTable(path) {
   return Array.isArray(path)
     && path[0] === "app"
     && path[1] === "func"
