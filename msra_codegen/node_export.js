@@ -220,6 +220,7 @@ function serializeAssignment(assignment) {
     annotation: Boolean(assignment.annotation),
     annotationName: assignment.annotationName || null,
     annotationHasArguments: Boolean(assignment.annotationHasArguments),
+    annotationArgs: Array.isArray(assignment.annotationArgs) ? assignment.annotationArgs.map(serializeNamedArg) : [],
   };
 }
 

@@ -262,6 +262,11 @@ test("python codegen generates both bundled msra documents without failing", () 
     .replace('package_name="ozon_api"', 'package_name="mit_api"')
     .replace('license="GPL-3.0-or-later"', 'license="MIT"');
   writeFileSync(mitInputPath, mitSource, "utf8");
+  const printListInputPath = path.join(workDir, "example-print-list.msra");
+  const printListSource = readFileSync(path.join(repoRoot, "examples", "example.msra"), "utf8")
+    .replace('package_name="ozon_api"', 'package_name="print_list_api"')
+    .replace("@Docs", '@Docs(print=["Первая строка", "Вторая строка"])');
+  writeFileSync(printListInputPath, printListSource, "utf8");
   cases.push({
     inputPath: mitInputPath,
     outputDir: path.join(workDir, "mit"),
@@ -272,6 +277,12 @@ test("python codegen generates both bundled msra documents without failing", () 
     inputPath: delimitedInputPath,
     outputDir: path.join(workDir, "delimited"),
     packageName: "delimited_api",
+    license: "GPL-3.0-or-later",
+  });
+  cases.push({
+    inputPath: printListInputPath,
+    outputDir: path.join(workDir, "print-list"),
+    packageName: "print_list_api",
     license: "GPL-3.0-or-later",
   });
 
@@ -308,6 +319,13 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(exampleText, /async def main\(\):/);
       assert.match(exampleText, /async with [A-Za-z0-9_]+\(\) as api:/);
       assert.doesNotMatch(exampleText, /\bpass\b/);
+      if (testCase.packageName === "fixprice_api") {
+        assert.match(exampleText, /print\(f"Первая категория: \{tree\[next\(iter\(tree\)\)\]\['alias'\]\}"\)/);
+      }
+      if (testCase.packageName === "print_list_api") {
+        assert.match(exampleText, /print\(['"]Первая строка['"]\)/);
+        assert.match(exampleText, /print\(['"]Вторая строка['"]\)/);
+      }
       assert.ok(!existsSync(path.join(testCase.outputDir, "merged.msra")), "expected merged.msra to be cleaned up by default");
       assert.ok(!existsSync(path.join(testCase.outputDir, "stale.txt")), "expected stale root files to be removed by default");
       assert.ok(!existsSync(path.join(testCase.outputDir, "legacy")), "expected stale nested directories to be removed by default");

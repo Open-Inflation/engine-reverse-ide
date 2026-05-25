@@ -10,4 +10,4 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/category"
 
 [CATALOG_TREE.examples.tree]
 @Test
-@Docs
+@Docs(print="Первая категория: "<FUNCRESULT.CATALOG_TREE.tree.JSON[@Key(0)]["alias"]>)

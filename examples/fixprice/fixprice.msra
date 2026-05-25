@@ -4,6 +4,7 @@ version="0.2.4.1"
 [app]
 name="FixPriceAPI"
 package_name="fixprice_api"
+description=""
 version="0.2.4.1"
 authors=[
     {name="Miskler", email="mail@miskler.ru"},

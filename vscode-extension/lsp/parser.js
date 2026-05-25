@@ -521,19 +521,31 @@ class Parser {
     const annotationRange = new Range(atToken.range.start, nameToken.range.end);
     let value = new BoolExpr(annotationRange, true);
     let annotationHasArguments = false;
+    let annotationArgs = [];
     if (this._match("LPAREN")) {
       annotationHasArguments = true;
       if (this._check("RPAREN")) {
         this._advance();
       } else {
-        value = this._withValuePathSegment(
-          {
-            value: annotationKey,
-            quoted: false,
-            range: annotationRange,
-          },
-          () => this._parseExpr(false, true, true),
-        );
+        if (annotationKey === "docs") {
+          annotationArgs = this._withValuePathSegment(
+            {
+              value: annotationKey,
+              quoted: false,
+              range: annotationRange,
+            },
+            () => this._parseNamedArgumentList("annotation"),
+          );
+        } else {
+          value = this._withValuePathSegment(
+            {
+              value: annotationKey,
+              quoted: false,
+              range: annotationRange,
+            },
+            () => this._parseExpr(false, true, true),
+          );
+        }
         this._expect("RPAREN", "Expected ')' to close annotation");
       }
     }
@@ -548,6 +560,7 @@ class Parser {
       true,
       nameToken.value,
       annotationHasArguments,
+      annotationArgs,
       annotationRange,
     );
     if (this._check("NEWLINE")) {
@@ -556,6 +569,51 @@ class Parser {
       this._error("Expected end of line after annotation", this._current().range, "trailing-annotation");
       this._syncToNextStatement();
     }
+  }
+
+  _parseNamedArgumentList(context) {
+    const args = [];
+    while (!this._check("RPAREN") && !this._check("EOF")) {
+      if (this._check("NEWLINE")) {
+        this._advance();
+        continue;
+      }
+      const nameToken = this._parseKeyToken();
+      if (nameToken === null) {
+        const label = context === "annotation" ? "named annotation argument" : "named argument";
+        this._error(`Expected ${label}`, this._current().range, context === "annotation" ? "expected-annotation-argument" : "expected-named-argument");
+        this._syncUntil(new Set(["COMMA", "RPAREN"]));
+        if (this._match("COMMA")) {
+          continue;
+        }
+        break;
+      }
+      if (!this._match("EQ")) {
+        const label = context === "annotation" ? "argument" : "argument";
+        this._error(`Expected '=' after ${label} name`, this._current().range, context === "annotation" ? "expected-annotation-argument-equals" : "expected-argument-equals");
+        this._syncUntil(new Set(["COMMA", "RPAREN"]));
+        if (this._match("COMMA")) {
+          continue;
+        }
+        break;
+      }
+      const value = this._withValuePathSegment(
+        {
+          value: nameToken.value,
+          quoted: nameToken.type === "STRING",
+          range: nameToken.range,
+        },
+        () => this._parseExpr(false, true),
+      );
+      args.push(new NamedArg(nameToken.value, nameToken.range, value));
+      if (this._match("COMMA")) {
+        continue;
+      }
+      if (this._check("RPAREN")) {
+        break;
+      }
+    }
+    return args;
   }
 
   _parseDirectiveOrRecover() {
@@ -625,7 +683,7 @@ class Parser {
     return annotationMap[normalized] || null;
   }
 
-  _registerAssignment(keyToken, value, quoted = false, annotation = false, annotationName = null, annotationHasArguments = false, annotationRange = null) {
+  _registerAssignment(keyToken, value, quoted = false, annotation = false, annotationName = null, annotationHasArguments = false, annotationArgs = [], annotationRange = null) {
     const key = keyToken.value;
     const keyRange = keyToken.range;
     const assignmentRange = new Range(keyRange.start, value ? value.range.end : this._previous().range.end);
@@ -647,6 +705,7 @@ class Parser {
       annotation,
       annotationName,
       annotationHasArguments,
+      annotationArgs,
       annotationRange,
     );
     if (this.assignments.has(assignmentIdentityKey)) {

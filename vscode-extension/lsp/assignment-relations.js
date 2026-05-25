@@ -472,9 +472,90 @@ function validateExampleInputRelations(tableIndex, lookupTableIndex, lookupAssig
         );
       }
     }
+
+    const docsAssignment = getTableAssignment(assignmentsByTable, table.path, "docs");
+    const docsPrintArgs = docsAssignment && Array.isArray(docsAssignment.annotationArgs)
+      ? docsAssignment.annotationArgs.filter((arg) => arg && arg.name === "print")
+      : [];
+    for (const printArg of docsPrintArgs) {
+      validateFuncResultReferencesInExpression(
+        printArg.value,
+        table,
+        ["docs", "print"],
+        lookupTableIndex,
+        lookupAssignmentIndex,
+        diagnostics,
+        '@Docs(print=...)',
+      );
+    }
   }
 
   return diagnostics;
+}
+
+function validateFuncResultReferencesInExpression(expr, table, valuePathSegments, lookupTableIndex, lookupAssignmentIndex, diagnostics, contextLabel) {
+  walkExpressions(expr, (node) => {
+    if (!(node instanceof RefExpr) || !isFuncResultReferenceValue(node)) {
+      return;
+    }
+    const funcResultReference = parseFuncResultReference(node, table.path || [], valuePathSegments);
+    if (funcResultReference === null || !funcResultReference.valid) {
+      diagnostics.push(
+        new Diagnostic(
+          (funcResultReference && funcResultReference.message)
+            || `${contextLabel} in table [${pathLabel(table.path)}] uses an invalid FUNCRESULT reference.`,
+          node.range || table.headerRange,
+          "error",
+          "msra",
+          (funcResultReference && funcResultReference.code) || "invalid-funcresult-reference",
+        ),
+      );
+      return;
+    }
+
+    const referencedExamplePath = ["app", "func", funcResultReference.functionId, "examples", funcResultReference.exampleName];
+    const referencedExample = lookupTableIndex.get(pathIdentityKey(referencedExamplePath));
+    if (!referencedExample) {
+      diagnostics.push(
+        new Diagnostic(
+          `FUNCRESULT reference <${renderFuncResultReference(node)}> in ${contextLabel} in table [${pathLabel(table.path)}] points to missing example [${pathLabel(referencedExamplePath)}].`,
+          node.range || table.headerRange,
+          "error",
+          "msra",
+          "unresolved-reference",
+        ),
+      );
+      return;
+    }
+
+    const currentDocs = getBooleanAssignmentValue(lookupAssignmentIndex, table.path, "docs");
+    const currentTest = getBooleanAssignmentValue(lookupAssignmentIndex, table.path, "test");
+    const referencedDocs = getBooleanAssignmentValue(lookupAssignmentIndex, referencedExamplePath, "docs");
+    const referencedTest = getBooleanAssignmentValue(lookupAssignmentIndex, referencedExamplePath, "test");
+
+    if (currentDocs && !referencedDocs) {
+      diagnostics.push(
+        new Diagnostic(
+          `Example [${pathLabel(referencedExamplePath)}] referenced from [${pathLabel(table.path)}] must also be marked @Docs because the referring example uses @Docs.`,
+          node.range || table.headerRange,
+          "error",
+          "msra",
+          "invalid-funcresult-example-docs",
+        ),
+      );
+    }
+    if (currentTest && !referencedTest) {
+      diagnostics.push(
+        new Diagnostic(
+          `Example [${pathLabel(referencedExamplePath)}] referenced from [${pathLabel(table.path)}] must also be marked @Test because the referring example uses @Test.`,
+          node.range || table.headerRange,
+          "error",
+          "msra",
+          "invalid-funcresult-example-test",
+        ),
+      );
+    }
+  });
 }
 
 function validateReadmePipelineExampleNameCollisions(tableIndex, lookupTableIndex, lookupAssignmentIndex) {

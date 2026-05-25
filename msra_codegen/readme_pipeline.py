@@ -42,8 +42,8 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
     selected_node_keys = set(node_order)
     dependencies: dict[str, set[str]] = {}
     for node in selected_nodes:
-        deps = collect_funcresult_dependencies(node["example"].get("inputs"))
-        dependencies[node["key"]] = {dep for dep in deps if dep in selected_node_keys}
+        deps = collect_funcresult_dependencies([node["example"].get("inputs"), node["example"].get("print")])
+        dependencies[node["key"]] = {dep for dep in deps if dep in selected_node_keys and dep != node["key"]}
 
     ordered_keys = topologically_order_functions(node_order, dependencies, order_index)
     nodes_by_key = {node["key"]: node for node in selected_nodes}
@@ -82,6 +82,8 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
             else f"        {output_var} = (await {call_path}()){response_suffix}"
         )
         output_var_names[node_key] = output_var
+        for print_line in render_readme_print_lines(example.get("print"), output_var_names):
+            body_lines.append(print_line)
 
     lines = ["import asyncio"]
     lines.extend(
@@ -376,6 +378,60 @@ def render_readme_expr(expr: Any, output_var_names: dict[str, str]) -> str:
     if kind == "index":
         return f"{render_readme_expr(expr.get('value'), output_var_names)}[{render_readme_expr(expr.get('index'), output_var_names)}]"
     return render_expr(expr, self_ref="api")
+
+
+def render_readme_print_lines(print_expr: Any, output_var_names: dict[str, str]) -> list[str]:
+    if print_expr is None:
+        return []
+    if isinstance(print_expr, dict) and print_expr.get("kind") == "array":
+        lines: list[str] = []
+        for item in print_expr.get("items", []):
+            lines.extend(render_readme_print_lines(item, output_var_names))
+        return lines
+    return [f"        print({render_readme_print_value(print_expr, output_var_names)})"]
+
+
+def render_readme_print_value(expr: Any, output_var_names: dict[str, str]) -> str:
+    if isinstance(expr, dict) and expr.get("kind") == "sequence":
+        return render_readme_fstring(expr, output_var_names)
+    if isinstance(expr, dict) and expr.get("kind") == "merge":
+        return render_readme_fstring(expr, output_var_names)
+    return render_readme_expr(expr, output_var_names)
+
+
+def render_readme_fstring(expr: dict[str, Any], output_var_names: dict[str, str]) -> str:
+    parts: list[str] = []
+
+    def walk(node: Any) -> None:
+        if node is None:
+            return
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+            return
+        if not isinstance(node, dict):
+            parts.append("{" + render_readme_expr(node, output_var_names) + "}")
+            return
+        kind = node.get("kind")
+        if kind == "sequence":
+            for item in node.get("items", []):
+                walk(item)
+            return
+        if kind == "merge":
+            for part in node.get("parts", []):
+                walk(part)
+            return
+        if kind == "string":
+            parts.append(escape_fstring_literal(str(node.get("value", ""))))
+            return
+        parts.append("{" + render_readme_expr(node, output_var_names) + "}")
+
+    walk(expr)
+    return 'f"' + "".join(parts) + '"'
+
+
+def escape_fstring_literal(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("{", "{{").replace("}", "}}").replace('"', '\\"')
 
 
 def render_readme_text_expr(expr: Any, output_var_names: dict[str, str]) -> str:

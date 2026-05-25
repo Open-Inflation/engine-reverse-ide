@@ -1440,6 +1440,17 @@ test("FUNCRESULT references require matching @Docs and @Test flags on the refere
   assert.match(testDiagnostic.message, /@Test/);
 });
 
+test("FUNCRESULT references are allowed inside @Docs(print=...)", () => {
+  const text = createFuncResultFixture({
+    sourceAnnotations: ["Docs", "Test"],
+    targetAnnotations: ['Docs(print="Первая категория: "<FUNCRESULT.SRC.source_snapshot.JSON[@Key(0)]["alias"]>)', "Test"],
+  });
+  const document = parseDocument(text, "file:///funcresult-docs-print.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
 test("annotation-only flags reject explicit arguments", () => {
   const text = [
     "[app]",
@@ -1457,7 +1468,7 @@ test("annotation-only flags reject explicit arguments", () => {
     "[app.func.A3A417.examples]",
     "[app.func.A3A417.examples.smoke]",
     "@Test(false)",
-    "@Docs(false)",
+    "@Docs(foo=false)",
     'inputs={"query"="example"}',
     "",
   ].join("\n");

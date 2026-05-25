@@ -66,6 +66,14 @@ def render_assignment(assignment: dict[str, Any]) -> str:
         return ""
     if assignment.get("annotation"):
         annotation_name = str(assignment.get("annotationName") or assignment.get("key") or "")
+        annotation_args = assignment.get("annotationArgs")
+        if annotation_name.lower() == "docs" and isinstance(annotation_args, list):
+            rendered_args = ", ".join(
+                render_named_arg(arg) for arg in annotation_args if isinstance(arg, dict)
+            )
+            if assignment.get("annotationHasArguments"):
+                return f"@{annotation_name}({rendered_args})"
+            return f"@{annotation_name}"
         if assignment.get("annotationHasArguments"):
             value = assignment.get("value")
             if isinstance(value, dict) and value.get("kind") == "bool" and value.get("value") is True:

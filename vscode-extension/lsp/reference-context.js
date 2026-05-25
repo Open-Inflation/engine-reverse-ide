@@ -50,8 +50,16 @@ function isExampleInputsValuePath(tablePath, valuePathSegments) {
   return pathMatches(tablePath, ["app", "func", "*", "examples", "*"]) && pathStartsWith(valuePathSegments, ["inputs"]);
 }
 
+function isExampleDocsPrintValuePath(tablePath, valuePathSegments) {
+  return pathMatches(tablePath, ["app", "func", "*", "examples", "*"]) && pathStartsWith(valuePathSegments, ["docs", "print"]);
+}
+
+function isExampleFuncResultValuePath(tablePath, valuePathSegments) {
+  return isExampleInputsValuePath(tablePath, valuePathSegments) || isExampleDocsPrintValuePath(tablePath, valuePathSegments);
+}
+
 function isFuncResultReferenceContext(tablePath, valuePathSegments) {
-  return isExampleInputsValuePath(tablePath, valuePathSegments) && normalizePathSegments(valuePathSegments).length >= 2;
+  return isExampleFuncResultValuePath(tablePath, valuePathSegments) && normalizePathSegments(valuePathSegments).length >= 2;
 }
 
 function parseFuncResultReference(ref, tablePath, valuePathSegments) {
@@ -60,11 +68,11 @@ function parseFuncResultReference(ref, tablePath, valuePathSegments) {
     return null;
   }
 
-  if (!isExampleInputsValuePath(tablePath, valuePathSegments)) {
+  if (!isExampleFuncResultValuePath(tablePath, valuePathSegments)) {
     return {
       valid: false,
       code: "invalid-funcresult-reference",
-      message: 'FUNCRESULT references are only allowed inside [app.func.*.examples.<name>] inputs.<key>.value.',
+      message: 'FUNCRESULT references are only allowed inside [app.func.*.examples.<name>] inputs.<key>.value or @Docs(print=...).',
       range: ref.range || null,
     };
   }
@@ -171,6 +179,8 @@ module.exports = {
   EXAMPLE_INPUT_REFERENCE_ROOTS,
   FUNCRESULT_RESULT_TYPES,
   isExampleInputsValuePath,
+  isExampleDocsPrintValuePath,
+  isExampleFuncResultValuePath,
   isFuncResultReferenceContext,
   parseFuncResultReference,
   pathMatches,

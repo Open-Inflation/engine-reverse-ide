@@ -69,13 +69,19 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     def get_table(path: list[str] | tuple[str, ...]) -> dict[str, Any] | None:
         return table_index.get(tuple(path))
 
-    def get_assignment(table: dict[str, Any] | None, key: str, default: Any = None) -> Any:
+    def get_assignment_entry(table: dict[str, Any] | None, key: str) -> dict[str, Any] | None:
         if not table:
-            return default
+            return None
         for assignment in table.get("assignments", []):
             if assignment.get("key") == key:
-                return assignment.get("value")
-        return default
+                return assignment
+        return None
+
+    def get_assignment(table: dict[str, Any] | None, key: str, default: Any = None) -> Any:
+        entry = get_assignment_entry(table, key)
+        if entry is None:
+            return default
+        return entry.get("value")
 
     app_table = get_table(["app"])
     app = {
@@ -168,14 +174,16 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         path = table["path"]
         if len(path) == 5 and path[0] == "app" and path[1] == "func" and path[3] == "examples":
             func_id = path[2]
+            docs_assignment = get_assignment_entry(table, "docs")
             examples_by_function.setdefault(func_id, []).append(
                 {
                     "name": path[4],
-                    "docs": bool(get_plain_value(get_assignment(table, "docs", False))),
+                    "docs": bool(docs_assignment and bool(get_plain_value(docs_assignment.get("value")))),
                     "test": bool(get_plain_value(get_assignment(table, "test", False))),
                     "type": str(get_plain_value(get_assignment(table, "type", "json"))).strip().lower(),
                     "description": str(get_plain_value(get_assignment(table, "description", ""))),
                     "inputs": get_assignment(table, "inputs"),
+                    "print": extract_docs_print_value(docs_assignment),
                 }
             )
             continue
@@ -263,6 +271,20 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         "warmup": warmup_spec,
         "functions": functions,
     }
+
+
+def extract_docs_print_value(docs_assignment: dict[str, Any] | None) -> Any:
+    if not docs_assignment or not bool(docs_assignment.get("annotation")):
+        return None
+    if str(docs_assignment.get("annotationName") or "").lower() != "docs":
+        return None
+    args = docs_assignment.get("annotationArgs")
+    if not isinstance(args, list):
+        return None
+    for arg in args:
+        if isinstance(arg, dict) and str(arg.get("name") or "") == "print":
+            return arg.get("value")
+    return None
 
 
 def build_input_spec(table: dict[str, Any], get_assignment) -> dict[str, Any]:

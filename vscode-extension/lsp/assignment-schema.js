@@ -246,7 +246,7 @@ function annotationRequirementForAssignment(tablePath, key) {
       return { kind: "flag", label: "@Test", legacyLabel: "test" };
     }
     if (key === "docs") {
-      return { kind: "flag", label: "@Docs", legacyLabel: "docs" };
+      return { kind: "docs", label: "@Docs", legacyLabel: "docs" };
     }
   }
   if (matchesExtractorPath(tablePath) && key === "render_html") {
@@ -769,6 +769,12 @@ function validateAssignment(tablePath, assignment, tableAssignments = []) {
         ),
       ];
     }
+    if (annotationRequirement.kind === "docs") {
+      const docsDiagnostics = validateDocsAnnotationArguments(assignment);
+      if (docsDiagnostics.length > 0) {
+        return docsDiagnostics;
+      }
+    }
     if (annotationRequirement.kind === "humanize" && assignment.annotationHasArguments && !(assignment.value instanceof NumberExpr)) {
       return [
         typeDiagnostic(
@@ -810,6 +816,26 @@ function validateAssignment(tablePath, assignment, tableAssignments = []) {
     ruleDiagnostics.push(...validateUrlParamConstConflicts(tableAssignments, assignment));
   }
   return ruleDiagnostics;
+}
+
+function validateDocsAnnotationArguments(assignment) {
+  if (!assignment || !assignment.annotationHasArguments) {
+    return [];
+  }
+  const args = Array.isArray(assignment.annotationArgs) ? assignment.annotationArgs : [];
+  if (args.length === 0) {
+    return [];
+  }
+  if (args.length !== 1 || !args[0] || args[0].name !== "print") {
+    return [
+      typeDiagnostic(
+        assignment.keyRange,
+        "Annotation @Docs accepts only the optional print=... argument. Use bare @Docs or @Docs(print=...).",
+        "invalid-annotation-argument",
+      ),
+    ];
+  }
+  return [];
 }
 
 function findSchema(tablePath) {
