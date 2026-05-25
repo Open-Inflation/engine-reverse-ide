@@ -1230,6 +1230,7 @@ test("generator wires external warmup scripts into the manager", () => {
 test("python codegen generates both bundled msra documents without failing", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-codegen-"));
+  const currentYear = new Date().getFullYear();
   const cases = [
     {
       inputPath: path.join(repoRoot, "examples", "example.msra"),
@@ -1241,7 +1242,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       inputPath: path.join(repoRoot, "examples", "fixprice", "fixprice.msra"),
       outputDir: path.join(workDir, "fixprice"),
       packageName: "fixprice_api",
-      license: "GPL-3.0",
+      license: "MIT",
     },
   ];
   const delimitedInputPath = path.join(workDir, "example-delimited.msra");
@@ -1255,6 +1256,17 @@ test("python codegen generates both bundled msra documents without failing", () 
     readFileSync(path.join(repoRoot, "warmup.py"), "utf8"),
     "utf8",
   );
+  const mitInputPath = path.join(workDir, "example-mit.msra");
+  const mitSource = readFileSync(path.join(repoRoot, "examples", "example.msra"), "utf8")
+    .replace('package_name="ozon_api"', 'package_name="mit_api"')
+    .replace('license="GPL-3.0-or-later"', 'license="MIT"');
+  writeFileSync(mitInputPath, mitSource, "utf8");
+  cases.push({
+    inputPath: mitInputPath,
+    outputDir: path.join(workDir, "mit"),
+    packageName: "mit_api",
+    license: "MIT",
+  });
   cases.push({
     inputPath: delimitedInputPath,
     outputDir: path.join(workDir, "delimited"),
@@ -1280,10 +1292,22 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.strictEqual(mergedCheck.status, 0, mergedCheck.stderr || mergedCheck.stdout);
       const readmeText = readFileSync(path.join(testCase.outputDir, "README.md"), "utf8");
       const pyprojectText = readFileSync(path.join(testCase.outputDir, "pyproject.toml"), "utf8");
+      const licenseText = readFileSync(path.join(testCase.outputDir, "LICENSE"), "utf8");
       assert.match(readmeText, /pip install [a-z0-9_]+/i);
       assert.match(readmeText, /async with [A-Za-z0-9_]+\(\) as api:/);
       assert.match(pyprojectText, new RegExp(`^name = "${testCase.packageName}"$`, "m"));
       assert.ok(pyprojectText.includes(`license = "${testCase.license}"`));
+      if (testCase.license === "MIT") {
+        assert.match(licenseText, /MIT License/);
+        assert.match(licenseText, new RegExp(`^Copyright \\(c\\) ${currentYear} `, "m"));
+        assert.match(licenseText, /Miskler/);
+        if (testCase.packageName === "mit_api") {
+          assert.match(licenseText, /Another Author/);
+        }
+      } else {
+        assert.match(licenseText, /GNU GENERAL PUBLIC LICENSE/);
+      }
+      assert.ok(!existsSync(path.join(testCase.outputDir, "LICENSES")));
       const packageDir = path.join(testCase.outputDir, testCase.packageName);
       const compileResult = spawnSync("python", ["-m", "compileall", "-q", packageDir], {
         cwd: repoRoot,

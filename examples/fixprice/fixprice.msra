@@ -8,7 +8,7 @@ version="0.2.4.1"
 authors=[
     {name="Miskler", email="mail@miskler.ru"}
 ]
-license="GPL-3.0"
+license="MIT"
 timeout_ms=35000
 browser=camoufox
 @Humanize

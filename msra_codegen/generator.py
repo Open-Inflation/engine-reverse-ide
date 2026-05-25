@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.request import urlopen
 
 try:
     from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -527,6 +529,11 @@ def generate_project(
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
 
+    legacy_license_dir = output_dir / "LICENSES"
+    if legacy_license_dir.exists():
+        shutil.rmtree(legacy_license_dir)
+    write_root_license(output_dir, project)
+
     from .docs_generator import generate_docs_project
 
     generate_docs_project(project, output_dir, package_name, group_tree)
@@ -560,6 +567,63 @@ def render_authors_block(authors: Any) -> str:
     if not items:
         return "authors = []"
     return "authors = [\n" + ",\n".join(items) + "\n]"
+
+
+def write_root_license(output_dir: Path, project: dict[str, Any]) -> None:
+    license_name = normalize_license_name(str(project["app"].get("license", "MIT") or "").strip() or "MIT")
+    authors = project["app"].get("authors", [])
+    license_text = render_license_text(license_name, authors)
+    write_text(output_dir / "LICENSE", license_text)
+
+
+def normalize_license_name(license_name: str) -> str:
+    normalized = license_name.strip()
+    if normalized in {"GPL-3.0", "GPL-3.0+"}:
+        return "GPL-3.0-or-later"
+    return normalized
+
+
+def render_license_text(license_name: str, authors: Any) -> str:
+    if license_name == "MIT":
+        return render_template(
+            "licenses/MIT.txt.tpl",
+            {
+                "copyright_holders": format_copyright_holders(authors),
+                "year": datetime.now().year,
+            },
+        )
+    return load_license_text(license_name)
+
+
+def format_copyright_holders(authors: Any) -> str:
+    names: list[str] = []
+    if isinstance(authors, list):
+        for author in authors:
+            if not isinstance(author, dict):
+                continue
+            name = str(author.get("name", "")).strip()
+            if name:
+                names.append(name)
+    if not names:
+        return "The authors"
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return " and ".join(names)
+    return ", ".join(names[:-1]) + ", and " + names[-1]
+
+
+def load_license_text(license_name: str) -> str:
+    bundled_license = Path(__file__).resolve().parents[1] / "LICENSE"
+    if license_name.startswith("GPL-3.0") and bundled_license.exists():
+        return bundled_license.read_text(encoding="utf-8")
+    try:
+        with urlopen(f"https://spdx.org/licenses/{license_name}.txt", timeout=10) as response:
+            return response.read().decode("utf-8")
+    except Exception as exc:  # pragma: no cover - network fallback
+        raise RuntimeError(
+            f'Unable to load license text for "{license_name}".'
+        ) from exc
 
 
 def render_init(project: dict[str, Any], package_name: str) -> str:
