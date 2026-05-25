@@ -30,6 +30,7 @@ const TABLE_ROOT_SEGMENTS = new Set([
 
 const APP_CHILD_SEGMENTS = new Set([
   "warmup",
+  "defaults",
   "variables",
   "prefixes",
   "regexes",
@@ -215,6 +216,16 @@ function classifyTableSegment(segment, index, pathSegments) {
     }
     if (funcChild === "input" || funcChild === "headers" || funcChild === "examples" || funcChild === "postprocess") {
       return "parameter";
+    }
+    return "parameter";
+  }
+
+  if (appChild === "defaults") {
+    if (index === 2) {
+      return value === "func" ? "namespace" : "parameter";
+    }
+    if (index === 3) {
+      return value === "headers" ? "namespace" : "parameter";
     }
     return "parameter";
   }

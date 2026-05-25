@@ -277,7 +277,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
             }
         )
 
-    headers_table = get_table(["app", "func", "headers"])
+    headers_table = get_table(["app", "defaults", "func", "headers"])
     headers_spec = build_headers_spec(headers_table, get_assignment)
 
     warmup_table = get_table(["app", "warmup"])
@@ -315,8 +315,6 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         if len(path) != 3 or path[0] != "app" or path[1] != "func":
             continue
         func_id = path[2]
-        if func_id == "headers":
-            continue
 
         root = table
         group = group_path_from_expr(get_assignment(root, "group", ""))

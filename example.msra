@@ -96,7 +96,7 @@ type="application/x-www-form-urlencoded"
 # та же логика и структура
 
 
-[app.func.headers] # определяем дефолтные значеня
+[app.defaults.func.headers] # определяем дефолтные значеня
 referrer=<DOCUMENT.PREFIXES.ORIGIN>
 cors_mode=cors # значение по умолчанию, вписано для ясности
 credentials=include # значение по умолчанию, вписано для ясности

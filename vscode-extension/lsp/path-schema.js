@@ -7,6 +7,7 @@ const TABLE_ROOT_SEGMENTS = new Set([
 
 const APP_CHILD_SEGMENTS = new Set([
   "warmup",
+  "defaults",
   "variables",
   "prefixes",
   "regexes",
@@ -95,6 +96,31 @@ function pathIdentityKey(pathSegments) {
 function appendAppBranchIdentity(tokens, segments, index, branchName) {
   if (branchName === "groups") {
     appendRemainingCustomIdentity(tokens, segments, index);
+    return;
+  }
+
+  if (branchName === "defaults") {
+    if (index >= segments.length) {
+      return;
+    }
+    const child = segments[index];
+    if (!segmentQuoted(child) && segmentValue(child) === "func") {
+      pushIdentityToken(tokens, "system", child);
+      if (index + 1 >= segments.length) {
+        return;
+      }
+      const grandChild = segments[index + 1];
+      if (!segmentQuoted(grandChild) && segmentValue(grandChild) === "headers") {
+        pushIdentityToken(tokens, "system", grandChild);
+        appendRemainingCustomIdentity(tokens, segments, index + 2);
+        return;
+      }
+      pushIdentityToken(tokens, "custom", grandChild);
+      appendRemainingCustomIdentity(tokens, segments, index + 2);
+      return;
+    }
+    pushIdentityToken(tokens, "custom", child);
+    appendRemainingCustomIdentity(tokens, segments, index + 1);
     return;
   }
 
@@ -249,6 +275,9 @@ function validateAppPath(segments, index) {
   if (segment.value === "warmup" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
+  if (segment.value === "defaults" && !segment.quoted) {
+    return validateDefaultsNamespace(segments, index + 1);
+  }
   if (segment.value === "variables" && !segment.quoted) {
     return validateDynamicLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`, "variable");
   }
@@ -267,8 +296,40 @@ function validateAppPath(segments, index) {
   return invalidPath(
     segments,
     index,
-    `Invalid child table "${renderSegment(segment)}" under "app" in "${renderPath(segments)}". Expected "warmup", "variables", "prefixes", "regexes", "groups", or "func".`,
-    ["warmup", "variables", "prefixes", "regexes", "groups", "func"],
+    `Invalid child table "${renderSegment(segment)}" under "app" in "${renderPath(segments)}". Expected "warmup", "defaults", "variables", "prefixes", "regexes", "groups", or "func".`,
+    ["warmup", "defaults", "variables", "prefixes", "regexes", "groups", "func"],
+  );
+}
+
+function validateDefaultsNamespace(segments, index) {
+  if (index >= segments.length) {
+    return { valid: true };
+  }
+  const segment = segments[index];
+  if (segment.value === "func" && !segment.quoted) {
+    return validateDefaultsFuncNamespace(segments, index + 1);
+  }
+  return invalidPath(
+    segments,
+    index,
+    `Invalid child table "${renderSegment(segment)}" under "app.defaults" in "${renderPath(segments)}". Expected "func".`,
+    ["func"],
+  );
+}
+
+function validateDefaultsFuncNamespace(segments, index) {
+  if (index >= segments.length) {
+    return { valid: true };
+  }
+  const segment = segments[index];
+  if (segment.value === "headers" && !segment.quoted) {
+    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
+  }
+  return invalidPath(
+    segments,
+    index,
+    `Invalid child table "${renderSegment(segment)}" under "app.defaults.func" in "${renderPath(segments)}". Expected "headers".`,
+    ["headers"],
   );
 }
 

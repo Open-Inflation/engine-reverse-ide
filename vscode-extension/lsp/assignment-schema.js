@@ -153,10 +153,11 @@ function matchesBodyPath(path) {
 }
 
 function matchesFuncHeadersPath(path) {
-  if (path.length === 3) {
-    return path[0] === "app" && path[1] === "func" && path[2] === "headers";
-  }
   return path.length === 4 && path[0] === "app" && path[1] === "func" && path[3] === "headers";
+}
+
+function matchesDefaultsFuncHeadersPath(path) {
+  return path.length === 4 && path[0] === "app" && path[1] === "defaults" && path[2] === "func" && path[3] === "headers";
 }
 
 function matchesUrlPath(path) {
@@ -639,6 +640,12 @@ const TABLE_SCHEMAS = [
         message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
       }),
     ],
+  }),
+  makeFixedSchema(matchesDefaultsFuncHeadersPath, {
+    referrer: ANY,
+    cors_mode: CORS_MODE_SPEC,
+    credentials: CREDENTIALS_SPEC,
+    headers: ANY,
   }),
   makeFixedSchema(matchesFuncHeadersPath, {
     referrer: ANY,

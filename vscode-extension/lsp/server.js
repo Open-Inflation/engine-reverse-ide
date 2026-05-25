@@ -683,6 +683,7 @@ class MsraLanguageServer {
       ["app", "Top-level application namespace"],
       ["msra", "Document root table"],
       ["warmup", "Warmup settings"],
+      ["defaults", "Shared function defaults"],
       ["variables", "Variable definitions"],
       ["prefixes", "Reusable prefixes"],
       ["regexes", "Reusable regex definitions"],

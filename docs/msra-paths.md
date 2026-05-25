@@ -15,6 +15,9 @@
 ```text
 app
 ├─ warmup
+├─ defaults
+│  └─ func
+│     └─ headers
 ├─ variables
 ├─ prefixes
 ├─ regexes
@@ -30,6 +33,9 @@ app
       │  └─ <name>
       └─ postprocess
 ```
+
+`app.defaults.func.headers` хранит общие defaults для request policy всех функций.
+Локальные `app.func.<id>.headers` могут их переопределять.
 
 Из этого дерева важно помнить одно: смысл сегмента определяется не только его текстом, но и слотом, в котором он стоит.
 

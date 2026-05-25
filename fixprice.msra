@@ -83,7 +83,7 @@ description="Homepage promotional content methods."
 [app.groups.General]
 description="General helpers that are not browser-backed API methods."
 
-[app.func.headers]
+[app.defaults.func.headers]
 referrer=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>
 cors_mode=cors
 credentials=include

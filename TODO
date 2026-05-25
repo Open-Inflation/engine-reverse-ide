@@ -1,10 +1,16 @@
 # Язык
-1. match переименовать в match
-2. [app.func.headers] переезжает в [app.defaults.func.headers]
-3. новый const_in_url="metro" заменяющий конструкцию values=[{value_in_url="metro", default=true}] и для списков const_in_url=["metro", "ortem"] для values=[{value_in_url="metro", default=true}, {value_in_url="ortem", default=true}] - предполагается что юзер их не может задать, параметр константный
-4. вместо postprocessing
+1. Вместо
+[app.variables.city_id]
+types=[{"type"=integer, "match"={from=1, to=2147483647}}, {"type"=null, "value"=null}]
+Пишем
+[app.variables.city_id]
+@Nullable
+types=[{"type"=integer, "match"={from=1, to=2147483647}}]
+
+2. новый const_in_url="metro" заменяющий конструкцию values=[{value_in_url="metro", default=true}] и для списков const_in_url=["metro", "ortem"] для values=[{value_in_url="metro", default=true}, {value_in_url="ortem", default=true}] - предполагается что юзер их не может задать, параметр константный
+3. вместо postprocessing
 [app.func.CATALOG_PRODUCT_INFO.extractor]
-render_html=true
+@RenderHtml
 script="extractors/catalog-product-info.js"
 
 # Кодогенерация

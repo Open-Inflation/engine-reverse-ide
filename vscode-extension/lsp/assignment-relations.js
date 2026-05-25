@@ -933,8 +933,7 @@ function isFuncRootTable(path) {
   return Array.isArray(path)
     && path.length === 3
     && path[0] === "app"
-    && path[1] === "func"
-    && path[2] !== "headers";
+    && path[1] === "func";
 }
 
 function hasUnquotedChildTable(tableIndex, parentPath, childName) {

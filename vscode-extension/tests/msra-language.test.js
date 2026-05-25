@@ -1234,7 +1234,25 @@ test("urlencoded body items accept a nested url table under the body item itself
   assert.ok(!payloadDiagnostic, "expected the nested url table to satisfy the urlencoded body requirement");
 });
 
-test("shared function headers accept referrer cors_mode credentials and headers", () => {
+test("default function headers accept referrer cors_mode credentials and headers", () => {
+  const text = [
+    "[app]",
+    "[app.prefixes]",
+    'ORIGIN="https://www.ozon.ru/"',
+    "[app.defaults.func.headers]",
+    'referrer=<DOCUMENT.PREFIXES.ORIGIN>',
+    'cors_mode=cors',
+    'credentials=include',
+    "headers=<UNSTANDARD_HEADERS>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///shared-headers.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("legacy shared function headers block is rejected", () => {
   const text = [
     "[app]",
     "[app.prefixes]",
@@ -1246,10 +1264,11 @@ test("shared function headers accept referrer cors_mode credentials and headers"
     "headers=<UNSTANDARD_HEADERS>",
     "",
   ].join("\n");
-  const document = parseDocument(text, "file:///shared-headers.msra");
+  const document = parseDocument(text, "file:///legacy-shared-headers.msra");
   const analysis = analyzeDocument(document);
+  const unknownKeyDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "unknown-assignment-key");
 
-  assert.deepStrictEqual(analysis.diagnostics, []);
+  assert.ok(unknownKeyDiagnostic, "expected the legacy shared headers block to be rejected");
 });
 
 test("nested body tables require the parent body item", () => {
@@ -1529,6 +1548,7 @@ test("grammar splits table paths into system segments, user segments, dots, and 
   assert.strictEqual(quotedSegmentPattern.end, "(\\\")");
   assert.match(grammar.repository["path-dots"].patterns[0].name, /punctuation\.separator\.period/);
   assert.match(grammar.repository["path-system-segment"].patterns[0].match, /app/);
+  assert.match(grammar.repository["path-system-segment"].patterns[0].match, /defaults/);
   assert.strictEqual(grammar.repository["path-user-segment"].patterns[0].name, "variable.other.readwrite.msra");
   assert.match(grammar.repository["path-user-segment"].patterns[0].match, /A-Za-z_/);
 });
@@ -1694,6 +1714,28 @@ test("semantic tokens classify reserved names by slot rather than literal text",
   assert.ok(findTokenOnLine(1, "url", "namespace"), "expected the child table slot to treat url as a system keyword");
   assert.ok(findTokenOnLine(2, "params", "namespace"), "expected params to stay system inside the url namespace");
   assert.ok(findTokenOnLine(2, "url", "parameter"), "expected the parameter-name slot to treat url as a custom name");
+});
+
+test("semantic tokens classify shared function defaults as reserved namespaces", () => {
+  const text = [
+    "[app.defaults.func.headers]",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///defaults-headers-semantic.msra");
+  const tokens = collectSemanticTokens(document);
+
+  const findTokenOnLine = (line, needle, tokenType) => tokens.find((token) => {
+    if (token.line !== line || token.tokenType !== tokenType) {
+      return false;
+    }
+    const start = document.offsetAt({ line: token.line, character: token.character });
+    const end = start + token.length;
+    return text.slice(start, end) === needle;
+  });
+
+  assert.ok(findTokenOnLine(0, "defaults", "namespace"), "expected defaults to be classified as a system namespace");
+  assert.ok(findTokenOnLine(0, "func", "namespace"), "expected func under defaults to be classified as a system namespace");
+  assert.ok(findTokenOnLine(0, "headers", "namespace"), "expected headers under defaults.func to be classified as a system namespace");
 });
 
 test("semantic tokens keep prefix definitions custom without parent-dependent reference coloring", () => {
