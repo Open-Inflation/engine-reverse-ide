@@ -1,13 +1,15 @@
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
-const { mkdtempSync, rmSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdtempSync, rmSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
 const { readFileSync } = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const test = require("node:test");
 
 const { analyzeDocument } = require("../lsp/analysis");
 const { parseDocument } = require("../lsp/parser");
+const { loadProject } = require("../lsp/project-loader");
 const { MsraLanguageServer } = require("../lsp/server");
 const { collectSemanticTokens } = require("../lsp/semantic-tokens");
 const languageConfiguration = require("../language-configuration.json");
@@ -41,8 +43,39 @@ function collectPythonFiles(dir) {
   return files;
 }
 
+function createMultiFileFixture({ invalidPrefix = false } = {}) {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "msra-multifile-"));
+  const parentPath = path.join(tmpDir, "parent.msra");
+  const childPath = path.join(tmpDir, "funcs.msraf");
+  const parentText = [
+    "[app]",
+    'name="RootAPI"',
+    "[app.groups.Catalog]",
+    'description="Catalog group"',
+    "[app.func]",
+    '!include("funcs.msraf")',
+    "",
+  ].join("\n");
+  const childText = [
+    '!root("./parent.msra")',
+    "",
+    invalidPrefix ? "[app.func.GET_USER]" : "[GET_USER]",
+    'group=<GROUPS.Catalog>',
+    "",
+  ].join("\n");
+  writeFileSync(parentPath, parentText, "utf8");
+  writeFileSync(childPath, childText, "utf8");
+  return {
+    tmpDir,
+    parentPath,
+    childPath,
+    parentText,
+    childText,
+  };
+}
+
 test("example document stays valid and keeps the documented path", () => {
-  const examplePath = path.resolve(__dirname, "..", "..", "example.msra");
+  const examplePath = path.resolve(__dirname, "..", "..", "examples", "example.msra");
   const text = readFileSync(examplePath, "utf8");
   const document = parseDocument(text, examplePath);
   const analysis = analyzeDocument(document);
@@ -59,7 +92,7 @@ test("example document stays valid and keeps the documented path", () => {
 });
 
 test("fixprice document stays valid", () => {
-  const fixpricePath = path.resolve(__dirname, "..", "..", "fixprice.msra");
+  const fixpricePath = path.resolve(__dirname, "..", "..", "examples", "fixprice", "fixprice.msra");
   const text = readFileSync(fixpricePath, "utf8");
   const document = parseDocument(text, fixpricePath);
   const analysis = analyzeDocument(document);
@@ -1152,18 +1185,18 @@ test("python codegen generates both bundled msra documents without failing", () 
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-codegen-"));
   const cases = [
     {
-      inputPath: path.join(repoRoot, "example.msra"),
+      inputPath: path.join(repoRoot, "examples", "example.msra"),
       outputDir: path.join(workDir, "example"),
       packageName: "exampleapi",
     },
     {
-      inputPath: path.join(repoRoot, "fixprice.msra"),
+      inputPath: path.join(repoRoot, "examples", "fixprice", "fixprice.msra"),
       outputDir: path.join(workDir, "fixprice"),
       packageName: "fixpriceapi",
     },
   ];
   const delimitedInputPath = path.join(workDir, "example-delimited.msra");
-  const delimitedSource = readFileSync(path.join(repoRoot, "example.msra"), "utf8")
+  const delimitedSource = readFileSync(path.join(repoRoot, "examples", "example.msra"), "utf8")
     .replace("style=repeat,", "style=delimited,")
     .replace('delimiter=","', 'delimiter="|"');
   writeFileSync(delimitedInputPath, delimitedSource, "utf8");
@@ -1477,7 +1510,7 @@ test("virtual variable references must resolve to declared variables", () => {
 
 test("FUNCRESULT references are allowed inside example inputs", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
-  const examplePath = path.join(repoRoot, "example.msra");
+  const examplePath = path.join(repoRoot, "examples", "example.msra");
   const text = readFileSync(examplePath, "utf8").replace(
     '"query"="example"',
     '"query"=<FUNCRESULT.A3A417.JSON["some"]["path"][0]>',
@@ -1552,7 +1585,7 @@ test("legacy boolean toggles are rejected in favor of annotations", () => {
 
 test("FUNCRESULT references require a result kind and reject bare headers syntax", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
-  const examplePath = path.join(repoRoot, "example.msra");
+  const examplePath = path.join(repoRoot, "examples", "example.msra");
   const text = readFileSync(examplePath, "utf8").replace(
     '"query"="example"',
     '"query"=<FUNCRESULT.headers>',
@@ -2038,7 +2071,7 @@ test("reference completions insert angle brackets when the user has not typed th
 
 test("FUNCRESULT completions are available inside example inputs", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
-  const examplePath = path.join(repoRoot, "example.msra");
+  const examplePath = path.join(repoRoot, "examples", "example.msra");
   const server = new MsraLanguageServer({
     onRequest() {},
     onNotification() {},
@@ -2080,7 +2113,7 @@ test("FUNCRESULT completions are available inside example inputs", () => {
 
 test("completion is field-aware for groups enums and static values", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
-  const examplePath = path.join(repoRoot, "example.msra");
+  const examplePath = path.join(repoRoot, "examples", "example.msra");
   const server = new MsraLanguageServer({
     onRequest() {},
     onNotification() {},
@@ -2166,6 +2199,100 @@ test("completion narrows inline table values by field", () => {
     const labels = new Set(response.items.map((item) => item.label));
     assert.deepStrictEqual(labels, testCase.expected);
   }
+});
+
+test("multi-file include/root projects resolve child msraf tables and parent references", () => {
+  const fixture = createMultiFileFixture();
+  const project = loadProject(fixture.parentPath);
+
+  assert.strictEqual(project.rootPath, fixture.parentPath);
+  assert.ok(project.documents.has(fixture.childPath), "expected the included child document to be loaded");
+  assert.ok(
+    hasTablePath(project.documents.get(fixture.childPath).transformed, ["app", "func", "GET_USER"]),
+    "expected the child function table to be rewritten under app.func",
+  );
+
+  const childDocument = project.documents.get(fixture.childPath);
+  const childAnalysis = analyzeDocument(childDocument.transformed, {
+    tableIndex: project.mergedTables,
+    assignmentIndex: project.mergedAssignments,
+    rawDocument: childDocument.raw,
+    sourcePath: fixture.childPath,
+  });
+  assert.deepStrictEqual(childAnalysis.diagnostics, []);
+
+  const server = new MsraLanguageServer({
+    onRequest() {},
+    onNotification() {},
+    listen() {},
+    sendNotification() {},
+  });
+  const parentUri = pathToFileURL(fixture.parentPath).href;
+  const childUri = pathToFileURL(fixture.childPath).href;
+  server._updateDocument({ textDocument: { uri: parentUri, text: fixture.parentText } }, false);
+  server._updateDocument({ textDocument: { uri: childUri, text: fixture.childText } }, false);
+
+  const childState = server.documents.get(childUri);
+  assert.ok(childState, "expected the child document to stay open in the server");
+  assert.deepStrictEqual(childState.analyzed.diagnostics, []);
+
+  const completionServer = new MsraLanguageServer({
+    onRequest() {},
+    onNotification() {},
+    listen() {},
+    sendNotification() {},
+  });
+  const completionText = fixture.childText.replace("group=<GROUPS.Catalog>", "group=");
+  completionServer._updateDocument({ textDocument: { uri: parentUri, text: fixture.parentText } }, false);
+  completionServer._updateDocument({ textDocument: { uri: childUri, text: completionText } }, false);
+
+  const lines = completionText.split(/\r?\n/);
+  const lineIndex = lines.findIndex((line) => line.includes("group="));
+  const completion = completionServer._completion({
+    textDocument: { uri: childUri },
+    position: {
+      line: lineIndex,
+      character: lines[lineIndex].indexOf("group=") + "group=".length,
+    },
+  });
+  assert.ok(
+    completion.items.some((item) => item.label === "GROUPS.Catalog"),
+    "expected child completions to see parent group tables through the merged project",
+  );
+});
+
+test("msraf files reject explicit app.func prefixes", () => {
+  const fixture = createMultiFileFixture({ invalidPrefix: true });
+  const project = loadProject(fixture.parentPath);
+  const childDocument = project.documents.get(fixture.childPath);
+  const analysis = analyzeDocument(childDocument.transformed, {
+    tableIndex: project.mergedTables,
+    assignmentIndex: project.mergedAssignments,
+    rawDocument: childDocument.raw,
+    sourcePath: fixture.childPath,
+  });
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-msraf-table-path");
+
+  assert.ok(diagnostic, "expected explicit app.func prefixes to be rejected in msraf files");
+  assert.match(diagnostic.message, /omit the leading "app\.func" namespace/);
+});
+
+test("generator writes a merged intermediate msra file", () => {
+  const fixture = createMultiFileFixture();
+  const outputDir = path.join(fixture.tmpDir, "generated");
+  const result = spawnSync("python", ["-m", "msra_codegen.cli", fixture.parentPath, "-o", outputDir], {
+    cwd: path.resolve(__dirname, "..", ".."),
+    encoding: "utf8",
+  });
+
+  assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+  const mergedPath = path.join(outputDir, "merged.msra");
+  assert.ok(existsSync(mergedPath), "expected the merged intermediate file to be written");
+  const mergedText = readFileSync(mergedPath, "utf8");
+  assert.match(mergedText, /\[app\.func\.GET_USER\]/);
+  assert.match(mergedText, /\[app\.groups\.Catalog\]/);
+  assert.ok(!mergedText.includes("!include("), "expected merged source to inline the child file instead of keeping include directives");
+  assert.ok(!mergedText.includes("!root("), "expected merged source to omit the child LSP root directive");
 });
 
 test("language configuration keeps brackets out of comments and strings", () => {

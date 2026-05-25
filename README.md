@@ -9,9 +9,11 @@ MSRA is a TOML-like language for describing browser automation and related runti
 
 ## Documentation
 
-MkDocs documentation lives under `docs/` and explains the current MSRA path semantics, including when quoted and unquoted segments describe the same table and when they split into different paths.
+MkDocs documentation lives under `docs/` and splits the MSRA language into separate pages per table family, so `[app]`, `[app.warmup]`, `[app.func.*]`, and related namespaces are documented independently.
 
 - Main page: [`docs/index.md`](docs/index.md)
+- Language overview: [`docs/msra-language.md`](docs/msra-language.md)
+- App table: [`docs/msra-app.md`](docs/msra-app.md)
 - Path rules: [`docs/msra-paths.md`](docs/msra-paths.md)
 
 ## CLI
@@ -21,14 +23,14 @@ The canonical installable CLI entrypoint is `msra-lsp`.
 In this repository, the easiest way to run it is through the local Node wrapper:
 
 ```powershell
-node .\bin\msra.js check .\example.msra
+node .\bin\msra.js check .\examples\example.msra
 node .\bin\msra.js serve
 ```
 
 If you install or link the package, you can also call the bare command:
 
 ```powershell
-msra-lsp check .\example.msra
+msra-lsp check .\examples\example.msra
 msra-lsp serve
 ```
 
@@ -42,7 +44,7 @@ npm run serve
 If you are already inside `vscode-extension`, call the root entrypoint with a relative path:
 
 ```powershell
-node ..\bin\msra.js check ..\example.msra
+node ..\bin\msra.js check ..\examples\example.msra
 ```
 
 ## CLI modes
@@ -57,7 +59,7 @@ node ..\bin\msra.js check ..\example.msra
 This repo also includes a Python generator that turns an `.msra` document into an async Python client package and a matching Sphinx documentation tree.
 
 ```powershell
-python -m msra_codegen .\fixprice.msra -o .\generated
+python -m msra_codegen .\examples\fixprice\fixprice.msra -o .\generated
 ```
 
 The generator uses Jinja2 templates, so install its Python dependency first if your environment does not already have it:
@@ -91,7 +93,7 @@ python -m sphinx -b html .\generated\docs\source .\generated\docs\_build\html
 
 The reusable Jinja2 templates live under `msra_codegen/templates/`, so the output shape can be adjusted without editing the generator logic itself.
 
-For the current FixPrice project, the default package name is `fixprice_api`.
+For the FixPrice project, the default package name is `fixprice_api`.
 
 ## Language overview
 

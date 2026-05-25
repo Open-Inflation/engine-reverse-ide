@@ -29,41 +29,51 @@ class AnalysisResult {
   }
 }
 
-function analyzeDocument(document) {
+function analyzeDocument(document, context = {}) {
   const diagnostics = [...document.diagnostics];
-  const tableIndex = new Map(document.tables);
-  const assignmentIndex = new Map(document.assignments);
+  diagnostics.push(...validateMsrafStructure(context.rawDocument || null, context.sourcePath || document.uri || ""));
+  const localTableIndex = new Map(document.tables);
+  const localAssignmentIndex = new Map(document.assignments);
+  const lookupTableIndex = context.tableIndex ? new Map([...context.tableIndex, ...localTableIndex]) : localTableIndex;
+  const lookupAssignmentIndex = context.assignmentIndex ? new Map([...context.assignmentIndex, ...localAssignmentIndex]) : localAssignmentIndex;
   const rootTableIndex = new Map();
-  for (const table of tableIndex.values()) {
-    if (table.path.length) {
-      rootTableIndex.set(pathLabel(table.pathSegments || table.path), table.path);
-      const validation = validateTablePath(table.pathSegments || table.path);
-      if (!validation.valid) {
-        diagnostics.push(
-          new Diagnostic(
-            validation.message,
-            tablePathSegmentRange(table, validation.segmentIndex),
-            "error",
-            "msra",
-            validation.code,
-          ),
-        );
-      }
+  for (const table of localTableIndex.values()) {
+    const tablePath = table.pathSegments || table.path;
+    if (!tablePath || !tablePath.length) {
+      continue;
+    }
+    const validation = validateTablePath(tablePath);
+    if (!validation.valid) {
+      diagnostics.push(
+        new Diagnostic(
+          validation.message,
+          tablePathSegmentRange(table, validation.segmentIndex),
+          "error",
+          "msra",
+          validation.code,
+        ),
+      );
     }
   }
-  diagnostics.push(...validateTableRelations(tableIndex));
-  for (const assignment of assignmentIndex.values()) {
-    const table = tableIndex.get(pathIdentityKey(assignment.tablePath));
+  for (const table of lookupTableIndex.values()) {
+    const tablePath = table.pathSegments || table.path;
+    if (tablePath && tablePath.length) {
+      rootTableIndex.set(pathLabel(tablePath), table.path);
+    }
+  }
+  diagnostics.push(...validateTableRelations(localTableIndex, lookupTableIndex));
+  for (const assignment of localAssignmentIndex.values()) {
+    const table = localTableIndex.get(pathIdentityKey(assignment.tablePath));
     for (const diagnostic of validateAssignment(assignment.tablePath, assignment, table ? table.assignments || [] : [])) {
       diagnostics.push(diagnostic);
     }
   }
-  diagnostics.push(...validateAssignmentRelations(tableIndex, assignmentIndex));
-  diagnostics.push(...validateGroupAssignments(tableIndex, assignmentIndex));
+  diagnostics.push(...validateAssignmentRelations(localTableIndex, localAssignmentIndex, lookupTableIndex, lookupAssignmentIndex));
+  diagnostics.push(...validateGroupAssignments(lookupTableIndex, localAssignmentIndex));
   const result = new AnalysisResult(document);
   result.diagnostics = diagnostics;
-  result.tableIndex = tableIndex;
-  result.assignmentIndex = assignmentIndex;
+  result.tableIndex = lookupTableIndex;
+  result.assignmentIndex = lookupAssignmentIndex;
   result.rootTableIndex = rootTableIndex;
 
   for (const ref of document.references) {
@@ -110,7 +120,7 @@ function analyzeDocument(document) {
       if (!KNOWN_DYNAMIC_ROOTS.has(root)) {
         diagnostics.push(
           new Diagnostic(
-            `Unresolved reference <${renderRef(ref.expr)}>`,
+          `Unresolved reference <${renderRef(ref.expr)}>`,
             ref.range,
             "error",
             "msra",
@@ -122,6 +132,48 @@ function analyzeDocument(document) {
   }
 
   return result;
+}
+
+function validateMsrafStructure(rawDocument, sourcePath) {
+  if (!rawDocument || !String(sourcePath || "").toLowerCase().endsWith(".msraf")) {
+    return [];
+  }
+  const diagnostics = [];
+  for (const table of rawDocument.tables.values()) {
+    const segments = table.pathSegments || table.path || [];
+    const prefixIndex = findAppFuncPrefixIndex(segments);
+    if (prefixIndex === -1) {
+      continue;
+    }
+    diagnostics.push(
+      new Diagnostic(
+        'In .msraf files, omit the leading "app.func" namespace and write relative function tables instead.',
+        segments[prefixIndex] && segments[prefixIndex].range ? segments[prefixIndex].range : table.headerRange,
+        "error",
+        "msra",
+        "invalid-msraf-table-path",
+      ),
+    );
+  }
+  return diagnostics;
+}
+
+function findAppFuncPrefixIndex(segments) {
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const current = segments[index];
+    const next = segments[index + 1];
+    if (
+      current &&
+      current.value === "app" &&
+      !current.quoted &&
+      next &&
+      next.value === "func" &&
+      !next.quoted
+    ) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function tablePathSegmentRange(table, segmentIndex) {

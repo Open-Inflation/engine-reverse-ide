@@ -4,6 +4,7 @@ const {
   BoolExpr,
   CallExpr,
   Diagnostic,
+  DirectiveDef,
   IdentExpr,
   InlineEntry,
   InlineTableExpr,
@@ -113,6 +114,12 @@ class Tokenizer {
         const start = this._position();
         this._advanceChar();
         this._emit("AT", "@", start, this._position());
+        continue;
+      }
+      if (char === "!") {
+        const start = this._position();
+        this._advanceChar();
+        this._emit("BANG", "!", start, this._position());
         continue;
       }
       if (char === "#") {
@@ -353,6 +360,7 @@ class Parser {
     this.tables = new Map();
     this.assignments = new Map();
     this.references = [];
+    this.directives = [];
     this.currentTable = [];
     this.currentTableSegments = [];
     this.currentTableIdentityKey = pathIdentityKey([]);
@@ -373,6 +381,10 @@ class Parser {
         this._parseAnnotationOrRecover();
         continue;
       }
+      if (this._check("BANG")) {
+        this._parseDirectiveOrRecover();
+        continue;
+      }
       this._parseAssignmentOrRecover();
     }
     return new ParsedDocument({
@@ -384,6 +396,7 @@ class Parser {
       tables: this.tables,
       assignments: this.assignments,
       references: this.references,
+      directives: this.directives,
       errors: this.diagnostics,
     });
   }
@@ -541,6 +554,52 @@ class Parser {
       this._advance();
     } else if (!this._check("EOF")) {
       this._error("Expected end of line after annotation", this._current().range, "trailing-annotation");
+      this._syncToNextStatement();
+    }
+  }
+
+  _parseDirectiveOrRecover() {
+    const bangToken = this._advance();
+    const nameToken = this._parseKeyToken();
+    if (nameToken === null) {
+      this._error("Expected directive name after '!'", this._current().range, "expected-directive-name");
+      this._syncToNextStatement();
+      return;
+    }
+    const directiveName = String(nameToken.value || "").toLowerCase();
+    if (directiveName !== "include" && directiveName !== "root") {
+      this._error(`Unknown directive !${nameToken.value}`, nameToken.range, "unknown-directive");
+      this._syncToNextStatement();
+      return;
+    }
+    if (!this._match("LPAREN")) {
+      this._error(`Expected '(' after !${nameToken.value}`, this._current().range, "expected-directive-args");
+      this._syncToNextStatement();
+      return;
+    }
+    const valueToken = this._current();
+    if (valueToken.type !== "STRING") {
+      this._error(`Expected string literal inside !${nameToken.value}(...)`, valueToken.range, "expected-directive-string");
+      this._syncToNextStatement();
+      return;
+    }
+    const value = this._advance();
+    const closeToken = this._expect("RPAREN", "Expected ')' to close directive");
+    const directiveRange = new Range(bangToken.range.start, closeToken ? closeToken.range.end : value.range.end);
+    const directive = new DirectiveDef(
+      directiveName,
+      value.value,
+      value.range,
+      directiveRange,
+      this.currentTable.slice(),
+      this.currentTableSegments.slice(),
+      this.currentTableIdentityKey,
+    );
+    this.directives.push(directive);
+    if (this._check("NEWLINE")) {
+      this._advance();
+    } else if (!this._check("EOF")) {
+      this._error("Expected end of line after directive", this._current().range, "trailing-directive");
       this._syncToNextStatement();
     }
   }

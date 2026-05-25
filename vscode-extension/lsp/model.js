@@ -213,6 +213,26 @@ class ReferenceOccurrence {
   }
 }
 
+class DirectiveDef {
+  constructor(
+    kind,
+    value,
+    valueRange,
+    range,
+    tablePath = [],
+    tablePathSegments = [],
+    tableIdentityKey = null,
+  ) {
+    this.kind = kind;
+    this.value = value;
+    this.valueRange = valueRange;
+    this.range = range;
+    this.tablePath = tablePath;
+    this.tablePathSegments = tablePathSegments;
+    this.tableIdentityKey = tableIdentityKey;
+  }
+}
+
 class ParsedDocument {
   constructor({
     uri,
@@ -223,6 +243,7 @@ class ParsedDocument {
     tables,
     assignments,
     references,
+    directives,
     errors,
   }) {
     this.uri = uri;
@@ -233,6 +254,7 @@ class ParsedDocument {
     this.tables = tables;
     this.assignments = assignments;
     this.references = references;
+    this.directives = directives;
     this.errors = errors;
   }
 
@@ -326,6 +348,7 @@ module.exports = {
   CallExpr,
   Diagnostic,
   Expr,
+  DirectiveDef,
   IdentExpr,
   InlineEntry,
   InlineTableExpr,

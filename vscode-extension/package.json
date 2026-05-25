@@ -1,7 +1,7 @@
 {
   "name": "msra-language-support",
   "displayName": "MSRA Language Support",
-  "description": "VS Code support for .msra files with internal or external LSP server modes.",
+  "description": "VS Code support for .msra and .msraf files with internal or external LSP server modes.",
   "version": "0.1.0",
   "publisher": "miskler",
   "repository": {
@@ -32,7 +32,8 @@
           "MSRA Config"
         ],
         "extensions": [
-          ".msra"
+          ".msra",
+          ".msraf"
         ],
         "configuration": "./language-configuration.json"
       }

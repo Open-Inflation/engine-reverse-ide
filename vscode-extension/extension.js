@@ -167,7 +167,7 @@ function activate(context) {
       { scheme: "file", language: "msra" },
     ],
     synchronize: {
-      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.msra"),
+      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{msra,msraf}"),
     },
   };
 

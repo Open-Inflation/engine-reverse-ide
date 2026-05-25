@@ -25,18 +25,19 @@ const {
   validateValueSpec,
 } = require("./assignment-schema");
 
-function validateAssignmentRelations(tableIndex, assignmentIndex) {
+function validateAssignmentRelations(tableIndex, assignmentIndex, lookupTableIndex = tableIndex, lookupAssignmentIndex = assignmentIndex) {
   const diagnostics = [];
   const assignmentsByTable = collectAssignmentsByTable(assignmentIndex);
+  const lookupAssignmentsByTable = collectAssignmentsByTable(lookupAssignmentIndex);
 
   diagnostics.push(...validateValuesMatchConflicts(assignmentsByTable));
   diagnostics.push(...validateFuncTransportRelations(assignmentsByTable));
-  diagnostics.push(...validateFuncExtractorRelations(tableIndex, assignmentIndex));
+  diagnostics.push(...validateFuncExtractorRelations(tableIndex, lookupAssignmentIndex));
   diagnostics.push(...validateWarmupRelations(assignmentIndex));
-  diagnostics.push(...validateBodyRelations(tableIndex, assignmentIndex));
+  diagnostics.push(...validateBodyRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex));
   diagnostics.push(...validateUrlParamValueRelations(assignmentsByTable));
-  diagnostics.push(...validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsByTable));
-  diagnostics.push(...validateVariableSourceRelations(tableIndex, assignmentIndex));
+  diagnostics.push(...validateExampleInputRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex, assignmentsByTable, lookupAssignmentsByTable));
+  diagnostics.push(...validateVariableSourceRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex));
 
   return diagnostics;
 }
@@ -197,7 +198,7 @@ function validateWarmupRelations(assignmentIndex) {
   return diagnostics;
 }
 
-function validateBodyRelations(tableIndex, assignmentIndex) {
+function validateBodyRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex) {
   const diagnostics = [];
   for (const table of tableIndex.values()) {
     const tablePath = table.path || [];
@@ -205,14 +206,14 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
       continue;
     }
 
-    const type = getStringAssignmentValue(assignmentIndex, tablePath, "type");
+    const type = getStringAssignmentValue(lookupAssignmentIndex, tablePath, "type");
     if (!type) {
       continue;
     }
 
-    const boundaryAssignment = getAssignment(assignmentIndex, tablePath, "boundary");
-    const fromAssignment = getAssignment(assignmentIndex, tablePath, "from");
-    const hasUrlChild = hasUnquotedChildTable(tableIndex, tablePath, "url");
+    const boundaryAssignment = getAssignment(lookupAssignmentIndex, tablePath, "boundary");
+    const fromAssignment = getAssignment(lookupAssignmentIndex, tablePath, "from");
+    const hasUrlChild = hasUnquotedChildTable(lookupTableIndex, tablePath, "url");
     const isMultipart = type === "multipart/form-data";
     const isFormEncoded = type === "application/x-www-form-urlencoded";
 
@@ -220,7 +221,7 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
       diagnostics.push(
         new Diagnostic(
           `Body item [${pathLabel(tablePath)}] with type "${type}" requires a "boundary" value.`,
-          getAssignment(assignmentIndex, tablePath, "type")?.keyRange || table.headerRange,
+          getAssignment(lookupAssignmentIndex, tablePath, "type")?.keyRange || table.headerRange,
           "error",
           "msra",
           "missing-body-boundary",
@@ -244,7 +245,7 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
       diagnostics.push(
         new Diagnostic(
           `Body item [${pathLabel(tablePath)}] requires "from" or a nested "url" table when type="${type}".`,
-          getAssignment(assignmentIndex, tablePath, "type")?.keyRange || table.headerRange,
+          getAssignment(lookupAssignmentIndex, tablePath, "type")?.keyRange || table.headerRange,
           "error",
           "msra",
           "missing-body-payload",
@@ -255,7 +256,7 @@ function validateBodyRelations(tableIndex, assignmentIndex) {
     if (tablePath.length > 4) {
       const parentPath = tablePath.slice(0, -1);
       if (isBodyItemTable(parentPath)) {
-        const parentType = getStringAssignmentValue(assignmentIndex, parentPath, "type");
+        const parentType = getStringAssignmentValue(lookupAssignmentIndex, parentPath, "type");
         if (parentType && parentType !== "multipart/form-data") {
           diagnostics.push(
             new Diagnostic(
@@ -355,9 +356,9 @@ function validateUrlParamValueRelations(assignmentsByTable) {
   return diagnostics;
 }
 
-function validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsByTable) {
+function validateExampleInputRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex, assignmentsByTable, lookupAssignmentsByTable) {
   const diagnostics = [];
-  const availableInputsByFunction = collectInputsByFunction(tableIndex);
+  const availableInputsByFunction = collectInputsByFunction(lookupTableIndex);
 
   for (const table of tableIndex.values()) {
     if (!isExampleItemTable(table.path || [])) {
@@ -398,7 +399,7 @@ function validateExampleInputRelations(tableIndex, assignmentIndex, assignmentsB
         continue;
       }
 
-      const typeAssignment = getTableAssignment(assignmentsByTable, [...functionPath, "input", inputEntry.key], "type");
+      const typeAssignment = getTableAssignment(lookupAssignmentsByTable, [...functionPath, "input", inputEntry.key], "type");
       const expectedSpec = getExampleInputValueSpec(typeAssignment && typeAssignment.value);
       if (!expectedSpec) {
         continue;
@@ -434,7 +435,7 @@ function isFuncResultReferenceValue(value) {
   return root && root.kind === "name" && String(root.value) === "FUNCRESULT";
 }
 
-function validateVariableSourceRelations(tableIndex, assignmentIndex) {
+function validateVariableSourceRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex) {
   const diagnostics = [];
   const variableNodes = new Map();
 
@@ -444,7 +445,7 @@ function validateVariableSourceRelations(tableIndex, assignmentIndex) {
       continue;
     }
 
-    const fromAssignment = getAssignment(assignmentIndex, tablePath, "from");
+    const fromAssignment = getAssignment(lookupAssignmentIndex, tablePath, "from");
     if (!fromAssignment) {
       continue;
     }

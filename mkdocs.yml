@@ -6,7 +6,22 @@ theme:
 nav:
   - Home: index.md
   - Язык MSRA:
-      - Полный справочник: msra-language.md
+      - Обзор: msra-language.md
+      - "[msra]": msra-msra.md
+      - "[app]": msra-app.md
+      - "[app.warmup]": msra-app-warmup.md
+      - "[app.defaults.func.headers]": msra-app-defaults-func-headers.md
+      - "[app.variables.<name>]": msra-app-variables.md
+      - "[app.prefixes]": msra-app-prefixes.md
+      - "[app.regexes.<name>]": msra-app-regexes.md
+      - "[app.groups.<path>]": msra-app-groups.md
+      - "[app.func.<id>]": msra-app-func.md
+      - "[app.func.<id>.input.<name>]": msra-app-func-input.md
+      - "[app.func.<id>.url]": msra-app-func-url.md
+      - "[app.func.<id>.body]": msra-app-func-body.md
+      - "[app.func.<id>.headers]": msra-app-func-headers.md
+      - "[app.func.<id>.extractor]": msra-app-func-extractor.md
+      - "[app.func.<id>.examples]": msra-app-func-examples.md
       - Пути и identity: msra-paths.md
       - Ограничения генератора: msra-generator-gaps.md
 markdown_extensions:

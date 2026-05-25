@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .bridge import load_msra_document
 from .generator import build_project, generate_project
+from .msra_serializer import write_merged_msra_document
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     ast = load_msra_document(args.msra_file)
+    output_root = args.output.resolve()
+    merged_source_path = output_root / "merged.msra"
+    write_merged_msra_document(ast, merged_source_path)
     project = build_project(ast, args.msra_file)
     generate_project(
         project,
@@ -45,9 +49,12 @@ def main(argv: list[str] | None = None) -> int:
         source_root=args.msra_file.resolve().parent,
     )
 
-    output_root = args.output.resolve()
     print(
         f"Generated {project['app']['name']} into {output_root} "
-        f"(docs in {output_root / 'docs'})"
+        f"(merged source in {merged_source_path}, docs in {output_root / 'docs'})"
     )
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

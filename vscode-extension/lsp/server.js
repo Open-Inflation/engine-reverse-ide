@@ -17,6 +17,7 @@ const {
 } = require("./reference-context");
 const { parseDocument } = require("./parser");
 const { TABLE_SCHEMAS, validateValueSpec } = require("./assignment-schema");
+const { loadProject, transformParsedDocument } = require("./project-loader");
 const {
   ArrayExpr,
   InlineTableExpr,
@@ -154,11 +155,30 @@ class MsraLanguageServer {
       return;
     }
     const text = this._extractText(uri, params);
-    const parsed = parseDocument(text, uri);
-    const analyzed = analyzeDocument(parsed);
-    this.documents.set(uri, new OpenDocument(uri, text, parsed, analyzed));
-    if (publish) {
-      this._publishDiagnostics(uri, analyzed.diagnostics, parsed);
+    this.documents.set(uri, new OpenDocument(uri, text, null, null));
+
+    const filePath = this._uriToPath(uri);
+    if (!filePath) {
+      const parsed = parseDocument(text, uri);
+      const analyzed = analyzeDocument(parsed, { rawDocument: parsed, sourcePath: filePath || uri });
+      this.documents.set(uri, new OpenDocument(uri, text, parsed, analyzed));
+      if (publish) {
+        this._publishDiagnostics(uri, analyzed.diagnostics, parsed);
+      }
+      return;
+    }
+
+    const textOverrides = this._collectTextOverrides(uri, text);
+    try {
+      const project = loadProject(filePath, { textOverrides });
+      this._applyProject(project, publish);
+    } catch (error) {
+      const parsed = parseDocument(text, uri);
+      const analyzed = analyzeDocument(parsed, { rawDocument: parsed, sourcePath: filePath });
+      this.documents.set(uri, new OpenDocument(uri, text, parsed, analyzed));
+      if (publish) {
+        this._publishDiagnostics(uri, analyzed.diagnostics, parsed);
+      }
     }
   }
 
@@ -169,10 +189,64 @@ class MsraLanguageServer {
       return;
     }
     this.documents.delete(uri);
+    const remainingEntry = [...this.documents.entries()].find(([candidate]) => this._uriToPath(candidate));
+    const remaining = remainingEntry ? remainingEntry[0] : null;
+    if (remaining) {
+      this._updateDocument({ textDocument: { uri: remaining, text: remainingEntry[1].text } }, true);
+      return;
+    }
     this.connection.sendNotification("textDocument/publishDiagnostics", {
       uri,
       diagnostics: [],
     });
+  }
+
+  _collectTextOverrides(activeUri, activeText) {
+    const overrides = {};
+    for (const [uri, document] of this.documents.entries()) {
+      const filePath = this._uriToPath(uri);
+      if (!filePath) {
+        continue;
+      }
+      overrides[filePath] = document.text;
+    }
+    const activePath = this._uriToPath(activeUri);
+    if (activePath) {
+      overrides[activePath] = activeText;
+    }
+    return overrides;
+  }
+
+  _applyProject(project, publish = false) {
+    const context = {
+      tableIndex: project.mergedTables,
+      assignmentIndex: project.mergedAssignments,
+    };
+    const updated = [];
+    for (const [uri, document] of this.documents.entries()) {
+      const filePath = this._uriToPath(uri);
+      if (!filePath) {
+        continue;
+      }
+      const projectDocument = project.documents.get(filePath);
+      if (!projectDocument) {
+        continue;
+      }
+      const parsed = projectDocument.transformed;
+      const analyzed = analyzeDocument(parsed, {
+        ...context,
+        rawDocument: projectDocument.raw,
+        sourcePath: filePath,
+      });
+      const nextDocument = new OpenDocument(uri, document.text, parsed, analyzed);
+      this.documents.set(uri, nextDocument);
+      updated.push({ uri, document: nextDocument });
+    }
+    if (publish) {
+      for (const entry of updated) {
+        this._publishDiagnostics(entry.uri, entry.document.analyzed.diagnostics, entry.document.parsed);
+      }
+    }
   }
 
   _extractText(uri, params) {

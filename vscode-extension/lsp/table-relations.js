@@ -1,10 +1,10 @@
 const { Diagnostic } = require("./model");
 const { normalizePathSegments, pathIdentityKey, renderPath } = require("./path-schema");
 
-function validateTableRelations(tableIndex) {
+function validateTableRelations(tableIndex, lookupTableIndex = tableIndex) {
   const diagnostics = [];
   for (const table of tableIndex.values()) {
-    diagnostics.push(...validateTableRelationsForTable(table, tableIndex));
+    diagnostics.push(...validateTableRelationsForTable(table, lookupTableIndex));
   }
   return diagnostics;
 }

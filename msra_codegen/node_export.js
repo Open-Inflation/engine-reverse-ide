@@ -18,8 +18,8 @@ const {
   SequenceExpr,
   StringExpr,
 } = require(path.resolve(__dirname, "..", "vscode-extension", "lsp", "model"));
-const { parseDocument } = require(path.resolve(__dirname, "..", "vscode-extension", "lsp", "parser"));
 const { analyzeDocument } = require(path.resolve(__dirname, "..", "vscode-extension", "lsp", "analysis"));
+const { loadProject } = require(path.resolve(__dirname, "..", "vscode-extension", "lsp", "project-loader"));
 
 function serializePosition(position) {
   if (!position) {
@@ -234,27 +234,39 @@ function main() {
     console.error("Usage: node node_export.js <file.msra>");
     process.exit(1);
   }
-  const text = fs.readFileSync(inputPath, "utf8");
-  const document = parseDocument(text, path.resolve(inputPath));
+  const project = loadProject(path.resolve(inputPath));
+  const document = {
+    uri: project.rootPath,
+    text: project.rootDocument ? project.rootDocument.transformed.text : "",
+    lineStarts: project.rootDocument ? project.rootDocument.transformed.lineStarts : [],
+    diagnostics: project.rootDocument ? project.rootDocument.transformed.diagnostics : [],
+    tables: project.mergedTables,
+    assignments: project.mergedAssignments,
+    references: project.mergedReferences,
+    directives: project.mergedDirectives,
+    errors: [],
+  };
   const analysis = analyzeDocument(document);
   if (analysis.diagnostics.length) {
     console.error(JSON.stringify(analysis.diagnostics.map(serializeDiagnostic), null, 2));
     process.exit(1);
   }
 
-  const tables = [...document.tables.values()].map(serializeTable);
-  const assignments = [...document.assignments.values()].map(serializeAssignment);
-  const references = (document.references || []).map(serializeReference);
+  const tables = [...project.mergedTables.values()].map(serializeTable);
+  const assignments = [...project.mergedAssignments.values()].map(serializeAssignment);
+  const references = (project.mergedReferences || []).map(serializeReference);
 
   process.stdout.write(
     JSON.stringify(
       {
-        uri: document.uri,
+        uri: project.rootPath,
         text: document.text,
         lineStarts: document.lineStarts,
         tables,
         assignments,
         references,
+        directives: project.mergedDirectives || [],
+        rootPath: project.rootPath,
       },
       null,
       2,
