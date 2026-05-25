@@ -304,6 +304,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
                 "types": types_expr,
                 "match": extract_variable_match(types_expr),
                 "read_only": bool(get_plain_value(get_assignment(table, "read_only", False))),
+                "nullable": bool(get_plain_value(get_assignment(table, "nullable", False))),
                 "from": get_assignment(table, "from"),
                 "description": get_plain_value(get_assignment(table, "description", "")),
             }
@@ -558,18 +559,21 @@ def build_abstraction_package_context(project: dict[str, Any]) -> dict[str, Any]
 
 def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
     type_names = variable_type_names(variable)
+    non_null_type_names = {name for name in type_names if name != "null"}
+    nullable = bool(variable.get("nullable", False))
+    has_null = nullable or "null" in type_names
     return {
         "name": variable["name"],
         "description": escape_docstring(variable["description"] or variable["name"]),
         "backing_name": f"_{variable['name']}",
         "capture_expr": render_expr(variable.get("from"), self_ref="self"),
-        "capture_kind": primary_type_name(type_names) or "string",
-        "getter_return": type_annotation_from_types(type_names) if "| None" in type_annotation_from_types(type_names) else f"{type_annotation_from_types(type_names)} | None",
-        "has_integer": "integer" in type_names,
-        "has_boolean": "boolean" in type_names,
-        "has_number": "number" in type_names,
-        "has_string": "string" in type_names or not type_names,
-        "has_null": "null" in type_names,
+        "capture_kind": primary_type_name(non_null_type_names) or "string",
+        "getter_return": type_annotation_from_types(non_null_type_names, nullable=has_null),
+        "has_integer": "integer" in non_null_type_names,
+        "has_boolean": "boolean" in non_null_type_names,
+        "has_number": "number" in non_null_type_names,
+        "has_string": "string" in non_null_type_names or not non_null_type_names,
+        "has_null": has_null,
         "setter_enabled": should_render_setter(variable),
         "match_pattern": match_to_pattern(variable.get("match")),
         "match_error": match_to_error(variable.get("match")),
@@ -1107,9 +1111,9 @@ def extract_variable_match(types_expr: dict[str, Any] | None) -> dict[str, Any] 
     return None
 
 
-def type_annotation_from_types(type_names: set[str]) -> str:
+def type_annotation_from_types(type_names: set[str], *, nullable: bool = False) -> str:
     if not type_names:
-        return "Any"
+        return "Any | None" if nullable else "Any"
     non_null = {name for name in type_names if name != "null"}
     base = {
         "string": "str",
@@ -1122,7 +1126,7 @@ def type_annotation_from_types(type_names: set[str]) -> str:
     if not non_null:
         return "Any | None"
     annotation = base.get(next(iter(non_null)), "Any")
-    if "null" in type_names:
+    if nullable or "null" in type_names:
         return f"{annotation} | None"
     return annotation
 

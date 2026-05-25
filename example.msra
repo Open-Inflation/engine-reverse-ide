@@ -22,7 +22,8 @@ warmup="./warmup.py:pipeline" # warmup.py копируется в generated pack
 on_error_screenshot_path="screenshot.png" # по умолчанию скриншоты не делаются
 
 [app.variables.city_id]
-types=[{"type"=integer, "match"={from=1, to=2147483647}}, {"type"=null, "value"=null}]
+@Nullable
+types=[{"type"=integer, "match"={from=1, to=2147483647}}]
 description="Идентификатор города"
 from=<UNSTANDARD_HEADERS.REQUEST.x-city> # доступно так же "value" или <LOCAL_STORAGE.x-city> или COOKIES так же можно указать COOKIES.key если по факту хранилище это список/словарь (опасно - если нет, runtime ошибка распарса json)
 

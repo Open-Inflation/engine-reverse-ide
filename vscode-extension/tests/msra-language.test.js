@@ -555,6 +555,20 @@ test("@ReadOnly annotation on app.variables stays valid", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
+test("@Nullable annotation on app.variables stays valid", () => {
+  const text = [
+    "[app]",
+    "[app.variables.city_id]",
+    "@Nullable",
+    'types=[{"type"=integer}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///nullable-variable.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
 test("@Required and @SubUrl annotations stay valid", () => {
   const text = [
     "[app]",
@@ -1142,7 +1156,9 @@ test("python codegen generates both bundled msra documents without failing", () 
       }
       const warmupModule = readFileSync(path.join(packageDir, "warmup.py"), "utf8");
       assert.match(warmupModule, /async def pipeline\(warmup: Warmup\)/);
-      assert.doesNotThrow(() => readFileSync(path.join(packageDir, "manager.py"), "utf8"));
+      const managerModule = readFileSync(path.join(packageDir, "manager.py"), "utf8");
+      assert.match(managerModule, /def city_id\(self\) -> int \| None:/);
+      assert.match(managerModule, /if value is None:\s+self\._city_id = None/);
     }
   } finally {
     rmSync(workDir, { recursive: true, force: true });
@@ -1360,7 +1376,8 @@ test("virtual variable references must resolve to declared variables", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"=integer, "match"={from=1, to=27}}, {"type"=null, "value"=null}]',
+    "@Nullable",
+    'types=[{"type"=integer, "match"={from=1, to=27}}]',
     'description="Идентификатор города"',
     'from=<UNSTANDARD_HEADERS.REQUEST.x-city>',
     "",
@@ -1402,6 +1419,10 @@ test("annotation-only flags reject explicit arguments", () => {
     "[app.func.A3A417.input.query]",
     "type=string",
     "@Required(false)",
+    "[app.variables.city_id]",
+    "@ReadOnly(true)",
+    "@Nullable(true)",
+    'types=[{"type"=integer}]',
     "[app.func.A3A417.examples]",
     "[app.func.A3A417.examples.smoke]",
     "@Test(false)",
@@ -1413,8 +1434,8 @@ test("annotation-only flags reject explicit arguments", () => {
   const analysis = analyzeDocument(document);
   const diagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-annotation-argument");
 
-  assert.strictEqual(diagnostics.length, 5);
-  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@Required|@Test|@Docs/.test(diagnostic.message)));
+  assert.strictEqual(diagnostics.length, 7);
+  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@Required|@ReadOnly|@Nullable|@Test|@Docs/.test(diagnostic.message)));
 });
 
 test("legacy boolean toggles are rejected in favor of annotations", () => {
@@ -1427,6 +1448,7 @@ test("legacy boolean toggles are rejected in favor of annotations", () => {
     "headers_sniffer=true",
     "[app.variables.city_id]",
     "read_only=true",
+    "nullable=true",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     "type=string",
@@ -1442,8 +1464,8 @@ test("legacy boolean toggles are rejected in favor of annotations", () => {
   const analysis = analyzeDocument(document);
   const diagnostics = analysis.diagnostics.filter((item) => item.code === "annotation-required");
 
-  assert.strictEqual(diagnostics.length, 8);
-  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@SniffHeaders|@ReadOnly|@Required|@SubUrl|@List/.test(diagnostic.message)));
+  assert.strictEqual(diagnostics.length, 9);
+  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@SniffHeaders|@ReadOnly|@Nullable|@Required|@SubUrl|@List/.test(diagnostic.message)));
 });
 
 test("FUNCRESULT references require a result kind and reject bare headers syntax", () => {
@@ -1891,7 +1913,8 @@ test("reference completions insert angle brackets when the user has not typed th
     const text = [
     "[app]",
     "[app.variables.city_id]",
-    'types=[{"type"=integer, "match"={from=1, to=2147483647}}, {"type"=null, "value"=null}]',
+    "@Nullable",
+    'types=[{"type"=integer, "match"={from=1, to=2147483647}}]',
     'description="Current city id used by catalog and balance requests."',
     lineText,
     "",
@@ -1901,7 +1924,7 @@ test("reference completions insert angle brackets when the user has not typed th
     const response = server._completion({
       textDocument: { uri },
       position: {
-        line: 4,
+        line: 5,
         character,
       },
     });
@@ -1913,8 +1936,8 @@ test("reference completions insert angle brackets when the user has not typed th
   const bareItem = getResponseCompletion("from=", "from=".length);
   assert.deepStrictEqual(bareItem.textEdit, {
     range: {
-      start: { line: 4, character: "from=".length },
-      end: { line: 4, character: "from=".length },
+      start: { line: 5, character: "from=".length },
+      end: { line: 5, character: "from=".length },
     },
     newText: "<UNSTANDARD_HEADERS.RESPONSE.$0>",
   });
@@ -1923,8 +1946,8 @@ test("reference completions insert angle brackets when the user has not typed th
   const closedItem = getResponseCompletion("from=<>", "from=<>".length);
   assert.deepStrictEqual(closedItem.textEdit, {
     range: {
-      start: { line: 4, character: "from=<".length },
-      end: { line: 4, character: "from=<>".length },
+      start: { line: 5, character: "from=<".length },
+      end: { line: 5, character: "from=<>".length },
     },
     newText: "UNSTANDARD_HEADERS.RESPONSE.$0>",
   });

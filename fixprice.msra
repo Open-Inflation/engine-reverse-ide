@@ -18,32 +18,38 @@ warmup="./warmup.py:pipeline"
 on_error_screenshot_path="screenshot.png"
 
 [app.variables.city_id]
-types=[{"type"=integer, "match"={from=1, to=2147483647}}, {"type"=null, "value"=null}]
+@Nullable
+types=[{"type"=integer, "match"={from=1, to=2147483647}}]
 description="Current city id used by catalog and balance requests."
 from=<UNSTANDARD_HEADERS.REQUEST.x-city>
 
 [app.variables.language]
-types=[{"type"=string, "match"=<DOCUMENT.REGEXES.LANGUAGE_TAG>}, {"type"=null, "value"=null}]
+@Nullable
+types=[{"type"=string, "match"=<DOCUMENT.REGEXES.LANGUAGE_TAG>}]
 description="Current language header value."
 from=<UNSTANDARD_HEADERS.REQUEST.x-language>
 
 [app.variables.token]
-types=[{"type"=string, "value"=null}]
+@Nullable
+types=[{"type"=string}]
 description="Access token captured by the warmup sniffer."
 from=<UNSTANDARD_HEADERS.REQUEST.x-key>
 
 [app.variables.delivery_type]
-types=[{"type"=string, "match"=<DOCUMENT.REGEXES.DELIVERY_TYPE>}, {"type"=null, "value"=null}]
+@Nullable
+types=[{"type"=string, "match"=<DOCUMENT.REGEXES.DELIVERY_TYPE>}]
 description="Delivery mode used by the catalog."
 from=<UNSTANDARD_HEADERS.REQUEST.x-delivery-type>
 
 [app.variables.store_id]
-types=[{"type"=string, "match"=<DOCUMENT.REGEXES.STORE_ID>}, {"type"=null, "value"=null}]
+@Nullable
+types=[{"type"=string, "match"=<DOCUMENT.REGEXES.STORE_ID>}]
 description="Store or PFM identifier."
 from=<UNSTANDARD_HEADERS.REQUEST.x-pfm>
 
 [app.variables.client_route]
-types=[{"type"=string, "value"=null}]
+@Nullable
+types=[{"type"=string}]
 description="Route path used for the X-Client-Route header."
 from=<UNSTANDARD_HEADERS.REQUEST.x-client-route>
 

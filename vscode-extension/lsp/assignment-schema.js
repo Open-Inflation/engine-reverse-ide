@@ -222,6 +222,9 @@ function annotationRequirementForAssignment(tablePath, key) {
   if (matchesVariablesPath(tablePath) && key === "read_only") {
     return { kind: "flag", label: "@ReadOnly", legacyLabel: "read_only" };
   }
+  if (matchesVariablesPath(tablePath) && key === "nullable") {
+    return { kind: "flag", label: "@Nullable", legacyLabel: "nullable" };
+  }
   if (matchesInputPath(tablePath) && key === "required") {
     return { kind: "flag", label: "@Required", legacyLabel: "required" };
   }
@@ -309,7 +312,7 @@ const MATCH_SPEC = { kind: "match" };
 
 const VARIABLE_TYPE_ITEM_SPEC = objectShape(
   {
-    type: enumOf(["string", "integer", "boolean", "null", "array", "object"]),
+    type: enumOf(["string", "integer", "boolean", "array", "object"]),
   },
   {
     match: MATCH_SPEC,
@@ -602,6 +605,7 @@ const TABLE_SCHEMAS = [
     types: arrayOf(VARIABLE_TYPE_ITEM_SPEC),
     description: STRINGISH,
     read_only: BOOLEAN,
+    nullable: BOOLEAN,
     from: ANY,
   }, {
     rules: [

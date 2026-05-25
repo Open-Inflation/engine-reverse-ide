@@ -554,6 +554,7 @@ class Parser {
       required: "required",
       list: "list",
       readonly: "read_only",
+      nullable: "nullable",
       test: "test",
       docs: "docs",
       humanize: "humanize",
