@@ -53,7 +53,8 @@ function analyzeDocument(document) {
   }
   diagnostics.push(...validateTableRelations(tableIndex));
   for (const assignment of assignmentIndex.values()) {
-    for (const diagnostic of validateAssignment(assignment.tablePath, assignment)) {
+    const table = tableIndex.get(pathIdentityKey(assignment.tablePath));
+    for (const diagnostic of validateAssignment(assignment.tablePath, assignment, table ? table.assignments || [] : [])) {
       diagnostics.push(diagnostic);
     }
   }

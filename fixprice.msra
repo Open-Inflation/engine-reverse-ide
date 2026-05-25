@@ -203,8 +203,8 @@ from=<INPUT.search>
 description="Optional address filter."
 
 [app.func.CATALOG_PRODUCT_BALANCE.url.params.inStock]
-values=[{"value_in_url"="true", "default"=true}]
-description="Present only when in_stock is true."
+const="true"
+description="Fixed inStock query parameter."
 
 [app.func.CATALOG_PRODUCT_BALANCE.examples.snapshot]
 @Test
@@ -369,17 +369,17 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/store"
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.searchType]
 @Required
-values=[{"value_in_url"="metro", "default"=true}]
+const="metro"
 description="Fixed searchType parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.canPickup]
 @Required
-values=[{"value_in_url"="all", "default"=true}]
+const="all"
 description="Fixed canPickup parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.showTemporarilyClosed]
 @Required
-values=[{"value_in_url"="all", "default"=true}]
+const="all"
 description="Fixed showTemporarilyClosed parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.countryId]

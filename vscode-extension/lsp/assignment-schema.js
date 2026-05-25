@@ -318,6 +318,7 @@ const NUMERIC_RANGE_SPEC = objectShape(
 
 const MATCH_SPEC = { kind: "match" };
 const VARIABLE_MATCH_SPEC = oneOf(MATCH_SPEC, arrayOf(SCALAR));
+const CONST_SPEC = oneOf(STRING, arrayOf(STRING));
 const JS_SCRIPT_PATH_SPEC = patternOf(
   /^(?:\.[\\/])?[A-Za-z0-9_.\/-]+\.js$/,
   "JavaScript extractor path like extractors/catalog-product-info.js",
@@ -720,6 +721,7 @@ const TABLE_SCHEMAS = [
     required: BOOLEAN,
     list: BOOLEAN,
     list_style: LIST_STYLE_SPEC,
+    const: CONST_SPEC,
     values: arrayOf(URL_PARAM_VALUE_SPEC),
     description: STRINGISH,
     from: ANY,
@@ -740,7 +742,7 @@ const TABLE_SCHEMAS = [
   }),
 ];
 
-function validateAssignment(tablePath, assignment) {
+function validateAssignment(tablePath, assignment, tableAssignments = []) {
   const annotationRequirement = annotationRequirementForAssignment(tablePath, assignment.key);
   if (annotationRequirement) {
     if (!assignment.annotation) {
@@ -798,6 +800,9 @@ function validateAssignment(tablePath, assignment) {
   const ruleDiagnostics = [];
   for (const rule of schema.rules || []) {
     ruleDiagnostics.push(...evaluateFixedSchemaRule(rule, assignment));
+  }
+  if (assignment.key === "const" && matchesUrlParamsPath(tablePath)) {
+    ruleDiagnostics.push(...validateUrlParamConstConflicts(tableAssignments, assignment));
   }
   return ruleDiagnostics;
 }
@@ -1146,6 +1151,29 @@ function evaluateFixedSchemaRule(rule, assignment) {
       rule.code,
     ),
   ];
+}
+
+function validateUrlParamConstConflicts(tableAssignments, assignment) {
+  const conflicts = [];
+  const conflictMessages = {
+    from: 'URL parameter constant cannot define both "const" and "from". Use "const" for fixed parameters and "from" for values driven by inputs or references.',
+    values: 'URL parameter constant cannot define both "const" and "values". Use "const" for fixed parameters and "values" for selectable mappings.',
+    match: 'URL parameter constant cannot define both "const" and "match". Use "const" for fixed parameters and "match" for validation rules.',
+  };
+  for (const key of Object.keys(conflictMessages)) {
+    const conflictingAssignment = tableAssignments.find((item) => item.key === key);
+    if (!conflictingAssignment) {
+      continue;
+    }
+    conflicts.push(
+      typeDiagnostic(
+        conflictingAssignment.keyRange || assignment.keyRange,
+        conflictMessages[key],
+        "conflicting-inline-table-keys",
+      ),
+    );
+  }
+  return conflicts;
 }
 
 function getNumericLiteral(value) {

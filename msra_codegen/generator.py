@@ -435,6 +435,7 @@ def build_url_param_spec(table: dict[str, Any], get_assignment) -> dict[str, Any
             "indexed": bool(list_style.get("indexed", False)),
         },
         "from": get_assignment(table, "from"),
+        "const": get_assignment(table, "const"),
         "values": get_assignment(table, "values"),
         "description": str(get_plain_value(get_assignment(table, "description", ""))),
     }
@@ -785,6 +786,8 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
         param_name = param["name"]
         list_style = param.get("list_style") or {}
         from_expr = param.get("from")
+        const_expr = param.get("const")
+        const_value = get_plain_value(const_expr)
         values = get_plain_value(param.get("values"))
         source_input_name = ref_input_name(from_expr)
         matched_input = inputs.get(normalize_name(source_input_name)) if source_input_name else inputs.get(normalize_name(param_name))
@@ -793,7 +796,9 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
             "name_expr": render_simple_value(param_name),
             "source_name": source_input_name or param_name,
             "source_expr": render_expr(from_expr, self_ref="self._parent") if from_expr is not None else None,
-            "is_list": bool(param.get("list", False)) or bool(matched_input and is_list_type_expr(matched_input.get("type"))),
+            "is_list": bool(param.get("list", False))
+            or bool(matched_input and is_list_type_expr(matched_input.get("type")))
+            or isinstance(const_value, list),
             "has_value_map": False,
             "selectable_values_expr": None,
             "value_map_expr": None,
@@ -805,6 +810,14 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
             "temp_name": f"_{normalize_name(param_name)}_value",
             "temp_list_name": f"_{normalize_name(param_name)}_values",
         }
+        if const_expr is not None:
+            item["kind"] = "literal"
+            if item["is_list"] and not isinstance(const_value, list):
+                item["value_expr"] = render_simple_value([const_value])
+            else:
+                item["value_expr"] = render_expr(const_expr, self_ref="self._parent")
+            result.append(item)
+            continue
         if from_expr is not None:
             item["kind"] = "from"
             if isinstance(values, list) and values and all(isinstance(entry, dict) for entry in values):

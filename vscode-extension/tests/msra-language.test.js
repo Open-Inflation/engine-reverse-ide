@@ -534,6 +534,98 @@ test("example tables inputs must match declared function input types", () => {
   assert.match(diagnostic.message, /integer/);
 });
 
+test("url param const values generate fixed query params", () => {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-const-"));
+  const inputPath = path.join(workDir, "const.msra");
+  const outputDir = path.join(workDir, "generated");
+  const packageName = "constapi";
+  const text = [
+    "[app]",
+    'name="ConstAPI"',
+    'version="0.1.0"',
+    'description=""',
+    "",
+    "[app.groups.Testing]",
+    'description="Testing"',
+    "",
+    "[app.func.A3A417]",
+    'name="search"',
+    "transport=fetch",
+    "method=GET",
+    "group=<GROUPS.Testing>",
+    "",
+    "[app.func.A3A417.url]",
+    'base="https://example.com/"',
+    "",
+    "[app.func.A3A417.url.params.searchType]",
+    'const="metro"',
+    "",
+    "[app.func.A3A417.url.params.tags]",
+    "@List",
+    'const=["metro", "ortem"]',
+    "",
+  ].join("\n");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir, "-p", packageName], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const packageDir = path.join(outputDir, packageName);
+    const moduleText = readFileSync(path.join(packageDir, "endpoints", "testing.py"), "utf8");
+    assert.match(moduleText, /query_params\.append\(\('searchType', 'metro'\)\)/);
+    assert.match(moduleText, /query_params\.append\(\('tags', \['metro', 'ortem'\]\)\)/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("url param const conflicts with from, values, and match", () => {
+  const text = [
+    "[app]",
+    'name="ConstAPI"',
+    'version="0.1.0"',
+    'description=""',
+    "",
+    "[app.regexes.TEXT_REQUEST]",
+    'regex="^[a-z]+$"',
+    "",
+    "[app.groups.Testing]",
+    'description="Testing"',
+    "",
+    "[app.func.A3A417]",
+    'name="search"',
+    "transport=fetch",
+    "method=GET",
+    "group=<GROUPS.Testing>",
+    "",
+    "[app.func.A3A417.input.search]",
+    "type=string",
+    "",
+    "[app.func.A3A417.url]",
+    'base="https://example.com/"',
+    "",
+    "[app.func.A3A417.url.params.searchType]",
+    'const="metro"',
+    "from=<INPUT.search>",
+    'values=[{"value_in_url"="metro", "default"=true}]',
+    "match=<DOCUMENT.REGEXES.TEXT_REQUEST>",
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///conflicting-const-param.msra");
+  const analysis = analyzeDocument(document);
+  const conflictDiagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "conflicting-inline-table-keys");
+
+  assert.strictEqual(conflictDiagnostics.length, 3);
+  assert.ok(conflictDiagnostics.some((item) => /const.*from|from.*const/.test(item.message)));
+  assert.ok(conflictDiagnostics.some((item) => /const.*values|values.*const/.test(item.message)));
+  assert.ok(conflictDiagnostics.some((item) => /const.*match|match.*const/.test(item.message)));
+});
+
 test("variable type items accept scalar match lists", () => {
   const text = [
     "[app]",
