@@ -10,7 +10,6 @@ description="Checks store balance for a product in the current city."
 type=integer
 @Required
 match={from=1, to=2147483647}
-description="Product id used in the balance path."
 
 [CATALOG_PRODUCT_BALANCE.input.in_stock]
 type=boolean
@@ -19,22 +18,18 @@ description="When false the request omits the inStock query flag."
 
 [CATALOG_PRODUCT_BALANCE.input.search]
 type=string
-description="Optional address filter for store search."
 
 [CATALOG_PRODUCT_BALANCE.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/store/balance/"<INPUT.product_id>
 
 [CATALOG_PRODUCT_BALANCE.url.params.canPickup]
 values=[{"value_in_url"="all", "default"=true}]
-description="Fixed canPickup query parameter."
 
 [CATALOG_PRODUCT_BALANCE.url.params.addressPart]
 from=<INPUT.search>
-description="Optional address filter."
 
 [CATALOG_PRODUCT_BALANCE.url.params.inStock]
 const="true"
-description="Fixed inStock query parameter."
 
 [CATALOG_PRODUCT_BALANCE.examples.snapshot]
 @Test

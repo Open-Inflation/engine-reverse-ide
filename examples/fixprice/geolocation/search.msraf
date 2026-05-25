@@ -4,57 +4,45 @@
 name="search"
 method=GET
 group=<GROUPS.Geolocation>
-description="Searches stores by country, region, city, and address filters."
 
 [GEOLOCATION_SHOP_SEARCH.input.country_id]
 type=integer
 match={from=1, to=2147483647}
-description="Optional country id filter."
 
 [GEOLOCATION_SHOP_SEARCH.input.region_id]
 type=integer
 match={from=1, to=2147483647}
-description="Optional region id filter."
 
 [GEOLOCATION_SHOP_SEARCH.input.city_id]
 type=integer
 match={from=1, to=2147483647}
-description="Optional city id filter."
 
 [GEOLOCATION_SHOP_SEARCH.input.search]
 type=string
-description="Optional address search filter."
 
 [GEOLOCATION_SHOP_SEARCH.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/store"
 
 [GEOLOCATION_SHOP_SEARCH.url.params.searchType]
 const="metro"
-description="Fixed searchType parameter."
 
 [GEOLOCATION_SHOP_SEARCH.url.params.canPickup]
 const="all"
-description="Fixed canPickup parameter."
 
 [GEOLOCATION_SHOP_SEARCH.url.params.showTemporarilyClosed]
 const="all"
-description="Fixed showTemporarilyClosed parameter."
 
 [GEOLOCATION_SHOP_SEARCH.url.params.countryId]
 from=<INPUT.country_id>
-description="Optional countryId query parameter."
 
 [GEOLOCATION_SHOP_SEARCH.url.params.regionId]
 from=<INPUT.region_id>
-description="Optional regionId query parameter."
 
 [GEOLOCATION_SHOP_SEARCH.url.params.cityId]
 from=<INPUT.city_id>
-description="Optional cityId query parameter."
 
 [GEOLOCATION_SHOP_SEARCH.url.params.addressPart]
 from=<INPUT.search>
-description="Optional addressPart query parameter."
 
 [GEOLOCATION_SHOP_SEARCH.examples.snapshot]
 @Test

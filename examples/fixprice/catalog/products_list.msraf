@@ -9,17 +9,14 @@ description="Fetches products inside a category or subcategory; the JSON body mi
 [CATALOG_PRODUCTS_LIST.input.category_alias]
 type=string
 @Required
-description="Category alias used in the request path and JSON body."
 
 [CATALOG_PRODUCTS_LIST.input.subcategory_alias]
 type=string
-description="Optional subcategory alias appended to the request path and body category."
 
 [CATALOG_PRODUCTS_LIST.input.page]
 type=integer
 default=1
 match={from=1, to=2147483647}
-description="Page number for the listing."
 
 [CATALOG_PRODUCTS_LIST.input.limit]
 type=integer
@@ -31,22 +28,18 @@ description="Page size for the listing; the Python code rejects values outside 1
 type=string
 default="sold"
 values=["sold", "abc", "min", "max"]
-description="Catalog sort order."
 
 [CATALOG_PRODUCTS_LIST.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/product/in/"<INPUT.category_alias>
 
 [CATALOG_PRODUCTS_LIST.url.params.page]
 from=<INPUT.page>
-description="Page query parameter."
 
 [CATALOG_PRODUCTS_LIST.url.params.limit]
 from=<INPUT.limit>
-description="Limit query parameter."
 
 [CATALOG_PRODUCTS_LIST.url.params.sort]
 from=<INPUT.sort>
-description="Sort query parameter."
 
 [CATALOG_PRODUCTS_LIST.body]
 type="application/json"

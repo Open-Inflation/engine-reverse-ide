@@ -4,7 +4,6 @@
 name="home_brands_list"
 method=GET
 group=<GROUPS.Advertising>
-description="Returns the brand list used on the homepage."
 
 [ADVERTISING_HOME_BRANDS_LIST.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
@@ -12,4 +11,3 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
 [ADVERTISING_HOME_BRANDS_LIST.examples.snapshot]
 @Test
 @Docs
-inputs={}
