@@ -288,14 +288,6 @@ const INPUT_TYPE_SPEC = oneOf(
 const EXAMPLE_INPUTS_SPEC = recordOf(ANY, {
   keyDescription: "input",
 });
-const EXAMPLE_ITEM_SPEC = objectShape(
-  {},
-  {
-    inputs: EXAMPLE_INPUTS_SPEC,
-    test: BOOLEAN,
-    docs: BOOLEAN,
-  },
-);
 
 const NUMERIC_RANGE_SPEC = objectShape(
   {
@@ -734,6 +726,15 @@ const TABLE_SCHEMAS = [
     inputs: EXAMPLE_INPUTS_SPEC,
     test: BOOLEAN,
     docs: BOOLEAN,
+    type: enumOf(["text", "json", "image"]),
+    description: STRINGISH,
+  }, {
+    rules: [
+      forbidDynamicValue("description", {
+        code: "invalid-description-dynamic",
+        message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
 ];
 

@@ -18,3 +18,4 @@ from=<INPUT.country_id>
 [GEOLOCATION_REGIONS_LIST.examples.snapshot]
 @Test
 @Docs
+description="Список регионов в выбранной стране."

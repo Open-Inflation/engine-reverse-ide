@@ -11,3 +11,4 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
 [ADVERTISING_HOME_BRANDS_LIST.examples.snapshot]
 @Test
 @Docs
+description="Список брендов на главной."

@@ -252,6 +252,9 @@ test("description fields cannot be dynamic", () => {
     "[app.func.A3A417.input.query]",
     'type=string',
     "description=<INPUT.description>",
+    "[app.func.A3A417.examples]",
+    "[app.func.A3A417.examples.smoke]",
+    "description=<INPUT.description>",
     "[app.func.A3A417.url.params.url]",
     "description=<INPUT.description>",
     "",
@@ -261,7 +264,7 @@ test("description fields cannot be dynamic", () => {
   const diagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-description-dynamic");
   const regexRaiseDiagnostic = analysis.diagnostics.find((item) => item.code === "invalid-regex-raise-dynamic");
 
-  assert.strictEqual(diagnostics.length, 6, "expected all dynamic descriptions to be rejected");
+  assert.strictEqual(diagnostics.length, 7, "expected all dynamic descriptions to be rejected");
   assert.ok(regexRaiseDiagnostic, "expected regex raise to reject dynamic references");
 });
 
@@ -489,13 +492,38 @@ test("example tables accept @Docs and @Test annotations", () => {
     "[app.func.A3A417.examples.smoke]",
     "@Test",
     "@Docs",
+    "type=json",
+    'description="Smoke test"',
     'inputs={"query"="example"}',
     "[app.func.A3A417.examples.alt_query]",
     "@Docs",
+    "type=text",
+    'description="Alternative query"',
     'inputs={"query"="example2"}',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///example-item-annotations.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("example tables accept explicit output types, including image", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.url]",
+    "type=string",
+    "@Required",
+    "[app.func.A3A417.examples]",
+    "[app.func.A3A417.examples.snapshot]",
+    "@Docs",
+    "type=image",
+    'description="Image example"',
+    'inputs={"url"="https://example.com/image.png"}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///example-item-types.msra");
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
@@ -510,6 +538,7 @@ test("example tables allow omitted inputs as an empty default", () => {
     "[app.func.A3A417.examples]",
     "[app.func.A3A417.examples.smoke]",
     "@Docs",
+    'description="Smoke test"',
     "",
   ].join("\n");
   const document = parseDocument(text, "file:///empty-example-inputs.msra");
@@ -1271,10 +1300,12 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(productModule, /from \.goto_pipeline import pipeline as goto_pipeline_runner/);
         assert.match(productModule, /await goto_pipeline_runner\(warmup\)/);
         assert.match(productModule, /extractors\/catalog-product-info\.js/);
-        assert.match(readmeText, /api\.Catalog\.tree\(\)/);
-        assert.match(readmeText, /api\.Catalog\.products_list\(/);
-        assert.match(readmeText, /api\.Geolocation\.cities_list\(/);
-        assert.match(readmeText, /Functions without an `examples` block are omitted/);
+        assert.match(readmeText, /python -m camoufox fetch/);
+        assert.match(readmeText, /Получаем дерево категорий/);
+        assert.match(readmeText, /Список товаров в выбранной категории/);
+        assert.match(readmeText, /api\.city_id = cities\[0\]\['id'\]/);
+        assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
+        assert.match(readmeText, /Image\.open\(image_stream\)/);
       }
       for (const filePath of collectPythonFiles(packageDir)) {
         const source = readFileSync(filePath, "utf8");
@@ -1299,6 +1330,60 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(readFileSync(path.join(packageDir, "extractors", "catalog-product-info.js"), "utf8"), /window\.__NUXT__=/);
       }
     }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("readme pipeline uses example type=image instead of function name", () => {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-image-readme-"));
+  const inputPath = path.join(workDir, "image.msra");
+  const outputDir = path.join(workDir, "generated");
+  const packageName = "imageapi";
+  const text = [
+    "[app]",
+    'name="ImageAPI"',
+    'version="0.1.0"',
+    "browser=firefox",
+    "",
+    "[app.groups.General]",
+    'description="General"',
+    "",
+    "[app.func.A3A417]",
+    'name="fetch_asset"',
+    "transport=direct",
+    "method=GET",
+    "group=<GROUPS.General>",
+    "",
+    "[app.func.A3A417.input.url]",
+    "type=string",
+    "@Required",
+    'description="Direct image URL."',
+    "",
+    "[app.func.A3A417.examples.snapshot]",
+    "@Test",
+    "@Docs",
+    "type=image",
+    'description="Image example"',
+    'inputs={"url"="https://example.com/image.png"}',
+    "",
+  ].join("\n");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir, "-p", packageName], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const readmeText = readFileSync(path.join(outputDir, "README.md"), "utf8");
+    assert.match(readmeText, /from PIL import Image/);
+    assert.match(readmeText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
+    assert.match(readmeText, /image_stream = await api\.General\.fetch_asset\(image_url\)/);
+    assert.match(readmeText, /with Image\.open\(image_stream\) as img:/);
+    assert.doesNotMatch(readmeText, /download_image/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

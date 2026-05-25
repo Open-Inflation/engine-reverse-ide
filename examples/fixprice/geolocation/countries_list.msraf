@@ -18,3 +18,4 @@ from=<INPUT.alias>
 [GEOLOCATION_COUNTRIES_LIST.examples.snapshot]
 @Test
 @Docs
+description="Список стран для геолокации."

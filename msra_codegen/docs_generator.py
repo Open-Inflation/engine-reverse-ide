@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 from datetime import date
 from pathlib import Path
@@ -117,6 +118,7 @@ def build_docs_project_context(
         "project_name": project_title,
         "project_version": str(app["version"]),
         "package_name": package_name,
+        "browser": str(app.get("browser", "")),
         "client_class_name": client_class_name,
         "has_catalog_sort": "CatalogSort" in exports,
         "current_year": str(date.today().year),
@@ -149,6 +151,7 @@ def build_docs_project_context(
             "package_name": package_name,
             "client_class_name": client_class_name,
             "has_catalog_sort": "CatalogSort" in exports,
+            "requires_camoufox": str(app.get("browser", "")) == "camoufox",
             "top_groups": top_groups,
         },
         "readme_pipeline_code": build_readme_pipeline_code(project, package_name, client_class_name),
@@ -253,10 +256,20 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
     functions_by_id = {func["id"]: func for func in functions}
     output_var_names: dict[str, str] = {}
     body_lines: list[str] = []
+    has_city_id_variable = any(str(variable.get("name")) == "city_id" for variable in project.get("variables", []))
+    needs_image_helpers = any(
+        normalize_example_type(primary_examples.get(func_id)) == "image"
+        and str(functions_by_id[func_id].get("transport") or "fetch").lower() == "direct"
+        for func_id in ordered_ids
+        if primary_examples.get(func_id) is not None
+    )
     current_group: str | None = None
+    step_index = 0
     for func_id in ordered_ids:
         func = functions_by_id[func_id]
         example = primary_examples[func_id]
+        example_type = normalize_example_type(example)
+        example_inputs = inline_table_items(example.get("inputs")) if example else []
         group_name = str(func.get("group") or "").split(".", 1)[0] or "Ungrouped"
         if group_name != current_group:
             current_group = group_name
@@ -264,20 +277,56 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
                 body_lines.append("")
             body_lines.append(f"        # {group_name}")
 
-        call_path = build_readme_call_path(func)
-        output_var = readme_output_var_name(func)
-        body_lines.append(
-            f"        {output_var} = await {call_path}({build_readme_call_args(example.get('inputs'), output_var_names)})"
+        step_index += 1
+        comment_text = normalize_readme_comment(
+            example.get("description") or func.get("description") or func.get("name") or func["id"]
         )
+        body_lines.append(f"        # {step_index}. {comment_text}")
+
+        call_path = build_readme_call_path(func)
+        transport = str(func.get("transport") or "fetch").lower()
+        output_var = readme_output_var_name(func, example_type, transport)
+        call_args = build_readme_call_args(example.get("inputs"), output_var_names)
+        if example_type == "image" and transport == "direct" and example_inputs:
+            url_input = next((item for item in example_inputs if item.get("key") == "url"), None)
+            if url_input is not None:
+                body_lines.append(f"        image_url = {render_readme_expr(url_input['value'], output_var_names)}")
+                body_lines.append(f"        {output_var} = await {call_path}(image_url)")
+                body_lines.append("        with Image.open(image_stream) as img:")
+                body_lines.append('            print(f"Image format: {img.format}, size: {img.size}")')
+                output_var_names[func_id] = output_var
+                continue
+        if transport == "direct":
+            body_lines.append(
+                f"        {output_var} = await {call_path}({call_args})" if call_args else f"        {output_var} = await {call_path}()"
+            )
+        else:
+            response_suffix = ".json()"
+            if example_type == "text":
+                response_suffix = ".text()"
+            elif example_type == "image":
+                response_suffix = ".image()"
+            body_lines.append(
+                f"        {output_var} = (await {call_path}({call_args})){response_suffix}"
+                if call_args
+                else f"        {output_var} = (await {call_path}()){response_suffix}"
+            )
+        if str(func.get("name") or "") == "cities_list" and has_city_id_variable:
+            body_lines.append(f"        api.city_id = {output_var}[0]['id']")
+            body_lines.append("        print(f\"Current city_id: {api.city_id}\")")
         output_var_names[func_id] = output_var
 
     lines = [
         "import asyncio",
+    ]
+    if needs_image_helpers:
+        lines.append("from PIL import Image")
+    lines.extend([
         f"from {package_name} import {client_class_name}",
         "",
         "async def main():",
         f"    async with {client_class_name}() as api:",
-    ]
+    ])
     if body_lines:
         lines.extend(body_lines)
     else:
@@ -303,6 +352,15 @@ def choose_primary_example(examples: list[dict[str, Any]]) -> dict[str, Any] | N
             item[0],
         ),
     )[0][1]
+
+
+def normalize_example_type(example: dict[str, Any] | None) -> str:
+    if not example:
+        return "json"
+    value = str(example.get("type") or "json").strip().lower()
+    if value not in {"text", "json", "image"}:
+        return "json"
+    return value
 
 
 def topologically_order_functions(
@@ -346,11 +404,19 @@ def build_readme_call_path(func: dict[str, Any]) -> str:
     return "api." + ".".join(segment for segment in group.split(".") if segment) + f".{method_name}"
 
 
-def readme_output_var_name(func: dict[str, Any]) -> str:
-    base = snake_case(str(func.get("name") or func["id"]))
-    if base.endswith("_list"):
-        base = base[: -len("_list")]
-    return f"{base}_output"
+def readme_output_var_name(func: dict[str, Any], example_type: str, transport: str) -> str:
+    name = snake_case(str(func.get("name") or func["id"]))
+    special_names = {
+        "tree": "tree_data",
+        "search": "search_results",
+    }
+    if example_type == "image":
+        return "image_stream" if transport == "direct" else "image"
+    if name in special_names:
+        return special_names[name]
+    if name.endswith("_list"):
+        name = name[: -len("_list")]
+    return name or "result"
 
 
 def build_readme_call_args(inputs_expr: dict[str, Any] | None, output_var_names: dict[str, str]) -> str:
@@ -367,6 +433,10 @@ def inline_table_items(expr: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not isinstance(expr, dict) or expr.get("kind") != "inline_table":
         return []
     return list(expr.get("items", []))
+
+
+def normalize_readme_comment(text: Any) -> str:
+    return re.sub(r"\s+", " ", str(text)).strip()
 
 
 def collect_funcresult_dependencies(expr: Any) -> set[str]:
@@ -486,14 +556,8 @@ def render_readme_ref(expr: dict[str, Any], output_var_names: dict[str, str]) ->
         return render_expr(expr, self_ref="api")
 
     function_id = str(function_part.get("value"))
-    result_kind = str(result_part.get("value")).upper()
     base = output_var_names.get(function_id, f"{snake_case(function_id)}_output")
-    if result_kind == "TEXT":
-        rendered = f"{base}.text"
-    elif result_kind == "IMAGE":
-        rendered = f"{base}.image()"
-    else:
-        rendered = f"{base}.json()"
+    rendered = base
 
     for tail_part in parts[3:]:
         tail_kind = tail_part.get("kind")

@@ -18,4 +18,5 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city/"<INPUT.city_id>
 [GEOLOCATION_CITY_INFO.examples.snapshot]
 @Test
 @Docs
+description="Подробная информация о городе."
 inputs={"city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[0]["id"]>}

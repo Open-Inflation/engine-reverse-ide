@@ -8,6 +8,9 @@ Install the generated client:
 
 ```bash
 pip install {{ package_name }}
+{% if quick_start.requires_camoufox %}
+python -m camoufox fetch
+{% endif %}
 ```
 
 Import the client:
@@ -24,7 +27,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## Pipeline Example
+## Usage
 
 ```py
 {{ readme_pipeline_code }}
@@ -34,4 +37,4 @@ if __name__ == "__main__":
 {{ readme_pipeline_note }}
 {% endif %}
 
-The full API reference lives under `docs/`.
+For more detailed information, see the generated docs in `docs/`.

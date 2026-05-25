@@ -35,4 +35,5 @@ goto_pipeline="./goto_pipeline.py:pipeline"
 [CATALOG_PRODUCT_INFO.examples.snapshot]
 @Test
 @Docs
+description="Получаем подробную карточку товара."
 inputs={"url"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["url"]>}

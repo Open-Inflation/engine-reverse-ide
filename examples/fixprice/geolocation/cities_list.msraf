@@ -19,4 +19,5 @@ from=<INPUT.country_id>
 [GEOLOCATION_CITIES_LIST.examples.snapshot]
 @Test
 @Docs
+description="Список городов в выбранной стране."
 inputs={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>}

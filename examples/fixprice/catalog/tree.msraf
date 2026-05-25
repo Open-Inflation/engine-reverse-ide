@@ -11,3 +11,4 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/category"
 [CATALOG_TREE.examples.snapshot]
 @Test
 @Docs
+description="Получаем дерево категорий."

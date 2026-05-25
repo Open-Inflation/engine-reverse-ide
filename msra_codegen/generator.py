@@ -321,6 +321,8 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
                     "name": path[4],
                     "docs": bool(get_plain_value(get_assignment(table, "docs", False))),
                     "test": bool(get_plain_value(get_assignment(table, "test", False))),
+                    "type": str(get_plain_value(get_assignment(table, "type", "json"))).strip().lower(),
+                    "description": str(get_plain_value(get_assignment(table, "description", ""))),
                     "inputs": get_assignment(table, "inputs"),
                 }
             )

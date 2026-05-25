@@ -47,4 +47,5 @@ from=<INPUT.search>
 [GEOLOCATION_SHOP_SEARCH.examples.snapshot]
 @Test
 @Docs
+description="Поиск магазинов по стране и городу."
 inputs={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>, "city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[85]["id"]>}

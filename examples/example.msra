@@ -141,8 +141,10 @@ values=[{"value_in_url"="true", "value"=true, "default"=true}, {"value_in_url"="
 [app.func.A3A417.examples.smoke]
 @Test
 @Docs
+description="Пример поиска по одному запросу."
 inputs={"query"="example"}
 
 [app.func.A3A417.examples.alt_query]
 @Docs
+description="Альтернативный пример поиска по другому запросу."
 inputs={"query"="example2"}
