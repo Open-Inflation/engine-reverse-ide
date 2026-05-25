@@ -146,17 +146,14 @@ description="Catalog sort order."
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/product/in/"<INPUT.category_alias>
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.page]
-@Required
 from=<INPUT.page>
 description="Page query parameter."
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.limit]
-@Required
 from=<INPUT.limit>
 description="Limit query parameter."
 
 [app.func.CATALOG_PRODUCTS_LIST.url.params.sort]
-@Required
 from=<INPUT.sort>
 description="Sort query parameter."
 
@@ -194,7 +191,6 @@ description="Optional address filter for store search."
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/store/balance/"<INPUT.product_id>
 
 [app.func.CATALOG_PRODUCT_BALANCE.url.params.canPickup]
-@Required
 values=[{"value_in_url"="all", "default"=true}]
 description="Fixed canPickup query parameter."
 
@@ -310,7 +306,6 @@ description="Country id used by the cities endpoint."
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city"
 
 [app.func.GEOLOCATION_CITIES_LIST.url.params.countryId]
-@Required
 from=<INPUT.country_id>
 description="CountryId query parameter."
 
@@ -368,17 +363,14 @@ description="Optional address search filter."
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/store"
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.searchType]
-@Required
 const="metro"
 description="Fixed searchType parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.canPickup]
-@Required
 const="all"
 description="Fixed canPickup parameter."
 
 [app.func.GEOLOCATION_SHOP_SEARCH.url.params.showTemporarilyClosed]
-@Required
 const="all"
 description="Fixed showTemporarilyClosed parameter."
 

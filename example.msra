@@ -112,7 +112,6 @@ base=<DOCUMENT.PREFIXES.BASE_API> # суффиксы теперь клеятся
 
 [app.func.A3A417.url.params.url]
 @SubUrl
-@Required
 @List # если @List допускается несколько значений, в т.ч. дефолтных одновременно (но если @List не указан - несколько дефолтов это ошибка синтаксиса)
 
 # Значения представлены как по умолчанию, на практике list_style необязательно объявлять чтобы заработал @List
@@ -132,7 +131,6 @@ values=[{"value_in_url"="/searchSuggestions/search/", "value"="/searchSuggestion
 description="Энтрипоинт front'end страницы к которой нужно предоставить json-вид"
 
 [app.func.A3A417.url.params.from_global.params.text]
-@Required
 from=<INPUT.query>
 match=<DOCUMENT.REGEXES.TEXT_REQUEST>
 description="Текст запроса"

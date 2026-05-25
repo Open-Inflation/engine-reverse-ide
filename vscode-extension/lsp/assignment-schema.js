@@ -237,9 +237,6 @@ function annotationRequirementForAssignment(tablePath, key) {
     if (key === "sub_url") {
       return { kind: "flag", label: "@SubUrl", legacyLabel: "sub_url" };
     }
-    if (key === "required") {
-      return { kind: "flag", label: "@Required", legacyLabel: "required" };
-    }
     if (key === "list") {
       return { kind: "flag", label: "@List", legacyLabel: "list" };
     }
@@ -718,7 +715,6 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["app", "func", "*", "extractor"]), EXTRACTOR_TABLE_KEYS),
   makeFixedSchema(matchesUrlParamsPath, {
     sub_url: BOOLEAN,
-    required: BOOLEAN,
     list: BOOLEAN,
     list_style: LIST_STYLE_SPEC,
     const: CONST_SPEC,

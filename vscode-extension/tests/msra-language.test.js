@@ -682,7 +682,7 @@ test("@Nullable annotation on app.variables stays valid", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
-test("@Required and @SubUrl annotations stay valid", () => {
+test("@Required stays valid on inputs and @SubUrl stays valid on url.params", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
@@ -692,7 +692,6 @@ test("@Required and @SubUrl annotations stay valid", () => {
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.url]",
     "@SubUrl",
-    "@Required",
     'values=[{"value_in_url"="/search", "value"="search"}]',
     "",
   ].join("\n");
@@ -1542,10 +1541,13 @@ test("legacy boolean toggles are rejected in favor of annotations", () => {
   ].join("\n");
   const document = parseDocument(text, "file:///legacy-annotation-syntax.msra");
   const analysis = analyzeDocument(document);
-  const diagnostics = analysis.diagnostics.filter((item) => item.code === "annotation-required");
+  const annotationRequiredDiagnostics = analysis.diagnostics.filter((item) => item.code === "annotation-required");
+  const unknownAssignmentDiagnostics = analysis.diagnostics.filter((item) => item.code === "unknown-assignment-key");
 
-  assert.strictEqual(diagnostics.length, 9);
-  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@SniffHeaders|@ReadOnly|@Nullable|@Required|@SubUrl|@List/.test(diagnostic.message)));
+  assert.strictEqual(annotationRequiredDiagnostics.length, 8);
+  assert.ok(annotationRequiredDiagnostics.every((diagnostic) => /@Humanize|@BlockImages|@SniffHeaders|@ReadOnly|@Nullable|@Required|@SubUrl|@List/.test(diagnostic.message)));
+  assert.strictEqual(unknownAssignmentDiagnostics.length, 1);
+  assert.match(unknownAssignmentDiagnostics[0].message, /required/);
 });
 
 test("FUNCRESULT references require a result kind and reject bare headers syntax", () => {

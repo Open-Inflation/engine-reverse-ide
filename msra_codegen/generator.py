@@ -427,7 +427,6 @@ def build_url_param_spec(table: dict[str, Any], get_assignment) -> dict[str, Any
     return {
         "name": table["path"][-1],
         "sub_url": bool(get_plain_value(get_assignment(table, "sub_url", False))),
-        "required": bool(get_plain_value(get_assignment(table, "required", False))),
         "list": bool(get_plain_value(get_assignment(table, "list", False))),
         "list_style": {
             "style": str(list_style.get("style", "repeat") or "repeat").strip().lower(),
