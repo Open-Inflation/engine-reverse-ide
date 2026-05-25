@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import shutil
 import textwrap
+import re
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from .codegen_context import abstraction_exports, build_group_context
 from .core_naming import group_public_import_path, root_client_class_name
@@ -116,6 +118,7 @@ def build_docs_project_context(
     project_title = str(app["name"] or package_name)
     index_title = f"{project_title} documentation"
     pipeline_script_code = build_readme_pipeline_code(project, package_name, client_class_name)
+    readme_context = build_readme_context(project, package_name, pipeline_script_code)
     return {
         "title": index_title,
         "title_underline": "=" * len(index_title),
@@ -158,10 +161,95 @@ def build_docs_project_context(
             "requires_camoufox": str(app.get("browser", "")) == "camoufox",
             "top_groups": top_groups,
         },
+        "readme": readme_context,
         "pipeline_script_code": pipeline_script_code,
         "pipeline_script_code_rst": textwrap.indent(pipeline_script_code, "    "),
         "pipeline_note": build_readme_pipeline_note(project),
     }
+
+
+def build_readme_context(
+    project: dict[str, Any],
+    package_name: str,
+    pipeline_script_code: str,
+) -> dict[str, Any]:
+    app = project["app"]
+    package_owner = str(app.get("package_owner") or package_name).strip() or package_name
+    package_owner_lower = package_owner.lower()
+    package_name_slug = package_name.replace("_", "-")
+    repo_url = f"https://github.com/{package_owner}/{package_name}"
+    docs_url = f"https://{package_owner_lower}.github.io/{package_name}/quick_start"
+    homepage_url = (
+        str(project.get("prefixes", {}).get("MAIN_SITE_ORIGIN") or "").strip()
+        or str(project.get("prefixes", {}).get("ORIGIN") or "").strip()
+        or str(project.get("prefixes", {}).get("MAIN_SITE_URL") or "").strip()
+    )
+    workflow_url = f"{repo_url}/actions/workflows/tests.yml"
+    workflow_runs_url = f"https://api.github.com/repos/{package_owner}/{package_name}/actions/workflows/tests.yml/runs?per_page=1&status=completed"
+    display_title = format_readme_title(str(app.get("name") or package_name), package_name)
+    project_line = display_title if not homepage_url else f"{display_title} - {homepage_url}"
+    socials = build_readme_social_links(app.get("social"))
+    return {
+        "title": display_title,
+        "project_line": project_line,
+        "homepage_url": homepage_url,
+        "package_owner": package_owner,
+        "package_owner_lower": package_owner_lower,
+        "package_name": package_name,
+        "package_name_slug": package_name_slug,
+        "repo_url": repo_url,
+        "issues_url": f"{repo_url}/issues",
+        "docs_url": docs_url,
+        "workflow_url": workflow_url,
+        "workflow_badge_url": f"{workflow_url}/badge.svg",
+        "workflow_last_run_badge_url": (
+            "https://img.shields.io/badge/dynamic/json?label=Tests%20last%20run"
+            "&query=%24.workflow_runs%5B0%5D.updated_at"
+            f"&url={quote(workflow_runs_url, safe='')}"
+            "&logo=githubactions&cacheSeconds=300"
+        ),
+        "pypi_project_url": f"https://pypi.org/project/{package_name_slug}/",
+        "pypi_python_badge_url": f"https://img.shields.io/pypi/pyversions/{package_name}",
+        "pypi_version_badge_url": f"https://img.shields.io/pypi/v/{package_name}?color=blue",
+        "pypi_downloads_badge_url": f"https://img.shields.io/pypi/dm/{package_name}?label=PyPi%20downloads",
+        "license_badge_url": f"https://img.shields.io/github/license/{package_owner}/{package_name}",
+        "license_url": f"{repo_url}/blob/main/LICENSE",
+        "socials": socials,
+        "principle_text": "Библиотека полностью повторяет сетевую работу обычного пользователя на сайте.",
+        "pipeline_script_code": pipeline_script_code,
+    }
+
+
+def format_readme_title(app_name: str, fallback: str) -> str:
+    title = str(app_name or "").strip() or fallback
+    return re.sub(r"(?<!\s)API$", " API", title)
+
+
+def build_readme_social_links(social: Any) -> list[dict[str, Any]]:
+    if not isinstance(social, dict):
+        return []
+    badges = {
+        "discord": "https://img.shields.io/discord/792572437292253224?label=Discord&labelColor=%232c2f33&color=%237289da",
+        "telegram": "https://img.shields.io/badge/Telegram-24A1DE",
+    }
+    labels = {
+        "discord": "Discord",
+        "telegram": "Telegram",
+    }
+    links: list[dict[str, Any]] = []
+    for key in ("discord", "telegram"):
+        url = str(social.get(key) or "").strip()
+        if not url:
+            continue
+        links.append(
+            {
+                "key": key,
+                "label": labels[key],
+                "badge_url": badges[key],
+                "url": url,
+            }
+        )
+    return links
 
 
 def build_group_docs_context(

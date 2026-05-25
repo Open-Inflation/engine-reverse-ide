@@ -208,6 +208,8 @@ test("app metadata accepts authors description and license", () => {
   const text = [
     "[app]",
     'name="OzonAPI"',
+    'package_owner="Miskler"',
+    'social={telegram="https://t.me/miskler_dev", discord="https://discord.gg/UnJnGHNbBp"}',
     'authors=[{name="Miskler", email="miskler@gmail.com"}, {name="Another Author", email="author@example.com"}]',
     'description="Ozon API integration for catalog browsing and cart flows"',
     'license="GPL-3.0-or-later"',
@@ -224,6 +226,8 @@ test("app metadata accepts authors description and license", () => {
 test("app metadata rejects malformed authors and license values", () => {
   const text = [
     "[app]",
+    'package_owner="bad owner!"',
+    'social={telegram="not-a-url"}',
     'authors=[{name="Miskler"}]',
     'license="GNU General Public License"',
     'min_required_python="3.x"',
@@ -231,10 +235,17 @@ test("app metadata rejects malformed authors and license values", () => {
   ].join("\n");
   const document = parseDocument(text, "file:///invalid-app-metadata.msra");
   const analysis = analyzeDocument(document);
+  const invalidPackageOwner = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+  const invalidSocial = analysis.diagnostics.filter((item) => item.code === "invalid-assignment-value-type").find((item) => /URL like/.test(item.message));
   const missingEmail = analysis.diagnostics.find((item) => item.code === "missing-inline-table-key");
-  const invalidLicense = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
-  const invalidPython = analysis.diagnostics.filter((item) => item.code === "invalid-assignment-value-type").find((item) => /minimum required Python version/.test(item.message));
+  const invalidValues = analysis.diagnostics.filter((item) => item.code === "invalid-assignment-value-type");
+  const invalidLicense = invalidValues.find((item) => /license abbreviation/.test(item.message));
+  const invalidPython = invalidValues.find((item) => /minimum required Python version/.test(item.message));
 
+  assert.ok(invalidPackageOwner, "expected package_owner with spaces to be rejected");
+  assert.match(invalidPackageOwner.message, /GitHub owner/);
+  assert.ok(invalidSocial, "expected social URLs to require https links");
+  assert.match(invalidSocial.message, /URL like/);
   assert.ok(missingEmail, "expected authors entries to require an email");
   assert.match(missingEmail.message, /email/);
   assert.ok(invalidLicense, "expected app.license to require a short license identifier");

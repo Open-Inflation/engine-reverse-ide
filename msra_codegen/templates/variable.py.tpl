@@ -7,7 +7,7 @@
 
 {% if setter_enabled %}
     @{{ name }}.setter
-    def {{ name }}(self, value) -> None:
+    def {{ name }}(self, value: {{ getter_return }}) -> None:
 {% if has_null %}
         if value is None:
             self.{{ backing_name }} = None

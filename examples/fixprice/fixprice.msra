@@ -4,6 +4,8 @@ version="0.2.4.1"
 [app]
 name="FixPriceAPI"
 package_name="fixprice_api"
+package_owner="Open-Inflation"
+social={telegram="https://t.me/miskler_dev", discord="https://discord.gg/UnJnGHNbBp"}
 description=""
 version="0.2.4.1"
 authors=[

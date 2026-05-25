@@ -1,10 +1,32 @@
-# {{ project_name }}
+<div align="center">
 
-Generated async client for `{{ package_name }}`.
+# {{ readme.title }}
 
-## Quick Start
+![Tests last run (ISO)]({{ readme.workflow_last_run_badge_url }})
+[![Tests]({{ readme.workflow_badge_url }})]({{ readme.workflow_url }})
+![PyPI - Python Version]({{ readme.pypi_python_badge_url }})
+![PyPI - Package Version]({{ readme.pypi_version_badge_url }})
+[![PyPI - Downloads]({{ readme.pypi_downloads_badge_url }})]({{ readme.pypi_project_url }})
+[![License]({{ readme.license_badge_url }})]({{ readme.license_url }})
+{% for social in readme.socials %}
+[![{{ social.label }}]({{ social.badge_url }})]({{ social.url }})
+{% endfor %}
 
-Install the generated client:
+{{ readme.project_line }}
+
+**[⭐ Star us on GitHub]({{ readme.repo_url }})** | **[📚 Read the Docs]({{ readme.docs_url }})** | **[🐛 Report Bug]({{ readme.issues_url }})**
+
+### Принцип работы
+
+</div>
+
+> {{ readme.principle_text }}
+
+<div align="center">
+
+# Usage
+
+</div>
 
 ```bash
 pip install {{ package_name }}
@@ -13,10 +35,41 @@ python -m camoufox fetch
 {% endif %}
 ```
 
-Use `example.py` for the runnable example. The same code is duplicated below and reused in the Sphinx quick start.
-
 ```py
 {{ pipeline_script_code }}
 ```
 
-The generated docs are available in `docs/`.
+Для более подробной информации смотрите референсы [документации]({{ readme.docs_url }}).
+
+---
+
+## Автотесты API (pytest + snapshots)
+
+В проекте используется автотест-фреймворк из `human_requests`:
+
+- endpoint-методы в бизнес-коде помечаются `@autotest`;
+- pytest-плагин сам находит эти методы и запускает их;
+- JSON-ответы проверяются через `pytest-jsonschema-snapshot` (`schemashot`);
+- параметры вызова и пост-обработка результата регистрируются в `tests/api_test.py` через:
+  - `@autotest_params`
+  - `@autotest_hook`
+  - `@autotest_depends_on`
+
+Минимальная конфигурация уже включена в `pyproject.toml`:
+
+```ini
+[tool.pytest.ini_options]
+anyio_mode = "auto"
+autotest_start_class = "{{ package_name }}.{{ client_class_name }}"
+```
+
+Запуск тестов:
+
+```bash
+pytest
+```
+
+Важно:
+
+- используется `pytest-anyio` (не `pytest-asyncio`);
+- ручные тесты остаются только для кейсов, которые не относятся к JSON-схемам endpoint-методов (например, `download_image`).

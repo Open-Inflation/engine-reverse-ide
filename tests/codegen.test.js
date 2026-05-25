@@ -236,12 +236,14 @@ test("python codegen generates both bundled msra documents without failing", () 
     {
       inputPath: path.join(repoRoot, "examples", "example.msra"),
       outputDir: path.join(workDir, "example"),
+      packageOwner: "Miskler",
       packageName: "ozon_api",
       license: "GPL-3.0-or-later",
     },
     {
       inputPath: path.join(repoRoot, "examples", "fixprice", "fixprice.msra"),
       outputDir: path.join(workDir, "fixprice"),
+      packageOwner: "Open-Inflation",
       packageName: "fixprice_api",
       license: "MIT",
     },
@@ -270,18 +272,21 @@ test("python codegen generates both bundled msra documents without failing", () 
   cases.push({
     inputPath: mitInputPath,
     outputDir: path.join(workDir, "mit"),
+    packageOwner: "Miskler",
     packageName: "mit_api",
     license: "MIT",
   });
   cases.push({
     inputPath: delimitedInputPath,
     outputDir: path.join(workDir, "delimited"),
+    packageOwner: "Miskler",
     packageName: "delimited_api",
     license: "GPL-3.0-or-later",
   });
   cases.push({
     inputPath: printListInputPath,
     outputDir: path.join(workDir, "print-list"),
+    packageOwner: "Miskler",
     packageName: "print_list_api",
     license: "GPL-3.0-or-later",
   });
@@ -306,15 +311,19 @@ test("python codegen generates both bundled msra documents without failing", () 
       const licenseText = readFileSync(path.join(testCase.outputDir, "LICENSE"), "utf8");
       const readmePipelineCode = extractMarkdownCodeFence(readmeText);
       const quickStartPipelineCode = extractRstPythonCodeBlock(quickStartText);
-      assert.match(readmeText, /pip install [a-z0-9_]+/i);
-      assert.match(readmeText, /Use `example\.py` for the runnable example/);
-      assert.match(readmeText, /The same code is duplicated below and reused in the Sphinx quick start/);
+      assert.match(readmeText, /# Usage/);
+      assert.match(readmeText, /## Автотесты API \(pytest \+ snapshots\)/);
+      assert.match(readmeText, /### Принцип работы/);
       assert.match(readmeText, /```py[\s\S]*async def main\(\):/);
       assert.doesNotMatch(readmeText, /examples\/pipeline\.py/);
       assert.ok(readmePipelineCode, "expected README to contain a python code block");
       assert.ok(quickStartPipelineCode, "expected quick_start.rst to contain a python code block");
       assert.strictEqual(normalizeNewlines(readmePipelineCode).trimEnd(), normalizeNewlines(exampleText).trimEnd());
       assert.strictEqual(normalizeNewlines(quickStartPipelineCode).trimEnd(), normalizeNewlines(exampleText).trimEnd());
+      assert.match(readmeText, new RegExp(`https://github\\.com/${testCase.packageOwner}/${testCase.packageName}`));
+      assert.match(readmeText, new RegExp(`https://${testCase.packageOwner.toLowerCase()}\\.github\\.io/${testCase.packageName}/quick_start`));
+      assert.match(readmeText, new RegExp(`https://pypi\\.org/project/${testCase.packageName.replaceAll("_", "-")}/`));
+      assert.match(readmeText, new RegExp(`https://img\\.shields\\.io/github/license/${testCase.packageOwner}/${testCase.packageName}`));
       assert.match(quickStartText, /.. code-block:: python[\s\S]*async def main\(\):/);
       assert.match(exampleText, /async def main\(\):/);
       assert.match(exampleText, /async with [A-Za-z0-9_]+\(\) as api:/);
@@ -393,6 +402,8 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(generalModule, /return await self\._parent\._direct_request\(request_url\)/);
         assert.doesNotMatch(generalModule, /retry_attempts/);
         assert.doesNotMatch(generalModule, /timeout/);
+        assert.match(managerModule, /def client_route\(self, value: str \| None\) -> None:/);
+        assert.match(managerModule, /def city_id\(self, value: int \| None\) -> None:/);
         assert.doesNotMatch(exampleText, /^\s*# tree$/m);
         assert.match(exampleText, /Загрузка изображения по прямой ссылке/);
         assert.match(exampleText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
@@ -401,6 +412,9 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
         assert.match(readmeText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
         assert.doesNotMatch(readmeText, /Image\.open\(download_image\)/);
+        assert.match(readmeText, /FixPrice API - https:\/\/fix-price\.com\//);
+        assert.match(readmeText, /https:\/\/t\.me\/miskler_dev/);
+        assert.match(readmeText, /https:\/\/discord\.gg\/UnJnGHNbBp/);
         assert.match(readmeText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
         assert.match(exampleText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
         assert.doesNotMatch(managerModule, /Async client generated from MSRA|Generated async client/);

@@ -365,6 +365,21 @@ const CORS_MODE_SPEC = enumOf(["cors", "no-cors", "same-origin"]);
 const CREDENTIALS_SPEC = enumOf(["omit", "same-origin", "include"]);
 const APP_NAME_SPEC = patternOf(/^\S+$/, "string without spaces");
 const PACKAGE_NAME_SPEC = patternOf(/^[a-z][a-z0-9_]*$/, "lowercase Python package name like fixprice_api");
+const PACKAGE_OWNER_SPEC = patternOf(
+  /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/,
+  "GitHub owner or organization name like Open-Inflation",
+);
+const SOCIAL_URL_SPEC = patternOf(
+  /^https?:\/\/\S+$/i,
+  "URL like https://t.me/your-channel",
+);
+const SOCIAL_SPEC = objectShape(
+  {},
+  {
+    telegram: SOCIAL_URL_SPEC,
+    discord: SOCIAL_URL_SPEC,
+  },
+);
 const MIN_REQUIRED_PYTHON_SPEC = patternOf(/^\d+\.\d+$/, "minimum required Python version like 3.10");
 const AUTHOR_EMAIL_SPEC = patternOf(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "email address");
 const LICENSE_SPEC = patternOf(/^[A-Za-z0-9][A-Za-z0-9.+-]*$/, "license abbreviation");
@@ -580,6 +595,8 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["app"]), {
     name: APP_NAME_SPEC,
     package_name: PACKAGE_NAME_SPEC,
+    package_owner: PACKAGE_OWNER_SPEC,
+    social: SOCIAL_SPEC,
     authors: arrayOf(AUTHOR_ITEM_SPEC),
     keywords: arrayOf(STRING),
     description: STRING,
@@ -595,6 +612,14 @@ const TABLE_SCHEMAS = [
       forbidDynamicValue("package_name", {
         code: "invalid-package-name-dynamic",
         message: 'Package name cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("package_owner", {
+        code: "invalid-package-owner-dynamic",
+        message: 'Package owner cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("social", {
+        code: "invalid-social-dynamic",
+        message: 'Social links cannot be dynamic. References and other dynamic expressions are not allowed.',
       }),
       forbidDynamicValue("version", {
         code: "invalid-version-dynamic",

@@ -6,6 +6,8 @@
 | --- | --- | --- |
 | `name` | Публичное имя приложения | Используется в заголовках документации и в docstring-ах сгенерированного клиента. Имя должно быть без пробелов. |
 | `package_name` | Имя Python-пакета | Единственный источник имени сгенерированного пакета и папки output. Значение должно быть статическим и в формате `lowercase_snake_case`, например `fixprice_api`. |
+| `package_owner` | GitHub owner или organization | Используется для ссылок и бейджей в `README.md`, включая GitHub repo URL, GitHub Pages docs URL и GitHub Actions badges. Значение должно быть статическим и соответствовать имени owner/organization на GitHub. |
+| `social` | Ссылки на соцсети | Inline table со статическими ссылками для README-бейджей, например `social={telegram="https://t.me/...", discord="https://discord.gg/..."}`. |
 | `authors` | Список авторов | Попадает в package metadata. Каждый элемент содержит `name` и `email`. |
 | `description` | Краткое описание проекта | Используется в документации и в метаданных сгенерированного пакета. |
 | `license` | Идентификатор лицензии | Попадает в package metadata и в корневой `LICENSE` сгенерированного проекта. |
@@ -41,6 +43,8 @@
 - `@Humanize` и `@BlockImages` валидны только при `browser="camoufox"`.
 - Если значение не задано, runtime и generated client используют `camoufox` как дефолтный режим.
 - `package_name` задаёт имя generated Python-пакета; generator больше не пытается выводить его из `name`.
+- `package_owner` задаёт GitHub owner/organization, из которого собираются ссылки и бейджи в generated `README.md`.
+- `social` задаёт внешние ссылки для README-бейджей, сейчас поддерживаются ключи `telegram` и `discord`.
 - `license` используется и для `pyproject.toml`, и для корневого `LICENSE` в сгенерированном проекте, как делает GitHub для репозиториев с лицензией.
 - `keywords` попадает в `project.keywords` без дополнительной трансформации.
 - `min_required_python` задаёт нижнюю границу `requires-python`; generator также расширяет его в Python version classifiers, поднимая верхнюю границу по официальному `python.org/api/v2/downloads/release/` и беря предпоследний стабильный `3.x` family как включительный предел.

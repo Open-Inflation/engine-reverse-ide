@@ -87,6 +87,8 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     app = {
         "name": str(get_plain_value(get_assignment(app_table, "name", "GeneratedAPI"))),
         "package_name": str(get_plain_value(get_assignment(app_table, "package_name", ""))),
+        "package_owner": str(get_plain_value(get_assignment(app_table, "package_owner", ""))),
+        "social": get_plain_value(get_assignment(app_table, "social", {})),
         "authors": get_plain_value(get_assignment(app_table, "authors", [])),
         "license": str(get_plain_value(get_assignment(app_table, "license", "MIT"))),
         "keywords": get_plain_value(get_assignment(app_table, "keywords", [])),
