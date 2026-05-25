@@ -3,6 +3,7 @@ version="0.2.4.1"
 
 [app]
 name="FixPriceAPI"
+package_name="fixprice_api"
 version="0.2.4.1"
 timeout_ms=35000
 browser=camoufox

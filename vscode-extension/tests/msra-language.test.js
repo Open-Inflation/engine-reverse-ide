@@ -50,6 +50,7 @@ function createMultiFileFixture({ invalidPrefix = false } = {}) {
   const parentText = [
     "[app]",
     'name="RootAPI"',
+    'package_name="root_api"',
     "[app.groups.Catalog]",
     'description="Catalog group"',
     "[app.func]",
@@ -616,10 +617,11 @@ test("url param const values generate fixed query params", () => {
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-const-"));
   const inputPath = path.join(workDir, "const.msra");
   const outputDir = path.join(workDir, "generated");
-  const packageName = "constapi";
+  const packageName = "const_api";
   const text = [
     "[app]",
     'name="ConstAPI"',
+    'package_name="const_api"',
     'version="0.1.0"',
     'description=""',
     "",
@@ -646,7 +648,7 @@ test("url param const values generate fixed query params", () => {
 
   try {
     writeFileSync(inputPath, text, "utf8");
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir, "-p", packageName], {
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       encoding: "utf8",
     });
@@ -1171,10 +1173,11 @@ test("generator wires external warmup scripts into the manager", () => {
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-warmup-"));
   const inputPath = path.join(workDir, "warmup.msra");
   const outputDir = path.join(workDir, "generated");
-  const packageName = "testpkg";
+  const packageName = "test_pkg";
   const text = [
     "[app]",
     'name="PipelineApp"',
+    'package_name="test_pkg"',
     'version="0.1.0"',
     "timeout_ms=1000",
     'browser=camoufox',
@@ -1199,7 +1202,7 @@ test("generator wires external warmup scripts into the manager", () => {
       readFileSync(path.join(repoRoot, "warmup.py"), "utf8"),
       "utf8",
     );
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir, "-p", packageName], {
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       encoding: "utf8",
     });
@@ -1231,16 +1234,17 @@ test("python codegen generates both bundled msra documents without failing", () 
     {
       inputPath: path.join(repoRoot, "examples", "example.msra"),
       outputDir: path.join(workDir, "example"),
-      packageName: "exampleapi",
+      packageName: "ozon_api",
     },
     {
       inputPath: path.join(repoRoot, "examples", "fixprice", "fixprice.msra"),
       outputDir: path.join(workDir, "fixprice"),
-      packageName: "fixpriceapi",
+      packageName: "fixprice_api",
     },
   ];
   const delimitedInputPath = path.join(workDir, "example-delimited.msra");
   const delimitedSource = readFileSync(path.join(repoRoot, "examples", "example.msra"), "utf8")
+    .replace('package_name="ozon_api"', 'package_name="delimited_api"')
     .replace("style=repeat,", "style=delimited,")
     .replace('delimiter=","', 'delimiter="|"');
   writeFileSync(delimitedInputPath, delimitedSource, "utf8");
@@ -1252,14 +1256,14 @@ test("python codegen generates both bundled msra documents without failing", () 
   cases.push({
     inputPath: delimitedInputPath,
     outputDir: path.join(workDir, "delimited"),
-    packageName: "delimitedapi",
+    packageName: "delimited_api",
   });
 
   try {
     for (const testCase of cases) {
       const result = spawnSync(
         "python",
-        ["-m", "msra_codegen", testCase.inputPath, "-o", testCase.outputDir, "-p", testCase.packageName],
+        ["-m", "msra_codegen", testCase.inputPath, "-o", testCase.outputDir],
         {
           cwd: repoRoot,
           encoding: "utf8",
@@ -1285,17 +1289,17 @@ test("python codegen generates both bundled msra documents without failing", () 
       const outputModule = readFileSync(path.join(packageDir, "abstraction", "output.py"), "utf8");
       assert.match(outputModule, /class Output/);
       assert.match(outputModule, /def image\(/);
-      if (testCase.packageName === "exampleapi") {
+      if (testCase.packageName === "ozon_api") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
         assert.match(productModule, /async def feed\(self, query: str \| None = None, url: list\[Literal\['\/searchSuggestions\/search\/'\]\] \| None = None, filename: str \| None = None\) -> abstraction\.Output:/);
         assert.match(productModule, /request_url = self\._parent\._BASE_API/);
         assert.match(productModule, /if _url_values in \(None, \[\]\):/);
         assert.match(productModule, /query_params\.append\(\('url', ','.join\(str\(__item\) for __item in _url_values\)\)\)/);
         assert.match(productModule, /query_params\.append\(\('from_global', 'true'\)\)/);
-      } else if (testCase.packageName === "delimitedapi") {
+      } else if (testCase.packageName === "delimited_api") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
         assert.match(productModule, /query_params\.append\(\('url', '\|'\.join\(str\(__item\) for __item in _url_values\)\)\)/);
-      } else if (testCase.packageName === "fixpriceapi") {
+      } else if (testCase.packageName === "fixprice_api") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
         assert.match(productModule, /from \.goto_pipeline import pipeline as goto_pipeline_runner/);
         assert.match(productModule, /await goto_pipeline_runner\(warmup\)/);
@@ -1303,9 +1307,9 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(readmeText, /python -m camoufox fetch/);
         assert.match(readmeText, /Получаем дерево категорий/);
         assert.match(readmeText, /Список товаров в выбранной категории/);
-        assert.match(readmeText, /api\.city_id = cities\[0\]\['id'\]/);
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
         assert.match(readmeText, /Image\.open\(image_stream\)/);
+        assert.doesNotMatch(readmeText, /Current city_id|api\.city_id =/);
       }
       for (const filePath of collectPythonFiles(packageDir)) {
         const source = readFileSync(filePath, "utf8");
@@ -1323,7 +1327,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       const managerModule = readFileSync(path.join(packageDir, "manager.py"), "utf8");
       assert.match(managerModule, /def city_id\(self\) -> int \| None:/);
       assert.match(managerModule, /if value is None:\s+self\._city_id = None/);
-      if (testCase.packageName === "fixpriceapi") {
+      if (testCase.packageName === "fixprice_api") {
         assert.match(managerModule, /allowed_values = \['store', 'pickup', 'courier'\]/);
         assert.match(managerModule, /if value not in allowed_values:/);
         assert.match(readFileSync(path.join(packageDir, "goto_pipeline.py"), "utf8"), /async def pipeline\(warmup: Warmup\)/);
@@ -1340,10 +1344,11 @@ test("readme pipeline uses example type=image instead of function name", () => {
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-image-readme-"));
   const inputPath = path.join(workDir, "image.msra");
   const outputDir = path.join(workDir, "generated");
-  const packageName = "imageapi";
+  const packageName = "image_api";
   const text = [
     "[app]",
     'name="ImageAPI"',
+    'package_name="image_api"',
     'version="0.1.0"',
     "browser=firefox",
     "",
@@ -1372,7 +1377,7 @@ test("readme pipeline uses example type=image instead of function name", () => {
 
   try {
     writeFileSync(inputPath, text, "utf8");
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir, "-p", packageName], {
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       encoding: "utf8",
     });

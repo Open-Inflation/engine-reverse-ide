@@ -22,12 +22,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("generated"),
         help="Output directory for the generated project (default: ./generated)",
     )
-    parser.add_argument(
-        "-p",
-        "--package-name",
-        default=None,
-        help="Python package name for the generated client (default: inferred from app name)",
-    )
     return parser
 
 
@@ -45,12 +39,11 @@ def main(argv: list[str] | None = None) -> int:
     generate_project(
         project,
         output_dir=args.output,
-        package_name=args.package_name,
         source_root=args.msra_file.resolve().parent,
     )
 
     print(
-        f"Generated {project['app']['name']} into {output_root} "
+        f"Generated {project['app'].get('package_name', '')} into {output_root} "
         f"(merged source in {merged_source_path}, docs in {output_root / 'docs'})"
     )
     return 0

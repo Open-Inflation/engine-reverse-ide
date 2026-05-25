@@ -233,6 +233,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     app_table = get_table(["app"])
     app = {
         "name": str(get_plain_value(get_assignment(app_table, "name", "GeneratedAPI"))),
+        "package_name": str(get_plain_value(get_assignment(app_table, "package_name", ""))),
         "description": str(get_plain_value(get_assignment(app_table, "description", ""))),
         "version": str(get_plain_value(get_assignment(app_table, "version", "0.1.0"))),
         "timeout_ms": int(get_plain_value(get_assignment(app_table, "timeout_ms", 35000))),
@@ -461,12 +462,13 @@ def build_url_param_spec(table: dict[str, Any], get_assignment) -> dict[str, Any
 def generate_project(
     project: dict[str, Any],
     output_dir: Path,
-    package_name: str | None = None,
     source_root: Path | None = None,
 ) -> None:
     output_dir = output_dir.resolve()
     source_root = source_root.resolve() if source_root is not None else Path(project["source_path"]).resolve().parent
-    package_name = package_name or infer_package_name(project["app"]["name"])
+    package_name = str(project["app"].get("package_name") or "").strip()
+    if not package_name:
+        raise ValueError('app.package_name is required and must be set explicitly in the source MSRA file.')
     group_tree = build_group_tree(project)
 
     package_root = output_dir / package_name
@@ -1281,15 +1283,6 @@ def is_catalog_sort_function(func: dict[str, Any]) -> bool:
         return False
     values = get_plain_value(sort_input.get("values"))
     return values == ["sold", "abc", "min", "max"]
-
-
-def infer_package_name(app_name: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9]+", "_", app_name).strip("_").lower()
-    if cleaned in {"fixpriceapi", "fix_price_api", "fixprice_api"}:
-        return "fixprice_api"
-    if "fixprice" in cleaned and not cleaned.endswith("_api"):
-        return "fixprice_api"
-    return cleaned or "generated_msra_client"
 
 
 def collect_extractor_assets(project: dict[str, Any]) -> list[str]:

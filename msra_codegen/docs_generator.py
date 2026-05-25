@@ -256,7 +256,6 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
     functions_by_id = {func["id"]: func for func in functions}
     output_var_names: dict[str, str] = {}
     body_lines: list[str] = []
-    has_city_id_variable = any(str(variable.get("name")) == "city_id" for variable in project.get("variables", []))
     needs_image_helpers = any(
         normalize_example_type(primary_examples.get(func_id)) == "image"
         and str(functions_by_id[func_id].get("transport") or "fetch").lower() == "direct"
@@ -311,9 +310,6 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
                 if call_args
                 else f"        {output_var} = (await {call_path}()){response_suffix}"
             )
-        if str(func.get("name") or "") == "cities_list" and has_city_id_variable:
-            body_lines.append(f"        api.city_id = {output_var}[0]['id']")
-            body_lines.append("        print(f\"Current city_id: {api.city_id}\")")
         output_var_names[func_id] = output_var
 
     lines = [
