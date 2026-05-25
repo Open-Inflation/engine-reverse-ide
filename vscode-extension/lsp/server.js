@@ -728,13 +728,37 @@ class MsraLanguageServer {
     }
 
     if (isFuncResultReferenceContext(completionContext.assignment ? completionContext.assignment.tablePath || [] : [], completionContext.target ? completionContext.target.valuePathSegments || [] : [])) {
+      const exampleNamesByFunction = new Map();
+      for (const table of [...analyzed.tableIndex.values()].sort((left, right) => comparePaths(left.path, right.path))) {
+        const path = table.path || [];
+        if (path.length === 5 && path[0] === "app" && path[1] === "func" && path[3] === "examples") {
+          const functionId = path[2];
+          if (!exampleNamesByFunction.has(functionId)) {
+            exampleNamesByFunction.set(functionId, []);
+          }
+          exampleNamesByFunction.get(functionId).push(path[4]);
+        }
+      }
       for (const table of [...analyzed.tableIndex.values()].sort((left, right) => comparePaths(left.path, right.path))) {
         const path = table.path || [];
         if (path.length === 3 && path[0] === "app" && path[1] === "func") {
           const functionLabel = pathLabel([path[2]]);
-          add(`FUNCRESULT.${functionLabel}.JSON`, `JSON result of ${pathLabel(path)}`, "FUNCRESULT");
-          add(`FUNCRESULT.${functionLabel}.TEXT`, `Text result of ${pathLabel(path)}`, "FUNCRESULT");
-          add(`FUNCRESULT.${functionLabel}.IMAGE`, `Image result of ${pathLabel(path)}`, "FUNCRESULT");
+          const exampleNames = exampleNamesByFunction.get(path[2]) || [];
+          const orderedExampleNames = [...exampleNames].sort((left, right) => {
+            if (left === "snapshot" && right !== "snapshot") {
+              return -1;
+            }
+            if (right === "snapshot" && left !== "snapshot") {
+              return 1;
+            }
+            return left.localeCompare(right);
+          });
+          for (const exampleName of orderedExampleNames) {
+            const exampleLabel = pathLabel([exampleName]);
+            add(`FUNCRESULT.${functionLabel}.${exampleLabel}.JSON`, `JSON result of ${pathLabel(path)} example ${exampleLabel}`, "FUNCRESULT");
+            add(`FUNCRESULT.${functionLabel}.${exampleLabel}.TEXT`, `Text result of ${pathLabel(path)} example ${exampleLabel}`, "FUNCRESULT");
+            add(`FUNCRESULT.${functionLabel}.${exampleLabel}.IMAGE`, `Image result of ${pathLabel(path)} example ${exampleLabel}`, "FUNCRESULT");
+          }
         }
       }
     }

@@ -73,17 +73,27 @@ function parseFuncResultReference(ref, tablePath, valuePathSegments) {
     return {
       valid: false,
       code: "invalid-funcresult-reference",
-      message: 'FUNCRESULT references must use the form <FUNCRESULT.<function>.JSON|TEXT|IMAGE>.',
+      message: 'FUNCRESULT references must use the form <FUNCRESULT.<function>.<example>.<kind>>.',
       range: ref.range || null,
     };
   }
 
-  const resultPart = parts[2] || null;
+  const examplePart = parts[2] || null;
+  if (!examplePart || examplePart.kind !== "name") {
+    return {
+      valid: false,
+      code: "invalid-funcresult-reference",
+      message: 'FUNCRESULT references must name the source example before the result kind, for example <FUNCRESULT.<function>.<example>.<kind>>.',
+      range: ref.range || null,
+    };
+  }
+
+  const resultPart = parts[3] || null;
   if (!resultPart || resultPart.kind !== "name") {
     return {
       valid: false,
       code: "invalid-funcresult-reference",
-      message: 'FUNCRESULT references must include a result kind: JSON, TEXT, or IMAGE.',
+      message: 'FUNCRESULT references must include a result kind after the source example: JSON, TEXT, or IMAGE.',
       range: ref.range || null,
     };
   }
@@ -98,12 +108,12 @@ function parseFuncResultReference(ref, tablePath, valuePathSegments) {
     };
   }
 
-  if (resultKind !== "JSON" && parts.length > 3) {
+  if (resultKind !== "JSON" && parts.length > 4) {
     return {
       valid: false,
       code: "invalid-funcresult-reference",
-      message: `FUNCRESULT.${String(functionPart.value)}.${resultKind} does not allow further path access. Use JSON if you need to address nested elements.`,
-      range: parts[3] && parts[3].range ? parts[3].range : ref.range || null,
+      message: `FUNCRESULT.${String(functionPart.value)}.${String(examplePart.value)}.${resultKind} does not allow further path access. Use JSON if you need to address nested elements.`,
+      range: parts[4] && parts[4].range ? parts[4].range : ref.range || null,
     };
   }
 
@@ -111,7 +121,8 @@ function parseFuncResultReference(ref, tablePath, valuePathSegments) {
     valid: true,
     functionId: String(functionPart.value),
     resultKind,
-    tailParts: parts.slice(3),
+    exampleName: String(examplePart.value),
+    tailParts: parts.slice(4),
     range: ref.range || null,
   };
 }

@@ -16,8 +16,7 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city"
 [GEOLOCATION_CITIES_LIST.url.params.countryId]
 from=<INPUT.country_id>
 
-[GEOLOCATION_CITIES_LIST.examples.snapshot]
+[GEOLOCATION_CITIES_LIST.examples.cities]
 @Test
 @Docs
-description="Список городов в выбранной стране."
-inputs={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.JSON[1]["id"]>}
+inputs={"country_id"=<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.en.JSON[1]["id"]>}

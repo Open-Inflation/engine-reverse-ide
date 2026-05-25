@@ -59,6 +59,42 @@ function createMultiFileFixture({ invalidPrefix = false } = {}) {
   };
 }
 
+function createFuncResultFixture({
+  sourceAnnotations = [],
+  targetAnnotations = [],
+  sourceExampleName = "source_snapshot",
+  targetExampleName = "target_snapshot",
+  reference = null,
+} = {}) {
+  const renderedReference = reference || `<FUNCRESULT.SRC.${sourceExampleName}.JSON["some"]["path"][0]>`;
+  const renderAnnotations = (annotations) => annotations.map((annotation) => `@${annotation}`);
+  return [
+    "[app]",
+    'package_name="test_api"',
+    "",
+    "[app.func.SRC]",
+    "",
+    "[app.func.SRC.input.query]",
+    "type=string",
+    "",
+    "[app.func.SRC.examples]",
+    `[app.func.SRC.examples.${sourceExampleName}]`,
+    ...renderAnnotations(sourceAnnotations),
+    'inputs={"query"="source"}',
+    "",
+    "[app.func.DST]",
+    "",
+    "[app.func.DST.input.query]",
+    "type=string",
+    "",
+    "[app.func.DST.examples]",
+    `[app.func.DST.examples.${targetExampleName}]`,
+    ...renderAnnotations(targetAnnotations),
+    `inputs={"query"=${renderedReference}}`,
+    "",
+  ].join("\n");
+}
+
 test("example document stays valid and keeps the documented path", () => {
   const examplePath = path.resolve(__dirname, "..", "..", "examples", "example.msra");
   const text = readFileSync(examplePath, "utf8");
@@ -518,6 +554,36 @@ test("example tables accept explicit output types, including image", () => {
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("readme pipeline variable name collisions are reported by LSP", () => {
+  const text = [
+    "[app]",
+    "[app.func.A3A417]",
+    "[app.func.A3A417.input.query]",
+    "type=string",
+    "[app.func.A3A417.examples]",
+    "[app.func.A3A417.examples.snapshot]",
+    "@Docs",
+    'description="First example"',
+    'inputs={"query"="example1"}',
+    "",
+    "[app.func.B3B418]",
+    "[app.func.B3B418.input.query]",
+    "type=string",
+    "[app.func.B3B418.examples]",
+    "[app.func.B3B418.examples.snapshot]",
+    "@Docs",
+    'description="Second example"',
+    'inputs={"query"="example2"}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///readme-collision.msra");
+  const analysis = analyzeDocument(document);
+  const collisionDiagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "duplicate-readme-example-variable");
+
+  assert.strictEqual(collisionDiagnostics.length, 2, "expected both colliding examples to be reported");
+  assert.match(collisionDiagnostics[0].message, /snapshot/);
 });
 
 test("example tables allow omitted inputs as an empty default", () => {
@@ -1339,16 +1405,39 @@ test("virtual variable references must resolve to declared variables", () => {
 });
 
 test("FUNCRESULT references are allowed inside example inputs", () => {
-  const repoRoot = path.resolve(__dirname, "..", "..");
-  const examplePath = path.join(repoRoot, "examples", "example.msra");
-  const text = readFileSync(examplePath, "utf8").replace(
-    '"query"="example"',
-    '"query"=<FUNCRESULT.A3A417.JSON["some"]["path"][0]>',
-  );
+  const text = createFuncResultFixture({
+    sourceAnnotations: ["Docs", "Test"],
+    targetAnnotations: ["Docs", "Test"],
+  });
   const document = parseDocument(text, "file:///funcresult-example-inputs.msra");
   const analysis = analyzeDocument(document);
 
   assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("FUNCRESULT references skip docs and test checks when the referring example omits them", () => {
+  const text = createFuncResultFixture();
+  const document = parseDocument(text, "file:///funcresult-example-inputs-no-flags.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("FUNCRESULT references require matching @Docs and @Test flags on the referenced example", () => {
+  const text = createFuncResultFixture({
+    sourceAnnotations: [],
+    targetAnnotations: ["Docs", "Test"],
+  });
+  const document = parseDocument(text, "file:///funcresult-example-inputs-missing-flags.msra");
+  const analysis = analyzeDocument(document);
+  const docsDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-funcresult-example-docs");
+  const testDiagnostic = analysis.diagnostics.find((diagnostic) => diagnostic.code === "invalid-funcresult-example-test");
+
+  assert.strictEqual(analysis.diagnostics.length, 2, "expected one docs and one test diagnostic");
+  assert.ok(docsDiagnostic, "expected the referenced example to require @Docs");
+  assert.ok(testDiagnostic, "expected the referenced example to require @Test");
+  assert.match(docsDiagnostic.message, /@Docs/);
+  assert.match(testDiagnostic.message, /@Test/);
 });
 
 test("annotation-only flags reject explicit arguments", () => {
@@ -1413,21 +1502,20 @@ test("legacy boolean toggles are rejected in favor of annotations", () => {
   assert.match(unknownAssignmentDiagnostics[0].message, /required/);
 });
 
-test("FUNCRESULT references require a result kind and reject bare headers syntax", () => {
-  const repoRoot = path.resolve(__dirname, "..", "..");
-  const examplePath = path.join(repoRoot, "examples", "example.msra");
-  const text = readFileSync(examplePath, "utf8").replace(
-    '"query"="example"',
-    '"query"=<FUNCRESULT.headers>',
-  );
+test("FUNCRESULT references reject the old function.kind.example order", () => {
+  const text = createFuncResultFixture({
+    reference: "<FUNCRESULT.SRC.JSON.source_snapshot>",
+  });
   const document = parseDocument(text, "file:///funcresult-invalid-syntax.msra");
   const analysis = analyzeDocument(document);
   const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-funcresult-reference");
+  const sourceExampleDiagnostic = diagnostics.find((diagnostic) => /result kind/i.test(diagnostic.message));
+  const invalidInputDiagnostic = diagnostics.find((diagnostic) => /invalid FUNCRESULT reference/i.test(diagnostic.message));
 
-  assert.strictEqual(diagnostics.length, 1, "expected bare FUNCRESULT syntax to be rejected");
-  assert.match(diagnostics[0].message, /JSON/i);
-  assert.match(diagnostics[0].message, /TEXT/i);
-  assert.match(diagnostics[0].message, /IMAGE/i);
+  assert.strictEqual(diagnostics.length, 2, "expected the old FUNCRESULT segment order to be rejected twice");
+  assert.ok(sourceExampleDiagnostic, "expected the parser to report the old segment order");
+  assert.ok(invalidInputDiagnostic, "expected the example input validator to report the invalid reference");
+  assert.match(sourceExampleDiagnostic.message, /result kind JSON, TEXT, or IMAGE/i);
 });
 
 test("variable sources cannot reference themselves", () => {
@@ -1900,22 +1988,23 @@ test("reference completions insert angle brackets when the user has not typed th
 });
 
 test("FUNCRESULT completions are available inside example inputs", () => {
-  const repoRoot = path.resolve(__dirname, "..", "..");
-  const examplePath = path.join(repoRoot, "examples", "example.msra");
   const server = new MsraLanguageServer({
     onRequest() {},
     onNotification() {},
     listen() {},
     sendNotification() {},
   });
-  const text = readFileSync(examplePath, "utf8").replace('"query"="example"', '"query"=<FUNCRESULT.A3A417.');
+  const text = createFuncResultFixture().replace(
+    '<FUNCRESULT.SRC.source_snapshot.JSON["some"]["path"][0]>',
+    '<FUNCRESULT.SRC.',
+  );
   const uri = "file:///completion-funcresult-example-inputs.msra";
   server._updateDocument({ textDocument: { uri, text } }, false);
   const lines = text.split(/\r?\n/);
-  const lineIndex = lines.findIndex((line) => line.includes('FUNCRESULT.A3A417.'));
+  const lineIndex = lines.findIndex((line) => line.includes('FUNCRESULT.SRC.'));
   assert.ok(lineIndex >= 0, "expected to find the FUNCRESULT reference line");
   const startCharacter = lines[lineIndex].indexOf('<') + 1;
-  const character = lines[lineIndex].indexOf('FUNCRESULT.A3A417.') + 'FUNCRESULT.A3A417.'.length;
+  const character = lines[lineIndex].indexOf('FUNCRESULT.SRC.') + 'FUNCRESULT.SRC.'.length;
   const response = server._completion({
     textDocument: { uri },
     position: {
@@ -1923,9 +2012,9 @@ test("FUNCRESULT completions are available inside example inputs", () => {
       character,
     },
   });
-  const jsonItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.A3A417.JSON");
-  const textItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.A3A417.TEXT");
-  const imageItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.A3A417.IMAGE");
+  const jsonItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.SRC.source_snapshot.JSON");
+  const textItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.SRC.source_snapshot.TEXT");
+  const imageItem = response.items.find((candidate) => candidate.label === "FUNCRESULT.SRC.source_snapshot.IMAGE");
 
   assert.ok(jsonItem, "expected JSON FUNCRESULT completion to be available");
   assert.ok(textItem, "expected TEXT FUNCRESULT completion to be available");
@@ -1935,10 +2024,10 @@ test("FUNCRESULT completions are available inside example inputs", () => {
       start: { line: lineIndex, character: startCharacter },
       end: { line: lineIndex, character },
     },
-    newText: "FUNCRESULT.A3A417.JSON$0>",
+    newText: "FUNCRESULT.SRC.source_snapshot.JSON$0>",
   });
   assert.strictEqual(jsonItem.insertTextFormat, 2);
-  assert.ok(!response.items.some((candidate) => candidate.label === "FUNCRESULT.A3A417"), "expected bare function result labels to stay hidden");
+  assert.ok(!response.items.some((candidate) => candidate.label === "FUNCRESULT.SRC"), "expected bare function result labels to stay hidden");
 });
 
 test("completion is field-aware for groups enums and static values", () => {

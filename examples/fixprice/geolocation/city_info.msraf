@@ -15,8 +15,7 @@ description="City id used in the path."
 [GEOLOCATION_CITY_INFO.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/city/"<INPUT.city_id>
 
-[GEOLOCATION_CITY_INFO.examples.snapshot]
+[GEOLOCATION_CITY_INFO.examples.city_info]
 @Test
 @Docs
-description="Подробная информация о городе."
-inputs={"city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.JSON[0]["id"]>}
+inputs={"city_id"=<FUNCRESULT.GEOLOCATION_CITIES_LIST.cities.JSON[0]["id"]>}

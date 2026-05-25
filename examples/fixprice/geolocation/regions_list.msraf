@@ -15,7 +15,6 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/region"
 [GEOLOCATION_REGIONS_LIST.url.params.countryId]
 from=<INPUT.country_id>
 
-[GEOLOCATION_REGIONS_LIST.examples.snapshot]
+[GEOLOCATION_REGIONS_LIST.examples.regions]
 @Test
 @Docs
-description="Список регионов в выбранной стране."

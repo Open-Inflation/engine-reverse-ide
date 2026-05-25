@@ -32,8 +32,7 @@ base=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>"/catalog/"
 script="extractors/catalog-product-info.js"
 goto_pipeline="./goto_pipeline.py:pipeline"
 
-[CATALOG_PRODUCT_INFO.examples.snapshot]
+[CATALOG_PRODUCT_INFO.examples.info]
 @Test
 @Docs
-description="Получаем подробную карточку товара."
-inputs={"url"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["url"]>}
+inputs={"url"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.products_list.JSON[0]["url"]>}

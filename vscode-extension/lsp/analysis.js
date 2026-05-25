@@ -230,8 +230,14 @@ function resolveReference(ref, result) {
 }
 
 function resolveFuncResultReference(funcResultReference, result) {
-  const functionPath = [makePathSegment("app"), makePathSegment("func"), makePathSegment(funcResultReference.functionId)];
-  const resolved = resolveStaticPath(functionPath, result);
+  const examplePath = [
+    makePathSegment("app"),
+    makePathSegment("func"),
+    makePathSegment(funcResultReference.functionId),
+    makePathSegment("examples"),
+    makePathSegment(funcResultReference.exampleName),
+  ];
+  const resolved = resolveStaticPath(examplePath, result);
   if (resolved === null) {
     return null;
   }

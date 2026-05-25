@@ -31,8 +31,7 @@ from=<INPUT.search>
 [CATALOG_PRODUCT_BALANCE.url.params.inStock]
 const="true"
 
-[CATALOG_PRODUCT_BALANCE.examples.snapshot]
+[CATALOG_PRODUCT_BALANCE.examples.balance]
 @Test
 @Docs
-description="Проверяем наличие товара по магазинам."
-inputs={"product_id"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.JSON[0]["id"]>}
+inputs={"product_id"=<FUNCRESULT.CATALOG_PRODUCTS_LIST.products_list.JSON[0]["id"]>}

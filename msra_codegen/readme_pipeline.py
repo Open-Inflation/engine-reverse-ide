@@ -6,6 +6,8 @@ from typing import Any
 from .core_naming import snake_case
 from .python_render import render_expr
 
+FUNCRESULT_RESULT_TYPES = {"JSON", "TEXT", "IMAGE"}
+
 
 def build_readme_pipeline_note(project: dict[str, Any]) -> str | None:
     if any(not func.get("examples") for func in project.get("functions", [])):
@@ -33,32 +35,34 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
             ]
         )
 
-    function_order = [func["id"] for func in functions]
-    order_index = {func_id: index for index, func_id in enumerate(function_order)}
-    primary_examples = {
-        func["id"]: choose_primary_example(func.get("examples", []))
-        for func in functions
-    }
+    selected_examples_by_function = select_examples_by_function(functions)
+    selected_nodes = build_selected_example_nodes(functions, selected_examples_by_function)
+    node_order = [node["key"] for node in selected_nodes]
+    order_index = {node_key: index for index, node_key in enumerate(node_order)}
+    selected_node_keys = set(node_order)
     dependencies: dict[str, set[str]] = {}
-    for func_id, example in primary_examples.items():
-        deps = collect_funcresult_dependencies(example.get("inputs")) if example else set()
-        dependencies[func_id] = {dep for dep in deps if dep in primary_examples}
+    for node in selected_nodes:
+        deps = collect_funcresult_dependencies(node["example"].get("inputs"))
+        dependencies[node["key"]] = {dep for dep in deps if dep in selected_node_keys}
 
-    ordered_ids = topologically_order_functions(function_order, dependencies, order_index)
-    functions_by_id = {func["id"]: func for func in functions}
+    ordered_keys = topologically_order_functions(node_order, dependencies, order_index)
+    nodes_by_key = {node["key"]: node for node in selected_nodes}
     output_var_names: dict[str, str] = {}
     body_lines: list[str] = []
     needs_image_helpers = any(
-        normalize_example_type(primary_examples.get(func_id)) == "image"
-        and str(functions_by_id[func_id].get("transport") or "fetch").lower() == "direct"
-        for func_id in ordered_ids
-        if primary_examples.get(func_id) is not None
+        normalize_example_type(nodes_by_key[node_key]["example"]) == "image"
+        and str(nodes_by_key[node_key]["function"].get("transport") or "fetch").lower() == "direct"
+        for node_key in ordered_keys
+        if node_key in nodes_by_key
     )
     current_group: str | None = None
     step_index = 0
-    for func_id in ordered_ids:
-        func = functions_by_id[func_id]
-        example = primary_examples[func_id]
+    for node_key in ordered_keys:
+        node = nodes_by_key[node_key]
+        func = node["function"]
+        example = node["example"]
+        function_id = node["function_id"]
+        example_name = node["example_name"]
         example_type = normalize_example_type(example)
         example_inputs = inline_table_items(example.get("inputs")) if example else []
         group_name = str(func.get("group") or "").split(".", 1)[0] or "Ungrouped"
@@ -76,16 +80,16 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
 
         call_path = build_readme_call_path(func)
         transport = str(func.get("transport") or "fetch").lower()
-        output_var = readme_output_var_name(func, example_type, transport)
+        output_var = readme_output_var_name(example_name)
         call_args = build_readme_call_args(example.get("inputs"), output_var_names)
         if example_type == "image" and transport == "direct" and example_inputs:
             url_input = next((item for item in example_inputs if item.get("key") == "url"), None)
             if url_input is not None:
                 body_lines.append(f"        image_url = {render_readme_expr(url_input['value'], output_var_names)}")
                 body_lines.append(f"        {output_var} = await {call_path}(image_url)")
-                body_lines.append("        with Image.open(image_stream) as img:")
+                body_lines.append(f"        with Image.open({output_var}) as img:")
                 body_lines.append('            print(f"Image format: {img.format}, size: {img.size}")')
-                output_var_names[func_id] = output_var
+                output_var_names[node_key] = output_var
                 continue
         if transport == "direct":
             body_lines.append(
@@ -102,19 +106,22 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
                 if call_args
                 else f"        {output_var} = (await {call_path}()){response_suffix}"
             )
-        output_var_names[func_id] = output_var
+        output_var_names[node_key] = output_var
 
-    lines = [
-        "import asyncio",
-    ]
+    lines = ["import asyncio"]
     if needs_image_helpers:
         lines.append("from PIL import Image")
-    lines.extend([
-        f"from {package_name} import {client_class_name}",
-        "",
-        "async def main():",
-        f"    async with {client_class_name}() as api:",
-    ])
+    lines.extend(
+        [
+            f"from {package_name} import {client_class_name}",
+            "",
+            "def _missing_readme_example_dependency(message: str):",
+            "    raise RuntimeError(message)",
+            "",
+            "async def main():",
+            f"    async with {client_class_name}() as api:",
+        ]
+    )
     if body_lines:
         lines.extend(body_lines)
     else:
@@ -129,17 +136,80 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
     return "\n".join(lines)
 
 
-def choose_primary_example(examples: list[dict[str, Any]]) -> dict[str, Any] | None:
+def select_examples_by_function(
+    functions: list[dict[str, Any]],
+) -> dict[str, list[str]]:
+    examples_by_function = collect_examples_by_function(functions)
+    selected: dict[str, set[str]] = {}
+    for func in functions:
+        function_id = str(func.get("id") or "")
+        examples = func.get("examples", [])
+        selected_names = select_initial_example_names(examples)
+        selected[function_id] = set(selected_names)
+
+    selected_ordered: dict[str, list[str]] = {}
+    for func in functions:
+        function_id = str(func.get("id") or "")
+        examples = func.get("examples", [])
+        selected_names = selected.get(function_id, set())
+        selected_ordered[function_id] = [
+            str(example.get("name"))
+            for example in examples
+            if str(example.get("name")) in selected_names
+        ]
+    return selected_ordered
+
+
+def select_initial_example_names(examples: list[dict[str, Any]]) -> set[str]:
     if not examples:
-        return None
-    return sorted(
-        enumerate(examples),
-        key=lambda item: (
-            not bool(item[1].get("docs")),
-            not bool(item[1].get("test")),
-            item[0],
-        ),
-    )[0][1]
+        return set()
+
+    return {
+        str(example.get("name"))
+        for example in examples
+        if bool(example.get("docs"))
+    }
+
+
+def build_selected_example_nodes(
+    functions: list[dict[str, Any]],
+    selected_examples_by_function: dict[str, list[str]],
+) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
+    for func in functions:
+        function_id = str(func.get("id") or "")
+        examples = {str(example.get("name")): example for example in func.get("examples", [])}
+        for example_name in selected_examples_by_function.get(function_id, []):
+            example = examples.get(example_name)
+            if example is None:
+                continue
+            nodes.append(
+                {
+                    "key": readme_example_key(function_id, example_name),
+                    "function_id": function_id,
+                    "function": func,
+                    "example_name": example_name,
+                    "example": example,
+                }
+            )
+    return nodes
+
+
+def collect_examples_by_function(functions: list[dict[str, Any]]) -> dict[str, dict[str, dict[str, Any]]]:
+    result: dict[str, dict[str, dict[str, Any]]] = {}
+    for func in functions:
+        function_id = str(func.get("id") or "")
+        examples = result.setdefault(function_id, {})
+        for example in func.get("examples", []):
+            example_name = str(example.get("name") or "")
+            if not example_name:
+                continue
+            examples[example_name] = example
+    return result
+
+
+def readme_example_key(function_id: str, example_name: str) -> str:
+    return f"{function_id}::{example_name}"
 
 
 def normalize_example_type(example: dict[str, Any] | None) -> str:
@@ -192,19 +262,8 @@ def build_readme_call_path(func: dict[str, Any]) -> str:
     return "api." + ".".join(segment for segment in group.split(".") if segment) + f".{method_name}"
 
 
-def readme_output_var_name(func: dict[str, Any], example_type: str, transport: str) -> str:
-    name = snake_case(str(func.get("name") or func["id"]))
-    special_names = {
-        "tree": "tree_data",
-        "search": "search_results",
-    }
-    if example_type == "image":
-        return "image_stream" if transport == "direct" else "image"
-    if name in special_names:
-        return special_names[name]
-    if name.endswith("_list"):
-        name = name[: -len("_list")]
-    return name or "result"
+def readme_output_var_name(example_name: str) -> str:
+    return snake_case(str(example_name))
 
 
 def build_readme_call_args(inputs_expr: dict[str, Any] | None, output_var_names: dict[str, str]) -> str:
@@ -227,6 +286,35 @@ def normalize_readme_comment(text: Any) -> str:
     return re.sub(r"\s+", " ", str(text)).strip()
 
 
+def parse_funcresult_reference(expr: dict[str, Any]) -> tuple[str, str, str, list[dict[str, Any]]]:
+    parts = expr.get("parts", [])
+    if len(parts) < 4 or parts[0].get("kind") != "name" or str(parts[0].get("value")) != "FUNCRESULT":
+        raise ValueError("FUNCRESULT references must use the form <FUNCRESULT.<function>.<example>.<kind>>.")
+
+    function_part = parts[1]
+    example_part = parts[2]
+    result_part = parts[3]
+    if function_part.get("kind") != "name":
+        raise ValueError("FUNCRESULT references must name the source function immediately after FUNCRESULT.")
+    if example_part.get("kind") != "name":
+        raise ValueError("FUNCRESULT references must name the source example before the result kind, for example <FUNCRESULT.<function>.<example>.<kind>>.")
+    if result_part.get("kind") != "name":
+        raise ValueError("FUNCRESULT references must include a result kind after the source example: JSON, TEXT, or IMAGE.")
+
+    result_kind = str(result_part.get("value"))
+    if result_kind not in FUNCRESULT_RESULT_TYPES:
+        raise ValueError("FUNCRESULT references must use the result kind JSON, TEXT, or IMAGE.")
+
+    function_id = str(function_part.get("value"))
+    example_name = str(example_part.get("value"))
+    if result_kind != "JSON" and len(parts) > 4:
+        raise ValueError(
+            f"FUNCRESULT.{function_id}.{example_name}.{result_kind} does not allow further path access. Use JSON if you need to address nested elements.",
+        )
+
+    return function_id, example_name, result_kind, parts[4:]
+
+
 def collect_funcresult_dependencies(expr: Any) -> set[str]:
     dependencies: set[str] = set()
 
@@ -240,10 +328,9 @@ def collect_funcresult_dependencies(expr: Any) -> set[str]:
         kind = node.get("kind")
         if kind == "ref":
             parts = node.get("parts", [])
-            if len(parts) >= 3 and parts[0].get("kind") == "name" and str(parts[0].get("value")) == "FUNCRESULT":
-                function_part = parts[1]
-                if function_part.get("kind") == "name":
-                    dependencies.add(str(function_part.get("value")))
+            if parts and parts[0].get("kind") == "name" and str(parts[0].get("value")) == "FUNCRESULT":
+                function_id, example_name, _result_kind, _tail_parts = parse_funcresult_reference(node)
+                dependencies.add(readme_example_key(function_id, example_name))
             for part in parts:
                 walk(part.get("value"))
             return
@@ -335,22 +422,28 @@ def render_readme_text_expr(expr: Any, output_var_names: dict[str, str]) -> str:
 
 def render_readme_ref(expr: dict[str, Any], output_var_names: dict[str, str]) -> str:
     parts = expr.get("parts", [])
-    if len(parts) < 3 or parts[0].get("kind") != "name" or str(parts[0].get("value")) != "FUNCRESULT":
+    if len(parts) < 4 or parts[0].get("kind") != "name" or str(parts[0].get("value")) != "FUNCRESULT":
         return render_expr(expr, self_ref="api")
 
-    function_part = parts[1]
-    result_part = parts[2]
-    if function_part.get("kind") != "name" or result_part.get("kind") != "name":
-        return render_expr(expr, self_ref="api")
-
-    function_id = str(function_part.get("value"))
-    base = output_var_names.get(function_id, f"{snake_case(function_id)}_output")
+    function_id, example_name, _result_kind, tail_parts = parse_funcresult_reference(expr)
+    base = output_var_names.get(readme_example_key(function_id, example_name))
+    if base is None:
+        return _missing_readme_example_dependency_call(function_id, example_name)
     rendered = base
 
-    for tail_part in parts[3:]:
+    for tail_part in tail_parts:
         tail_kind = tail_part.get("kind")
         if tail_kind == "index":
             rendered += f"[{render_readme_expr(tail_part.get('value'), output_var_names)}]"
         elif tail_kind == "name":
             rendered += f".{tail_part.get('value')}"
     return rendered
+
+
+def _missing_readme_example_dependency_call(function_id: str, example_name: str) -> str:
+    return (
+        "_missing_readme_example_dependency("
+        f"\"Referenced example [app.func.{function_id}.examples.{example_name}] is not included in generated docs. "
+        f"Mark it @Docs or remove the FUNCRESULT reference.\""
+        ")"
+    )

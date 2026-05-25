@@ -45,8 +45,7 @@ from=<INPUT.sort>
 type="application/json"
 from={category=<INPUT.category_alias>, brand=[], price=[], isDividedPrice=false, isNew=false, isHit=false, isSpecialPrice=false}
 
-[CATALOG_PRODUCTS_LIST.examples.snapshot]
+[CATALOG_PRODUCTS_LIST.examples.products_list]
 @Test
 @Docs
-description="Список товаров в выбранной категории."
-inputs={"category_alias"=<FUNCRESULT.CATALOG_TREE.JSON["1"]["alias"]>}
+inputs={"category_alias"=<FUNCRESULT.CATALOG_TREE.tree.JSON["1"]["alias"]>}

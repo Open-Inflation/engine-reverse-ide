@@ -15,7 +15,12 @@ base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/location/country"
 [GEOLOCATION_COUNTRIES_LIST.url.params.alias]
 from=<INPUT.alias>
 
-[GEOLOCATION_COUNTRIES_LIST.examples.snapshot]
+[GEOLOCATION_COUNTRIES_LIST.examples.en]
 @Test
 @Docs
-description="Список стран для геолокации."
+inputs={"alias"="en"}
+
+[GEOLOCATION_COUNTRIES_LIST.examples.ru]
+@Test
+@Docs
+inputs={"alias"="ru"}

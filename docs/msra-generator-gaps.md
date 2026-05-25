@@ -99,7 +99,7 @@ Codegen не добавляет в Python-пакет:
 Планируемый синтаксис вида:
 
 ```msra
-<FUNCRESULT.A3A417.JSON["some"]["path"][0]>
+<FUNCRESULT.A3A417.<example>.JSON["some"]["path"][0]>
 ```
 
 поддерживается LSP как специальный reference-синтаксис.
@@ -108,7 +108,7 @@ Codegen не добавляет в Python-пакет:
 
 - codegen не умеет генерировать runtime-логику для `FUNCRESULT`;
 - LSP принимает такую ссылку только внутри `[app.func.*.examples.<name>]` в значениях `inputs.<key>.value`;
-- синтаксис должен содержать result-kind сегмент `JSON`, `TEXT` или `IMAGE`, то есть `<FUNCRESULT.<function>.JSON|TEXT|IMAGE>`;
+- синтаксис должен содержать source example сразу после имени функции, затем result-kind `JSON`, `TEXT` или `IMAGE`, то есть `<FUNCRESULT.<function>.<example>.JSON>`;
 - если выбран `JSON`, после него можно продолжать путь к конкретным элементам через `["..."]` и `[0]`;
 - вне этого блока ссылка считается ошибочной.
 

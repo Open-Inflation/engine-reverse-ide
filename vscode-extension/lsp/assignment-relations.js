@@ -24,6 +24,7 @@ const {
   oneOf,
   validateValueSpec,
 } = require("./assignment-schema");
+const { parseFuncResultReference } = require("./reference-context");
 
 function validateAssignmentRelations(tableIndex, assignmentIndex, lookupTableIndex = tableIndex, lookupAssignmentIndex = assignmentIndex) {
   const diagnostics = [];
@@ -37,6 +38,7 @@ function validateAssignmentRelations(tableIndex, assignmentIndex, lookupTableInd
   diagnostics.push(...validateBodyRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex));
   diagnostics.push(...validateUrlParamValueRelations(assignmentsByTable));
   diagnostics.push(...validateExampleInputRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex, assignmentsByTable, lookupAssignmentsByTable));
+  diagnostics.push(...validateReadmePipelineExampleNameCollisions(tableIndex, lookupTableIndex, lookupAssignmentIndex));
   diagnostics.push(...validateVariableSourceRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex));
 
   return diagnostics;
@@ -390,13 +392,69 @@ function validateExampleInputRelations(tableIndex, lookupTableIndex, lookupAssig
         continue;
       }
 
-      const typeAssignment = getTableAssignment(lookupAssignmentsByTable, [...functionPath, "input", inputEntry.key], "type");
-      const expectedSpec = getExampleInputValueSpec(typeAssignment && typeAssignment.value);
-      if (!expectedSpec) {
+      if (isFuncResultReferenceValue(inputEntry.value)) {
+        const funcResultReference = parseFuncResultReference(inputEntry.value, table.path || [], ["inputs", inputEntry.key]);
+        if (funcResultReference === null || !funcResultReference.valid) {
+          diagnostics.push(
+            new Diagnostic(
+              `Input "${inputEntry.key}" in table [${pathLabel(table.path)}] uses an invalid FUNCRESULT reference.`,
+              inputEntry.value.range || inputEntry.keyRange,
+              "error",
+              "msra",
+              (funcResultReference && funcResultReference.code) || "invalid-funcresult-reference",
+            ),
+          );
+          continue;
+        }
+
+        const referencedExamplePath = ["app", "func", funcResultReference.functionId, "examples", funcResultReference.exampleName];
+        const referencedExample = lookupTableIndex.get(pathIdentityKey(referencedExamplePath));
+        if (!referencedExample) {
+          diagnostics.push(
+            new Diagnostic(
+              `FUNCRESULT reference <${renderFuncResultReference(inputEntry.value)}> in table [${pathLabel(table.path)}] points to missing example [${pathLabel(referencedExamplePath)}].`,
+              inputEntry.value.range || inputEntry.keyRange,
+              "error",
+              "msra",
+              "unresolved-reference",
+            ),
+          );
+          continue;
+        }
+
+        const currentDocs = getBooleanAssignmentValue(lookupAssignmentIndex, table.path, "docs");
+        const currentTest = getBooleanAssignmentValue(lookupAssignmentIndex, table.path, "test");
+        const referencedDocs = getBooleanAssignmentValue(lookupAssignmentIndex, referencedExamplePath, "docs");
+        const referencedTest = getBooleanAssignmentValue(lookupAssignmentIndex, referencedExamplePath, "test");
+
+        if (currentDocs && !referencedDocs) {
+          diagnostics.push(
+            new Diagnostic(
+              `Example [${pathLabel(referencedExamplePath)}] referenced from [${pathLabel(table.path)}] must also be marked @Docs because the referring example uses @Docs.`,
+              inputEntry.value.range || inputEntry.keyRange,
+              "error",
+              "msra",
+              "invalid-funcresult-example-docs",
+            ),
+          );
+        }
+        if (currentTest && !referencedTest) {
+          diagnostics.push(
+            new Diagnostic(
+              `Example [${pathLabel(referencedExamplePath)}] referenced from [${pathLabel(table.path)}] must also be marked @Test because the referring example uses @Test.`,
+              inputEntry.value.range || inputEntry.keyRange,
+              "error",
+              "msra",
+              "invalid-funcresult-example-test",
+            ),
+          );
+        }
         continue;
       }
 
-      if (isFuncResultReferenceValue(inputEntry.value)) {
+      const typeAssignment = getTableAssignment(lookupAssignmentsByTable, [...functionPath, "input", inputEntry.key], "type");
+      const expectedSpec = getExampleInputValueSpec(typeAssignment && typeAssignment.value);
+      if (!expectedSpec) {
         continue;
       }
 
@@ -418,12 +476,99 @@ function validateExampleInputRelations(tableIndex, lookupTableIndex, lookupAssig
   return diagnostics;
 }
 
+function validateReadmePipelineExampleNameCollisions(tableIndex, lookupTableIndex, lookupAssignmentIndex) {
+  const diagnostics = [];
+  const selectedExamplesByFunction = selectReadmeExamplesByFunction(lookupTableIndex, lookupAssignmentIndex);
+  const ownersByVariableName = new Map();
+
+  for (const table of lookupTableIndex.values()) {
+    if (!isExampleItemTable(table.path || [])) {
+      continue;
+    }
+
+    const functionId = String(table.path[2] || "");
+    const exampleName = String(table.path[4] || "");
+    const selectedNames = selectedExamplesByFunction.get(functionId);
+    if (!selectedNames || !selectedNames.has(exampleName)) {
+      continue;
+    }
+
+    const variableName = readmeExampleVariableName(exampleName);
+    if (!ownersByVariableName.has(variableName)) {
+      ownersByVariableName.set(variableName, []);
+    }
+    ownersByVariableName.get(variableName).push({
+      functionId,
+      exampleName,
+      table,
+    });
+  }
+
+  const collisionVariables = new Set(
+    [...ownersByVariableName.entries()]
+      .filter(([, owners]) => owners.length > 1)
+      .map(([variableName]) => variableName),
+  );
+  if (!collisionVariables.size) {
+    return diagnostics;
+  }
+
+  for (const table of tableIndex.values()) {
+    if (!isExampleItemTable(table.path || [])) {
+      continue;
+    }
+
+    const functionId = String(table.path[2] || "");
+    const exampleName = String(table.path[4] || "");
+    const selectedNames = selectedExamplesByFunction.get(functionId);
+    if (!selectedNames || !selectedNames.has(exampleName)) {
+      continue;
+    }
+
+    const variableName = readmeExampleVariableName(exampleName);
+    if (!collisionVariables.has(variableName)) {
+      continue;
+    }
+
+    const owners = ownersByVariableName.get(variableName) || [];
+    const ownerLabels = owners.map((owner) => pathLabel(owner.table.path));
+    diagnostics.push(
+      new Diagnostic(
+        `Example [${pathLabel(table.path)}] would generate README variable "${variableName}", but that name is shared by ${ownerLabels.length} selected example(s): ${ownerLabels.join(", ")}. Rename one of the snapshots so the auto-generated pipeline can use unique variable names.`,
+        table.headerRange,
+        "error",
+        "msra",
+        "duplicate-readme-example-variable",
+      ),
+    );
+  }
+
+  return diagnostics;
+}
+
 function isFuncResultReferenceValue(value) {
   if (!(value instanceof RefExpr) || !Array.isArray(value.parts) || value.parts.length < 2) {
     return false;
   }
   const root = value.parts[0];
   return root && root.kind === "name" && String(root.value) === "FUNCRESULT";
+}
+
+function renderFuncResultReference(ref) {
+  if (!ref || !Array.isArray(ref.parts)) {
+    return "FUNCRESULT";
+  }
+  return ref.parts
+    .map((part) => {
+      if (part.kind === "name") {
+        return String(part.value);
+      }
+      if (part.kind === "index") {
+        return "[...]";
+      }
+      return "";
+    })
+    .join(".");
 }
 
 function validateVariableSourceRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex) {
@@ -568,6 +713,23 @@ function isVariableTablePath(tablePath) {
   return tablePath.length === 3 && tablePath[0] === "app" && tablePath[1] === "variables";
 }
 
+function collectExamplesByFunction(tableIndex) {
+  const examplesByFunction = new Map();
+  for (const table of tableIndex.values()) {
+    const path = table.path || [];
+    if (!isExampleItemTable(path)) {
+      continue;
+    }
+
+    const functionId = String(path[2] || "");
+    if (!examplesByFunction.has(functionId)) {
+      examplesByFunction.set(functionId, []);
+    }
+    examplesByFunction.get(functionId).push(table);
+  }
+  return examplesByFunction;
+}
+
 function collectInputsByFunction(tableIndex) {
   const inputsByFunction = new Map();
   for (const table of tableIndex.values()) {
@@ -583,6 +745,32 @@ function collectInputsByFunction(tableIndex) {
     inputsByFunction.get(functionId).set(path[4], table);
   }
   return inputsByFunction;
+}
+
+function selectReadmeExamplesByFunction(tableIndex, assignmentIndex) {
+  const examplesByFunction = collectExamplesByFunction(tableIndex);
+  const selectedNamesByFunction = new Map();
+
+  for (const [functionId, examples] of examplesByFunction.entries()) {
+    const docsNames = new Set(
+      examples
+        .filter((example) => getBooleanAssignmentValue(assignmentIndex, example.path, "docs"))
+        .map((example) => String(example.path[4] || ""))
+        .filter(Boolean),
+    );
+    selectedNamesByFunction.set(functionId, docsNames);
+  }
+
+  return selectedNamesByFunction;
+}
+
+function readmeExampleVariableName(exampleName) {
+  return String(exampleName || "")
+    .replace(/([A-Z])/g, (match, letter, offset) => (offset === 0 ? letter : `_${letter}`))
+    .replace(/-/g, "_")
+    .replace(/[^A-Za-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase() || "generated";
 }
 
 function isExampleItemTable(tablePath) {

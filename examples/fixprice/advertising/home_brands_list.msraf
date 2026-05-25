@@ -8,7 +8,6 @@ group=<GROUPS.Advertising>
 [ADVERTISING_HOME_BRANDS_LIST.url]
 base=<DOCUMENT.PREFIXES.CATALOG_URL>"/v1/home/brand"
 
-[ADVERTISING_HOME_BRANDS_LIST.examples.snapshot]
+[ADVERTISING_HOME_BRANDS_LIST.examples.home_brands]
 @Test
 @Docs
-description="Список брендов на главной."

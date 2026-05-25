@@ -358,7 +358,7 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(productModule, /query_params\.append\(\('url', ','.join\(str\(__item\) for __item in _url_values\)\)\)/);
         assert.match(productModule, /query_params\.append\(\('from_global', 'true'\)\)/);
         assert.match(readmeText, /Пример поиска по одному запросу/);
-        assert.match(readmeText, /feed = \(await api\.Catalog\.Product\.feed\(query='example'\)\)\.json\(\)/);
+        assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query='example'\)\)\.json\(\)/);
       } else if (testCase.packageName === "delimited_api") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
         assert.match(productModule, /query_params\.append\(\('url', '\|'\.join\(str\(__item\) for __item in _url_values\)\)\)/);
@@ -375,12 +375,12 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(generalModule, /return await self\._parent\._direct_request\(request_url\)/);
         assert.doesNotMatch(generalModule, /retry_attempts/);
         assert.doesNotMatch(generalModule, /timeout/);
-        assert.match(exampleText, /Получаем дерево категорий/);
+        assert.match(exampleText, /# 1\. tree/);
         assert.match(exampleText, /Загрузка изображения по прямой ссылке/);
-        assert.match(exampleText, /Image\.open\(image_stream\)/);
-        assert.match(readmeText, /Получаем дерево категорий/);
+        assert.match(exampleText, /Image\.open\(download_image\)/);
+        assert.match(readmeText, /# 1\. tree/);
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
-        assert.match(readmeText, /Image\.open\(image_stream\)/);
+        assert.match(readmeText, /Image\.open\(download_image\)/);
         assert.doesNotMatch(managerModule, /Async client generated from MSRA|Generated async client/);
         assert.doesNotMatch(regexesModule, /Shared regex patterns and their validation messages/);
         assert.doesNotMatch(catalogSortModule, /Generated sort helpers|Sort order helper|Most popular first|Cheapest first|Most expensive first/);
@@ -407,6 +407,10 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(managerModule, /if value not in allowed_values:/);
         assert.match(readFileSync(path.join(packageDir, "goto_pipeline.py"), "utf8"), /async def pipeline\(warmup: Warmup\)/);
         assert.match(readFileSync(path.join(packageDir, "extractors", "catalog-product-info.js"), "utf8"), /window\.__NUXT__=/);
+        assert.match(readmeText, /en = \(await api\.Geolocation\.countries_list\(alias='en'\)\)\.json\(\)/);
+        assert.match(readmeText, /ru = \(await api\.Geolocation\.countries_list\(alias='ru'\)\)\.json\(\)/);
+        assert.match(exampleText, /en = \(await api\.Geolocation\.countries_list\(alias='en'\)\)\.json\(\)/);
+        assert.match(exampleText, /ru = \(await api\.Geolocation\.countries_list\(alias='ru'\)\)\.json\(\)/);
       }
     }
   } finally {
@@ -465,21 +469,93 @@ test("readme pipeline uses example type=image instead of function name", () => {
     const quickStartText = readFileSync(path.join(outputDir, "docs", "source", "quick_start.rst"), "utf8");
     assert.match(exampleText, /from PIL import Image/);
     assert.match(exampleText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
-    assert.match(exampleText, /image_stream = await api\.General\.fetch_asset\(image_url\)/);
-    assert.match(exampleText, /with Image\.open\(image_stream\) as img:/);
+    assert.match(exampleText, /snapshot = await api\.General\.fetch_asset\(image_url\)/);
+    assert.match(exampleText, /with Image\.open\(snapshot\) as img:/);
     assert.match(readmeText, /from PIL import Image/);
     assert.match(readmeText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
-    assert.match(readmeText, /image_stream = await api\.General\.fetch_asset\(image_url\)/);
-    assert.match(readmeText, /with Image\.open\(image_stream\) as img:/);
+    assert.match(readmeText, /snapshot = await api\.General\.fetch_asset\(image_url\)/);
+    assert.match(readmeText, /with Image\.open\(snapshot\) as img:/);
     assert.match(quickStartText, /from PIL import Image/);
     assert.match(quickStartText, /image_url = ['"]https:\/\/example\.com\/image\.png['"]/);
-    assert.match(quickStartText, /image_stream = await api\.General\.fetch_asset\(image_url\)/);
-    assert.match(quickStartText, /with Image\.open\(image_stream\) as img:/);
+    assert.match(quickStartText, /snapshot = await api\.General\.fetch_asset\(image_url\)/);
+    assert.match(quickStartText, /with Image\.open\(snapshot\) as img:/);
     assert.ok(!existsSync(path.join(outputDir, "merged.msra")), "expected merged.msra to be cleaned up by default");
     assert.ok(!existsSync(path.join(outputDir, "examples")), "expected no separate examples/pipeline.py output directory");
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
+});
+
+test("readme pipeline emits a runtime error for non-doc FUNCRESULT dependencies", () => {
+  const script = [
+    "import json, sys",
+    "from msra_codegen.readme_pipeline import build_readme_pipeline_code",
+    'project = json.loads(sys.argv[1])',
+    'print(build_readme_pipeline_code(project, project["app"]["package_name"], project["app"]["client_class_name"]))',
+  ].join("; ");
+  const project = {
+    app: {
+      name: "RuntimeErrorAPI",
+      package_name: "runtime_error_api",
+      client_class_name: "RuntimeErrorAPI",
+    },
+    functions: [
+      {
+        id: "SRC",
+        name: "source_data",
+        group: "General",
+        transport: "fetch",
+        examples: [
+          {
+            name: "source_snapshot",
+            test: true,
+            inputs: {
+              kind: "inline_table",
+              items: [{ key: "query", value: { kind: "string", value: "source" } }],
+            },
+          },
+        ],
+      },
+      {
+        id: "DST",
+        name: "consume_source",
+        group: "General",
+        transport: "fetch",
+        examples: [
+          {
+            name: "doc_snapshot",
+            docs: true,
+            inputs: {
+              kind: "inline_table",
+              items: [
+                {
+                  key: "query",
+                  value: {
+                    kind: "ref",
+                    parts: [
+                      { kind: "name", value: "FUNCRESULT" },
+                      { kind: "name", value: "SRC" },
+                      { kind: "name", value: "source_snapshot" },
+                      { kind: "name", value: "JSON" },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const result = spawnSync("python", ["-c", script, JSON.stringify(project)], {
+    cwd: path.resolve(__dirname, ".."),
+    encoding: "utf8",
+  });
+
+  assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /_missing_readme_example_dependency\(/);
+  assert.match(result.stdout, /Referenced example \[app\.func\.SRC\.examples\.source_snapshot\] is not included in generated docs/);
+  assert.doesNotMatch(result.stdout, /source_snapshot =/);
 });
 
 test("generator writes a merged intermediate msra file", () => {
