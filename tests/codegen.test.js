@@ -392,6 +392,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       } else if (testCase.packageName === "fixprice_api") {
         const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
         const generalModule = readFileSync(path.join(packageDir, "endpoints", "general.py"), "utf8");
+        const geolocationModule = readFileSync(path.join(packageDir, "endpoints", "geolocation.py"), "utf8");
         const managerModule = readFileSync(path.join(packageDir, "manager.py"), "utf8");
         const regexesModule = readFileSync(path.join(packageDir, "abstraction", "regexes.py"), "utf8");
         const catalogSortModule = readFileSync(path.join(packageDir, "abstraction", "catalog_sort.py"), "utf8");
@@ -403,7 +404,25 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.doesNotMatch(generalModule, /retry_attempts/);
         assert.doesNotMatch(generalModule, /timeout/);
         assert.match(managerModule, /def client_route\(self, value: str \| None\) -> None:/);
-        assert.match(managerModule, /def city_id\(self, value: int \| None\) -> None:/);
+        assert.doesNotMatch(managerModule, /@city_id\.setter/);
+        assert.doesNotMatch(managerModule, /_coerce_variable_value/);
+        assert.match(managerModule, /_city_id_raw = self\.unstandard_headers\.get\('x-city'\)/);
+        assert.match(managerModule, /self\._city_id = _city_id_value/);
+        assert.match(managerModule, /if float\(_city_id_value\) < 1 or float\(_city_id_value\) > 2147483647:/);
+        assert.match(managerModule, /_client_route_raw = self\.unstandard_headers\.get\('x-client-route'\)/);
+        assert.match(managerModule, /self\.client_route = _client_route_raw if isinstance\(_client_route_raw, str\) else str\(_client_route_raw\)/);
+        assert.doesNotMatch(managerModule, /re\.fullmatch\(/);
+        assert.match(managerModule, /abstraction\.RegexLanguageTag\.match\(value\)/);
+        assert.match(managerModule, /abstraction\.RegexStoreId\.match\(value\)/);
+        assert.match(regexesModule, /class RegexBase:/);
+        assert.match(regexesModule, /class RegexCountryAlias\(RegexBase\):/);
+        assert.match(regexesModule, /class RegexLanguageTag\(RegexBase\):/);
+        assert.match(regexesModule, /return re\.fullmatch\(cls\.REGEX, str\(value\)\) is not None/);
+        assert.doesNotMatch(geolocationModule, /re\.fullmatch\(/);
+        assert.match(geolocationModule, /if not \(abstraction\.RegexCountryAlias\.match\(alias\)\):/);
+        const languageTagBlock = regexesModule.split("class RegexLanguageTag(RegexBase):")[1].split("class RegexDeliveryType(RegexBase):")[0];
+        assert.match(languageTagBlock, /^\r?\n    REGEX = /);
+        assert.doesNotMatch(languageTagBlock, /ERROR = None/);
         assert.doesNotMatch(exampleText, /^\s*# tree$/m);
         assert.match(exampleText, /Загрузка изображения по прямой ссылке/);
         assert.match(exampleText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
@@ -437,8 +456,9 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(warmupModule, /async def pipeline\(warmup: Warmup\)/);
       const managerModule = readFileSync(path.join(packageDir, "manager.py"), "utf8");
       assert.match(managerModule, /def city_id\(self\) -> int \| None:/);
-      assert.match(managerModule, /if value is None:\s+self\._city_id = None/);
       if (testCase.packageName === "fixprice_api") {
+        assert.match(managerModule, /_city_id_raw = self\.unstandard_headers\.get\('x-city'\)/);
+        assert.match(managerModule, /self\._city_id = _city_id_value/);
         assert.match(managerModule, /allowed_values = \['store', 'pickup', 'courier'\]/);
         assert.match(managerModule, /if value not in allowed_values:/);
         assert.match(readFileSync(path.join(packageDir, "goto_pipeline.py"), "utf8"), /async def pipeline\(warmup: Warmup\)/);
@@ -447,6 +467,9 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(readmeText, /ru = \(await api\.Geolocation\.countries_list\(alias='ru'\)\)\.json\(\)/);
         assert.match(exampleText, /en = \(await api\.Geolocation\.countries_list\(alias='en'\)\)\.json\(\)/);
         assert.match(exampleText, /ru = \(await api\.Geolocation\.countries_list\(alias='ru'\)\)\.json\(\)/);
+      } else {
+        assert.match(managerModule, /@city_id\.setter/);
+        assert.match(managerModule, /if value is None:\r?\n\s+self\._city_id = None/);
       }
     }
   } finally {

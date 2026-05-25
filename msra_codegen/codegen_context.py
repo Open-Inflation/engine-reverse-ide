@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,7 @@ from .typespec import (
     match_to_pattern,
     match_to_range,
     match_to_values,
+    match_to_check_expr,
     normalize_name,
     primary_type_name,
     ref_input_name,
@@ -98,7 +100,7 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
     nullable = bool(variable.get("nullable", False))
     match_values = match_to_values(variable.get("match"))
     has_null = nullable or "null" in type_names or (match_values is not None and any(value is None for value in match_values))
-    return {
+    context = {
         "name": variable["name"],
         "description": escape_docstring(variable["description"]) if variable["description"] else "",
         "backing_name": f"_{variable['name']}",
@@ -114,9 +116,131 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
         "match_values": match_values,
         "match_values_expr": render_simple_value(match_values) if match_values is not None else None,
         "match_pattern": match_to_pattern(variable.get("match")),
+        "match_check_expr": match_to_check_expr(variable.get("match"), "value"),
         "match_error": match_to_error(variable.get("match")),
         "match_range": match_to_range(variable.get("match")),
     }
+    context["warmup_code"] = build_variable_warmup_code(context)
+    return context
+
+
+def build_variable_warmup_code(variable: dict[str, Any]) -> str:
+    raw_name = f"_{variable['name']}_raw"
+    value_name = f"_{variable['name']}_value"
+    target_expr = f"self.{variable['name']}" if variable.get("setter_enabled") else f"self.{variable['backing_name']}"
+    lines = [
+        f"{raw_name} = {variable['capture_expr']}",
+        f"if {raw_name} is None:",
+        f"    {target_expr} = None",
+        "else:",
+    ]
+    if variable.get("setter_enabled"):
+        value_lines = build_setter_variable_value_lines(variable, raw_name, target_expr)
+    else:
+        value_lines = build_variable_value_lines(variable, raw_name, value_name, target_expr)
+    lines.extend(f"    {line}" for line in value_lines)
+    return textwrap.indent("\n".join(lines), "        ")
+
+
+def build_setter_variable_value_lines(
+    variable: dict[str, Any],
+    raw_name: str,
+    target_expr: str,
+) -> list[str]:
+    label = variable["name"]
+    kind = str(variable.get("capture_kind") or "string")
+    lines: list[str] = []
+    if kind == "integer":
+        lines.append(f"{target_expr} = int({raw_name})")
+    elif kind == "number":
+        lines.append(f"{target_expr} = float({raw_name})")
+    elif kind == "boolean":
+        lines.extend(
+            [
+                f"if isinstance({raw_name}, bool):",
+                f"    {target_expr} = {raw_name}",
+                f"elif isinstance({raw_name}, str):",
+                f"    lowered = {raw_name}.strip().lower()",
+                '    if lowered in {"true", "1", "yes", "on"}:',
+                f"        {target_expr} = True",
+                '    elif lowered in {"false", "0", "no", "off"}:',
+                f"        {target_expr} = False",
+                "    else:",
+                f'        raise ValueError(f"`{label}` must be boolean-like")',
+                "else:",
+                f"    {target_expr} = bool({raw_name})",
+            ]
+        )
+    elif kind == "null":
+        lines.append(f"{target_expr} = None")
+    else:
+        lines.append(f"{target_expr} = {raw_name} if isinstance({raw_name}, str) else str({raw_name})")
+    return lines
+
+
+def build_variable_value_lines(
+    variable: dict[str, Any],
+    raw_name: str,
+    value_name: str,
+    target_expr: str,
+) -> list[str]:
+    label = variable["name"]
+    kind = str(variable.get("capture_kind") or "string")
+    lines: list[str] = []
+    if kind == "integer":
+        lines.append(f"{value_name} = int({raw_name})")
+    elif kind == "number":
+        lines.append(f"{value_name} = float({raw_name})")
+    elif kind == "boolean":
+        lines.extend(
+            [
+                f"if isinstance({raw_name}, bool):",
+                f"    {value_name} = {raw_name}",
+                f"elif isinstance({raw_name}, str):",
+                f"    lowered = {raw_name}.strip().lower()",
+                '    if lowered in {"true", "1", "yes", "on"}:',
+                f"        {value_name} = True",
+                '    elif lowered in {"false", "0", "no", "off"}:',
+                f"        {value_name} = False",
+                "    else:",
+                f'        raise ValueError(f"`{label}` must be boolean-like")',
+                "else:",
+                f"    {value_name} = bool({raw_name})",
+            ]
+        )
+    elif kind == "null":
+        lines.append(f"{value_name} = None")
+    else:
+        lines.append(f"{value_name} = {raw_name} if isinstance({raw_name}, str) else str({raw_name})")
+    if not variable.get("setter_enabled"):
+        lines.extend(build_variable_validation_lines(variable, value_name))
+    lines.append(f"{target_expr} = {value_name}")
+    return lines
+
+
+def build_variable_validation_lines(variable: dict[str, Any], value_name: str) -> list[str]:
+    label = variable["name"]
+    lines: list[str] = []
+    check_expr = match_to_check_expr(variable.get("match"), value_name)
+    if check_expr:
+        lines.append(f"if not ({check_expr}):")
+        if variable.get("match_error"):
+            lines.append(f"    raise ValueError({variable['match_error']})")
+        else:
+            lines.append(f'    raise ValueError("`{label}` does not match the expected format")')
+    elif variable.get("match_range"):
+        low, high = variable["match_range"]
+        lines.append(
+            f"if float({value_name}) < {low} or float({value_name}) > {high}:"
+        )
+        lines.append(
+            f'    raise ValueError("`{label}` must be between {low} and {high}")'
+        )
+    elif variable.get("match_values_expr") is not None:
+        lines.append(f"allowed_values = {variable['match_values_expr']}")
+        lines.append(f"if {value_name} not in allowed_values:")
+        lines.append(f'    raise ValueError(f"`{label}` must be one of {{allowed_values}}")')
+    return lines
 
 
 def build_pipeline_step_context(step_expr: dict[str, Any], *, page_ref: str, sniffer_ref: str | None, test_mode_ref: str | None) -> dict[str, Any]:
@@ -285,9 +409,8 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
                 "type_names": sorted(type_names),
                 "item_type_names": sorted(type_names) if is_list else [],
                 "is_list": is_list,
-                "match_pattern": (
-                    match_to_pattern(input_spec.get("match"))
-                ),
+                "match_pattern": match_to_pattern(input_spec.get("match")),
+                "match_check_expr": match_to_check_expr(input_spec.get("match"), input_spec["name"]),
                 "match_error": match_to_error(input_spec.get("match")),
                 "match_range": match_to_range(input_spec.get("match")),
                 "values_expr": render_simple_value(values) if isinstance(values, list) and values and all(not isinstance(item, dict) for item in values) else None,

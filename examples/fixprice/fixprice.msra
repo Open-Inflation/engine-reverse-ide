@@ -29,6 +29,7 @@ on_error_screenshot_path="screenshot.png"
 
 [app.variables.city_id]
 @Nullable
+@ReadOnly
 types=[{"type"=integer, "match"={from=1, to=2147483647}}]
 description="Current city id used by catalog and balance requests."
 from=<UNSTANDARD_HEADERS.REQUEST.x-city>
@@ -70,6 +71,7 @@ raise="Alias страны должен состоять ровно из двух
 
 [app.regexes.LANGUAGE_TAG]
 regex="^[a-z]{2}(?:-[A-Z]{2})?$"
+description="Языковой тег в формате xx или xx-YY, где xx - код языка из двух строчных букв, а YY - код страны из двух заглавных букв."
 
 [app.regexes.DELIVERY_TYPE]
 regex="^(store|pickup|courier)$"

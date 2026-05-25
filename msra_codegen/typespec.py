@@ -150,6 +150,20 @@ def match_to_error(expr: dict[str, Any] | None) -> str | None:
     return None
 
 
+def match_to_check_expr(expr: dict[str, Any] | None, value_expr: str) -> str | None:
+    if not expr:
+        return None
+    if expr.get("kind") == "string":
+        pattern = render_simple_value(expr.get("value"))
+        return f"re.fullmatch({pattern}, str({value_expr})) is not None"
+    if expr.get("kind") != "ref":
+        return None
+    parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
+    if len(parts) >= 3 and parts[0] == "DOCUMENT" and parts[1] == "REGEXES":
+        return f"abstraction.{regex_class_name(parts[2])}.match({value_expr})"
+    return None
+
+
 def match_to_range(expr: dict[str, Any] | None) -> tuple[int, int] | None:
     if not expr or expr.get("kind") != "inline_table":
         return None

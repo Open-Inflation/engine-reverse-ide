@@ -45,8 +45,8 @@
 {{ indent }}    raise TypeError("`{{ item.name }}` must be str")
 {% endif %}
 {% endif %}
-{% if item.match_pattern and not item.is_list %}
-{{ indent }}if re.fullmatch({{ item.match_pattern }}, str({{ item.name }})) is None:
+{% if item.match_check_expr and not item.is_list %}
+{{ indent }}if not ({{ item.match_check_expr }}):
 {% if item.match_error %}
 {{ indent }}    raise ValueError({{ item.match_error }})
 {% else %}

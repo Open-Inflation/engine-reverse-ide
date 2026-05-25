@@ -1,6 +1,5 @@
 from collections import defaultdict
 from dataclasses import dataclass
-import re
 from time import perf_counter, time
 from typing import Any
 
@@ -110,15 +109,8 @@ class {{ client_class_name }}:
 
         self.unstandard_headers = {k: list(v)[0] for k, v in result.items()}
 {% for variable in variables %}
-        self.{{ variable.backing_name }} = self._coerce_variable_value(
-            {{ variable.capture_expr }},
-            label={{ variable.name | tojson }},
-            kind={{ variable.capture_kind | tojson }},
-            pattern={{ variable.match_pattern if variable.match_pattern is not none else none }},
-            error_message={{ variable.match_error if variable.match_error is not none else none }},
-            range_value={{ variable.match_range if variable.match_range is not none else none }},
-            allowed_values={{ variable.match_values_expr if variable.match_values_expr is not none else none }},
-        )
+{{ variable.warmup_code }}
+
 {% endfor %}
         self.unstandard_urls = result_sniffer.get("request", {})
 
@@ -154,51 +146,6 @@ class {{ client_class_name }}:
         )
         await sniffer.start(self.ctx)
         return sniffer
-
-    @staticmethod
-    def _coerce_variable_value(
-        raw: Any,
-        *,
-        label: str,
-        kind: str,
-        pattern: str | None = None,
-        error_message: str | None = None,
-        range_value: tuple[int, int] | None = None,
-        allowed_values: list[Any] | None = None,
-    ) -> Any | None:
-        if raw is None:
-            return None
-        if kind == "integer":
-            value = raw if isinstance(raw, int) and not isinstance(raw, bool) else int(raw)
-        elif kind == "number":
-            value = raw if isinstance(raw, (int, float)) and not isinstance(raw, bool) else float(raw)
-        elif kind == "boolean":
-            if isinstance(raw, bool):
-                value = raw
-            elif isinstance(raw, str):
-                lowered = raw.strip().lower()
-                if lowered in {"true", "1", "yes", "on"}:
-                    value = True
-                elif lowered in {"false", "0", "no", "off"}:
-                    value = False
-                else:
-                    raise ValueError(f"`{label}` must be boolean-like")
-            else:
-                value = bool(raw)
-        elif kind == "null":
-            return None
-        else:
-            value = raw if isinstance(raw, str) else str(raw)
-        if pattern is not None and re.fullmatch(pattern, str(value)) is None:
-            if error_message is not None:
-                raise ValueError(error_message)
-            raise ValueError(f"`{label}` does not match the expected format")
-        if range_value is not None:
-            if float(value) < range_value[0] or float(value) > range_value[1]:
-                raise ValueError(f"`{label}` must be between {range_value[0]} and {range_value[1]}")
-        if allowed_values is not None and value not in allowed_values:
-            raise ValueError(f"`{label}` must be one of {allowed_values}")
-        return value
 
 {% for variable in variables %}
 {{ variable.code }}

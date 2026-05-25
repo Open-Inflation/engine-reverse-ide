@@ -27,8 +27,8 @@
         if not isinstance(value, str):
             raise TypeError("`{{ name }}` must be str")
 {% endif %}
-{% if match_pattern %}
-        if re.fullmatch({{ match_pattern }}, str(value)) is None:
+{% if match_check_expr %}
+        if not ({{ match_check_expr }}):
 {% if match_error %}
             raise ValueError({{ match_error }})
 {% else %}
