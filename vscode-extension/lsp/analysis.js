@@ -193,11 +193,31 @@ function renderRef(ref) {
       rendered.push(String(part.value));
     } else if (part.kind === "index") {
       rendered.push("[...]");
+    } else if (part.kind === "key") {
+      rendered.push(`[@Key(${renderRefIndexValue(part.value)})]`);
     } else if (part.kind === "call") {
       rendered.push("(...)");
     }
   }
   return rendered.join("");
+}
+
+function renderRefIndexValue(value) {
+  if (value && typeof value === "object") {
+    if (value.kind === "number") {
+      return typeof value.raw === "string" && value.raw ? value.raw : String(value.value);
+    }
+    if (value.kind === "string") {
+      return JSON.stringify(value.value);
+    }
+    if (value.kind === "bool") {
+      return value.value ? "true" : "false";
+    }
+    if (value.kind === "null") {
+      return "null";
+    }
+  }
+  return String(value);
 }
 
 function resolveReference(ref, result) {

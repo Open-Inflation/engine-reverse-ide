@@ -66,6 +66,13 @@ function serializeRefSegment(segment) {
       range: serializeRange(segment.range),
     };
   }
+  if (segment.kind === "key") {
+    return {
+      kind: segment.kind,
+      value: serializeExpr(segment.value),
+      range: serializeRange(segment.range),
+    };
+  }
   if (segment.kind === "call") {
     return {
       kind: segment.kind,

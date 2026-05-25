@@ -187,6 +187,9 @@ def render_ref(expr: dict[str, Any]) -> str:
         if kind == "index":
             rendered.append(f"[{render_expr(part.get('value'))}]")
             continue
+        if kind == "key":
+            rendered.append(f"[@Key({render_expr(part.get('value'))})]")
+            continue
         if kind == "call":
             args = part.get("value", [])
             rendered.append(f"({', '.join(render_named_arg(arg) for arg in args if isinstance(arg, dict))})")

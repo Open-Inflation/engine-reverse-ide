@@ -397,7 +397,8 @@ function validateExampleInputRelations(tableIndex, lookupTableIndex, lookupAssig
         if (funcResultReference === null || !funcResultReference.valid) {
           diagnostics.push(
             new Diagnostic(
-              `Input "${inputEntry.key}" in table [${pathLabel(table.path)}] uses an invalid FUNCRESULT reference.`,
+              (funcResultReference && funcResultReference.message)
+                || `Input "${inputEntry.key}" in table [${pathLabel(table.path)}] uses an invalid FUNCRESULT reference.`,
               inputEntry.value.range || inputEntry.keyRange,
               "error",
               "msra",
@@ -558,17 +559,46 @@ function renderFuncResultReference(ref) {
   if (!ref || !Array.isArray(ref.parts)) {
     return "FUNCRESULT";
   }
-  return ref.parts
-    .map((part) => {
-      if (part.kind === "name") {
-        return String(part.value);
+  const rendered = [];
+  for (const part of ref.parts) {
+    if (part.kind === "name") {
+      if (rendered.length) {
+        rendered.push(".");
       }
-      if (part.kind === "index") {
-        return "[...]";
-      }
-      return "";
-    })
-    .join(".");
+      rendered.push(String(part.value));
+      continue;
+    }
+    if (part.kind === "index") {
+      rendered.push("[...]");
+      continue;
+    }
+    if (part.kind === "key") {
+      rendered.push(`[@Key(${renderRefIndexValue(part.value)})]`);
+      continue;
+    }
+    if (part.kind === "call") {
+      rendered.push("(...)");
+    }
+  }
+  return rendered.join("");
+}
+
+function renderRefIndexValue(value) {
+  if (value && typeof value === "object") {
+    if (value.kind === "number") {
+      return typeof value.raw === "string" && value.raw ? value.raw : String(value.value);
+    }
+    if (value.kind === "string") {
+      return JSON.stringify(value.value);
+    }
+    if (value.kind === "bool") {
+      return value.value ? "true" : "false";
+    }
+    if (value.kind === "null") {
+      return "null";
+    }
+  }
+  return String(value);
 }
 
 function validateVariableSourceRelations(tableIndex, lookupTableIndex, lookupAssignmentIndex) {
@@ -977,6 +1007,8 @@ function walkExpressions(expr, visitor) {
   if (expr instanceof RefExpr) {
     for (const part of expr.parts) {
       if (part.kind === "index") {
+        walkExpressions(part.value, visitor);
+      } else if (part.kind === "key") {
         walkExpressions(part.value, visitor);
       } else if (part.kind === "call") {
         for (const arg of part.value || []) {

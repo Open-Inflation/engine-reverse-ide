@@ -277,6 +277,10 @@ def parse_funcresult_reference(expr: dict[str, Any]) -> tuple[str, str, str, lis
 
     function_id = str(function_part.get("value"))
     example_name = str(example_part.get("value"))
+    for tail_part in parts[4:]:
+        if tail_part.get("kind") != "key":
+            continue
+        validate_readme_key_selector(tail_part.get("value"), function_id, example_name)
     if result_kind != "JSON" and len(parts) > 4:
         raise ValueError(
             f"FUNCRESULT.{function_id}.{example_name}.{result_kind} does not allow further path access. Use JSON if you need to address nested elements.",
@@ -408,6 +412,44 @@ def render_readme_ref(expr: dict[str, Any], output_var_names: dict[str, str]) ->
         tail_kind = tail_part.get("kind")
         if tail_kind == "index":
             rendered += f"[{render_readme_expr(tail_part.get('value'), output_var_names)}]"
+        elif tail_kind == "key":
+            rendered += f"[{render_readme_key_selector(tail_part.get('value'), rendered)}]"
         elif tail_kind == "name":
             rendered += f".{tail_part.get('value')}"
     return rendered
+
+
+def render_readme_key_selector(index_expr: Any, data_expr: str) -> str:
+    index_value = readme_key_selector_number(index_expr)
+    if index_value is None:
+        raise ValueError("FUNCRESULT @Key selector requires an integer id greater than or equal to -1.")
+    if index_value == 0:
+        return f"next(iter({data_expr}))"
+    if index_value == -1:
+        return f"next(reversed({data_expr}))"
+    if index_value < -1:
+        raise ValueError("FUNCRESULT @Key selector requires an integer id greater than or equal to -1.")
+    rendered_index = str(index_value)
+    return f"list({data_expr})[{rendered_index}]"
+
+
+def validate_readme_key_selector(index_expr: Any, function_id: str, example_name: str) -> None:
+    index_value = readme_key_selector_number(index_expr)
+    if index_value is None or index_value < -1:
+        raise ValueError(
+            f"FUNCRESULT.{function_id}.{example_name}.JSON uses @Key with an invalid id. "
+            f"Expected an integer greater than or equal to -1."
+        )
+
+
+def readme_key_selector_number(index_expr: Any) -> int | None:
+    if not isinstance(index_expr, dict) or index_expr.get("kind") != "number":
+        return None
+    value = index_expr.get("value")
+    if isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float)):
+        return None
+    if not float(value).is_integer():
+        return None
+    return int(value)

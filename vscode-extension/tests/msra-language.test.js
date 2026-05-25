@@ -66,7 +66,7 @@ function createFuncResultFixture({
   targetExampleName = "target_snapshot",
   reference = null,
 } = {}) {
-  const renderedReference = reference || `<FUNCRESULT.SRC.${sourceExampleName}.JSON["some"]["path"][0]>`;
+  const renderedReference = reference || `<FUNCRESULT.SRC.${sourceExampleName}.JSON[@Key(0)]["some"]["path"][0]>`;
   const renderAnnotations = (annotations) => annotations.map((annotation) => `@${annotation}`);
   return [
     "[app]",
@@ -1510,11 +1510,9 @@ test("FUNCRESULT references reject the old function.kind.example order", () => {
   const analysis = analyzeDocument(document);
   const diagnostics = analysis.diagnostics.filter((diagnostic) => diagnostic.code === "invalid-funcresult-reference");
   const sourceExampleDiagnostic = diagnostics.find((diagnostic) => /result kind/i.test(diagnostic.message));
-  const invalidInputDiagnostic = diagnostics.find((diagnostic) => /invalid FUNCRESULT reference/i.test(diagnostic.message));
 
   assert.strictEqual(diagnostics.length, 2, "expected the old FUNCRESULT segment order to be rejected twice");
-  assert.ok(sourceExampleDiagnostic, "expected the parser to report the old segment order");
-  assert.ok(invalidInputDiagnostic, "expected the example input validator to report the invalid reference");
+  assert.ok(sourceExampleDiagnostic, "expected the parser and validator to report the invalid segment order");
   assert.match(sourceExampleDiagnostic.message, /result kind JSON, TEXT, or IMAGE/i);
 });
 
@@ -1995,7 +1993,7 @@ test("FUNCRESULT completions are available inside example inputs", () => {
     sendNotification() {},
   });
   const text = createFuncResultFixture().replace(
-    '<FUNCRESULT.SRC.source_snapshot.JSON["some"]["path"][0]>',
+    '<FUNCRESULT.SRC.source_snapshot.JSON[@Key(0)]["some"]["path"][0]>',
     '<FUNCRESULT.SRC.',
   );
   const uri = "file:///completion-funcresult-example-inputs.msra";
@@ -2028,6 +2026,76 @@ test("FUNCRESULT completions are available inside example inputs", () => {
   });
   assert.strictEqual(jsonItem.insertTextFormat, 2);
   assert.ok(!response.items.some((candidate) => candidate.label === "FUNCRESULT.SRC"), "expected bare function result labels to stay hidden");
+});
+
+test("FUNCRESULT supports @Key selectors inside JSON paths", () => {
+  const text = [
+    "[app]",
+    'package_name="key_api"',
+    "",
+    "[app.func.SRC]",
+    "",
+    "[app.func.SRC.input.query]",
+    "type=string",
+    "",
+    "[app.func.SRC.examples]",
+    "[app.func.SRC.examples.source_snapshot]",
+    "@Docs",
+    'description="Source snapshot"',
+    'inputs={"query"="source"}',
+    "",
+    "[app.func.DST]",
+    "",
+    "[app.func.DST.input.query]",
+    "type=string",
+    "",
+    "[app.func.DST.examples]",
+    "[app.func.DST.examples.destination_snapshot]",
+    "@Docs",
+    'description="Destination snapshot"',
+    'inputs={"query"=<FUNCRESULT.SRC.source_snapshot.JSON[@Key(0)]["alias"]>}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///funcresult-key-selector.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("FUNCRESULT rejects @Key selectors below -1", () => {
+  const text = [
+    "[app]",
+    'package_name="key_api"',
+    "",
+    "[app.func.SRC]",
+    "",
+    "[app.func.SRC.input.query]",
+    "type=string",
+    "",
+    "[app.func.SRC.examples]",
+    "[app.func.SRC.examples.source_snapshot]",
+    "@Docs",
+    'description="Source snapshot"',
+    'inputs={"query"="source"}',
+    "",
+    "[app.func.DST]",
+    "",
+    "[app.func.DST.input.query]",
+    "type=string",
+    "",
+    "[app.func.DST.examples]",
+    "[app.func.DST.examples.destination_snapshot]",
+    "@Docs",
+    'description="Destination snapshot"',
+    'inputs={"query"=<FUNCRESULT.SRC.source_snapshot.JSON[@Key(-2)]>}',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///funcresult-key-selector-invalid.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-funcresult-key-selector");
+
+  assert.ok(diagnostic, "expected @Key values below -1 to be rejected");
+  assert.match(diagnostic.message, /greater than or equal to -1/);
 });
 
 test("completion is field-aware for groups enums and static values", () => {

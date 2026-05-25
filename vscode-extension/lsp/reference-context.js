@@ -1,3 +1,4 @@
+const { NumberExpr } = require("./model");
 const { normalizePathSegments } = require("./path-schema");
 
 const DEFAULT_REFERENCE_ROOTS = [
@@ -108,6 +109,21 @@ function parseFuncResultReference(ref, tablePath, valuePathSegments) {
     };
   }
 
+  for (const tailPart of parts.slice(4)) {
+    if (tailPart.kind !== "key") {
+      continue;
+    }
+    const keyValidation = validateKeySelectorValue(tailPart.value);
+    if (keyValidation !== null) {
+      return {
+        valid: false,
+        code: "invalid-funcresult-key-selector",
+        message: keyValidation.message,
+        range: keyValidation.range || tailPart.range || ref.range || null,
+      };
+    }
+  }
+
   if (resultKind !== "JSON" && parts.length > 4) {
     return {
       valid: false,
@@ -125,6 +141,29 @@ function parseFuncResultReference(ref, tablePath, valuePathSegments) {
     tailParts: parts.slice(4),
     range: ref.range || null,
   };
+}
+
+function validateKeySelectorValue(value) {
+  if (!(value instanceof NumberExpr)) {
+    return {
+      message: "FUNCRESULT @Key selector requires an integer id greater than or equal to -1.",
+      range: value && value.range ? value.range : null,
+    };
+  }
+  const numericValue = Number(value.value);
+  if (!Number.isFinite(numericValue) || !Number.isInteger(numericValue)) {
+    return {
+      message: "FUNCRESULT @Key selector requires an integer id greater than or equal to -1.",
+      range: value.range || null,
+    };
+  }
+  if (numericValue < -1) {
+    return {
+      message: "FUNCRESULT @Key selector requires an integer id greater than or equal to -1.",
+      range: value.range || null,
+    };
+  }
+  return null;
 }
 
 module.exports = {

@@ -377,10 +377,14 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.doesNotMatch(generalModule, /timeout/);
         assert.doesNotMatch(exampleText, /^\s*# tree$/m);
         assert.match(exampleText, /Загрузка изображения по прямой ссылке/);
-        assert.match(exampleText, /Image\.open\(download_image\)/);
+        assert.match(exampleText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
+        assert.doesNotMatch(exampleText, /Image\.open\(download_image\)/);
         assert.doesNotMatch(readmeText, /^\s*# tree$/m);
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
-        assert.match(readmeText, /Image\.open\(download_image\)/);
+        assert.match(readmeText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
+        assert.doesNotMatch(readmeText, /Image\.open\(download_image\)/);
+        assert.match(readmeText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
+        assert.match(exampleText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
         assert.doesNotMatch(managerModule, /Async client generated from MSRA|Generated async client/);
         assert.doesNotMatch(regexesModule, /Shared regex patterns and their validation messages/);
         assert.doesNotMatch(catalogSortModule, /Generated sort helpers|Sort order helper|Most popular first|Cheapest first|Most expensive first/);
@@ -554,6 +558,82 @@ test("readme pipeline fails generation for non-doc FUNCRESULT dependencies", () 
   assert.match(combinedOutput, /Referenced example \[app\.func\.SRC\.examples\.source_snapshot\] is not included in generated docs/);
   assert.doesNotMatch(combinedOutput, /_missing_readme_example_dependency\(/);
   assert.doesNotMatch(combinedOutput, /source_snapshot =/);
+});
+
+test("readme pipeline rejects @Key selectors below -1", () => {
+  const script = [
+    "import json, sys",
+    "from msra_codegen.readme_pipeline import build_readme_pipeline_code",
+    'project = json.loads(sys.argv[1])',
+    'print(build_readme_pipeline_code(project, project["app"]["package_name"], project["app"]["client_class_name"]))',
+  ].join("; ");
+  const project = {
+    app: {
+      name: "KeySelectorAPI",
+      package_name: "key_selector_api",
+      client_class_name: "KeySelectorAPI",
+    },
+    functions: [
+      {
+        id: "SRC",
+        name: "source_data",
+        group: "General",
+        transport: "fetch",
+        examples: [
+          {
+            name: "source_snapshot",
+            docs: true,
+            inputs: {
+              kind: "inline_table",
+              items: [{ key: "query", value: { kind: "string", value: "source" } }],
+            },
+          },
+        ],
+      },
+      {
+        id: "DST",
+        name: "consume_source",
+        group: "General",
+        transport: "fetch",
+        examples: [
+          {
+            name: "doc_snapshot",
+            docs: true,
+            inputs: {
+              kind: "inline_table",
+              items: [
+                {
+                  key: "query",
+                  value: {
+                    kind: "ref",
+                    parts: [
+                      { kind: "name", value: "FUNCRESULT" },
+                      { kind: "name", value: "SRC" },
+                      { kind: "name", value: "source_snapshot" },
+                      { kind: "name", value: "JSON" },
+                      {
+                        kind: "key",
+                        value: { kind: "number", value: -2, raw: "-2" },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const result = spawnSync("python", ["-c", script, JSON.stringify(project)], {
+    cwd: path.resolve(__dirname, ".."),
+    encoding: "utf8",
+  });
+  const combinedOutput = `${result.stdout || ""}${result.stderr || ""}`;
+
+  assert.notStrictEqual(result.status, 0, "expected codegen to fail for invalid @Key selectors");
+  assert.match(combinedOutput, /@Key with an invalid id/);
+  assert.doesNotMatch(combinedOutput, /next\(iter\(/);
 });
 
 test("generator writes a merged intermediate msra file", () => {

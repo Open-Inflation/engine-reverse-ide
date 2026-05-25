@@ -929,9 +929,30 @@ class Parser {
 
   _parseRefIndex() {
     const start = this._advance();
+    if (this._check("AT")) {
+      const value = this._parseRefKeySelector();
+      const end = this._expect("RBRACK", "Expected ']' to close index") || this._previous();
+      return new RefSegment("key", value, new Range(start.range.start, end.range.end));
+    }
     const value = this._parseExpr(false);
     const end = this._expect("RBRACK", "Expected ']' to close index") || this._previous();
     return new RefSegment("index", value, new Range(start.range.start, end.range.end));
+  }
+
+  _parseRefKeySelector() {
+    const atToken = this._advance();
+    const nameToken = this._parseKeyToken();
+    if (nameToken === null || nameToken.type !== "IDENT" || String(nameToken.value || "").toLowerCase() !== "key") {
+      this._error("Expected @Key(...) selector inside reference index", nameToken ? nameToken.range : atToken.range, "expected-ref-key-selector");
+      return new NullExpr(atToken.range);
+    }
+    if (!this._match("LPAREN")) {
+      this._error("Expected '(' after @Key", this._current().range, "expected-ref-key-selector-args");
+      return new NullExpr(atToken.range);
+    }
+    const value = this._parseExpr(false);
+    this._expect("RPAREN", "Expected ')' to close @Key selector");
+    return value;
   }
 
   _parseRefCall() {
