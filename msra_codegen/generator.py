@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from pathlib import Path
@@ -234,6 +235,8 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     app = {
         "name": str(get_plain_value(get_assignment(app_table, "name", "GeneratedAPI"))),
         "package_name": str(get_plain_value(get_assignment(app_table, "package_name", ""))),
+        "authors": get_plain_value(get_assignment(app_table, "authors", [])),
+        "license": str(get_plain_value(get_assignment(app_table, "license", "MIT"))),
         "description": str(get_plain_value(get_assignment(app_table, "description", ""))),
         "version": str(get_plain_value(get_assignment(app_table, "version", "0.1.0"))),
         "timeout_ms": int(get_plain_value(get_assignment(app_table, "timeout_ms", 35000))),
@@ -531,13 +534,32 @@ def generate_project(
 
 def render_pyproject(project: dict[str, Any], package_name: str) -> str:
     client_class_name = root_client_class_name(project)
+    authors = project["app"].get("authors", [])
     return render_template(
         "pyproject.toml.tpl",
         {
+            "authors_block": render_authors_block(authors),
+            "license": project["app"].get("license", "MIT"),
             "package_name": package_name,
             "autotest_start_class": f"{package_name}.{client_class_name}",
         },
     )
+
+
+def render_authors_block(authors: Any) -> str:
+    items: list[str] = []
+    if isinstance(authors, list):
+        for author in authors:
+            if not isinstance(author, dict):
+                continue
+            fields = [f'name = {json.dumps(str(author.get("name", "")))}']
+            email = str(author.get("email", "")).strip()
+            if email:
+                fields.append(f'email = {json.dumps(email)}')
+            items.append("    { " + ", ".join(fields) + " }")
+    if not items:
+        return "authors = []"
+    return "authors = [\n" + ",\n".join(items) + "\n]"
 
 
 def render_init(project: dict[str, Any], package_name: str) -> str:

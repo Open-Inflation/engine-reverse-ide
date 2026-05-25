@@ -8,10 +8,8 @@ dynamic = ["version"]
 description = "Generated async Python client from MSRA"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
-authors = [
-    { name = "Miskler" }
-]
+license = "{{ license }}"
+{{ authors_block }}
 dependencies = [
     "camoufox[geoip]",
     "human_requests",

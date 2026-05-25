@@ -1235,11 +1235,13 @@ test("python codegen generates both bundled msra documents without failing", () 
       inputPath: path.join(repoRoot, "examples", "example.msra"),
       outputDir: path.join(workDir, "example"),
       packageName: "ozon_api",
+      license: "GPL-3.0-or-later",
     },
     {
       inputPath: path.join(repoRoot, "examples", "fixprice", "fixprice.msra"),
       outputDir: path.join(workDir, "fixprice"),
       packageName: "fixprice_api",
+      license: "GPL-3.0",
     },
   ];
   const delimitedInputPath = path.join(workDir, "example-delimited.msra");
@@ -1257,6 +1259,7 @@ test("python codegen generates both bundled msra documents without failing", () 
     inputPath: delimitedInputPath,
     outputDir: path.join(workDir, "delimited"),
     packageName: "delimited_api",
+    license: "GPL-3.0-or-later",
   });
 
   try {
@@ -1276,8 +1279,11 @@ test("python codegen generates both bundled msra documents without failing", () 
       });
       assert.strictEqual(mergedCheck.status, 0, mergedCheck.stderr || mergedCheck.stdout);
       const readmeText = readFileSync(path.join(testCase.outputDir, "README.md"), "utf8");
+      const pyprojectText = readFileSync(path.join(testCase.outputDir, "pyproject.toml"), "utf8");
       assert.match(readmeText, /pip install [a-z0-9_]+/i);
       assert.match(readmeText, /async with [A-Za-z0-9_]+\(\) as api:/);
+      assert.match(pyprojectText, new RegExp(`^name = "${testCase.packageName}"$`, "m"));
+      assert.ok(pyprojectText.includes(`license = "${testCase.license}"`));
       const packageDir = path.join(testCase.outputDir, testCase.packageName);
       const compileResult = spawnSync("python", ["-m", "compileall", "-q", packageDir], {
         cwd: repoRoot,
@@ -1310,6 +1316,7 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
         assert.match(readmeText, /Image\.open\(image_stream\)/);
         assert.doesNotMatch(readmeText, /Current city_id|api\.city_id =/);
+        assert.match(pyprojectText, /email = "mail@miskler\.ru"/);
       }
       for (const filePath of collectPythonFiles(packageDir)) {
         const source = readFileSync(filePath, "utf8");
