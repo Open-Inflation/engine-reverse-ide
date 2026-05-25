@@ -35,6 +35,10 @@
 {% elif match_range %}
         if float(value) < {{ match_range[0] }} or float(value) > {{ match_range[1] }}:
             raise ValueError("`{{ name }}` must be between {{ match_range[0] }} and {{ match_range[1] }}")
+{% elif match_values_expr %}
+        allowed_values = {{ match_values_expr }}
+        if value not in allowed_values:
+            raise ValueError(f"`{{ name }}` must be one of {allowed_values}")
 {% endif %}
         self.{{ backing_name }} = value
 {% endif %}

@@ -131,6 +131,7 @@ class {{ client_class_name }}:
             pattern={{ variable.match_pattern if variable.match_pattern is not none else none }},
             error_message={{ variable.match_error if variable.match_error is not none else none }},
             range_value={{ variable.match_range if variable.match_range is not none else none }},
+            allowed_values={{ variable.match_values_expr if variable.match_values_expr is not none else none }},
         )
 {% endfor %}
         self.unstandard_urls = result_sniffer.get("request", {})
@@ -150,6 +151,7 @@ class {{ client_class_name }}:
         pattern: str | None = None,
         error_message: str | None = None,
         range_value: tuple[int, int] | None = None,
+        allowed_values: list[Any] | None = None,
     ) -> Any | None:
         if raw is None:
             return None
@@ -181,6 +183,8 @@ class {{ client_class_name }}:
         if range_value is not None:
             if float(value) < range_value[0] or float(value) > range_value[1]:
                 raise ValueError(f"`{label}` must be between {range_value[0]} and {range_value[1]}")
+        if allowed_values is not None and value not in allowed_values:
+            raise ValueError(f"`{label}` must be one of {allowed_values}")
         return value
 
 {% for variable in variables %}

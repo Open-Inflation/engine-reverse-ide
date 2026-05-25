@@ -561,7 +561,8 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
     type_names = variable_type_names(variable)
     non_null_type_names = {name for name in type_names if name != "null"}
     nullable = bool(variable.get("nullable", False))
-    has_null = nullable or "null" in type_names
+    match_values = match_to_values(variable.get("match"))
+    has_null = nullable or "null" in type_names or (match_values is not None and any(value is None for value in match_values))
     return {
         "name": variable["name"],
         "description": escape_docstring(variable["description"] or variable["name"]),
@@ -575,6 +576,8 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
         "has_string": "string" in non_null_type_names or not non_null_type_names,
         "has_null": has_null,
         "setter_enabled": should_render_setter(variable),
+        "match_values": match_values,
+        "match_values_expr": render_simple_value(match_values) if match_values is not None else None,
         "match_pattern": match_to_pattern(variable.get("match")),
         "match_error": match_to_error(variable.get("match")),
         "match_range": match_to_range(variable.get("match")),
@@ -1176,6 +1179,18 @@ def variable_match_pattern(variable: dict[str, Any]) -> str | None:
     return match_to_pattern(match)
 
 
+def match_to_values(expr: dict[str, Any] | None) -> list[Any] | None:
+    if not expr or expr.get("kind") != "array":
+        return None
+    values: list[Any] = []
+    for item in expr.get("items", []):
+        value, ok = scalar_value_from_expr(item)
+        if not ok:
+            return None
+        values.append(value)
+    return values
+
+
 def match_to_pattern(expr: dict[str, Any] | None) -> str | None:
     if not expr:
         return None
@@ -1207,6 +1222,21 @@ def match_to_range(expr: dict[str, Any] | None) -> tuple[int, int] | None:
         except (TypeError, ValueError):
             return None
     return None
+
+
+def scalar_value_from_expr(expr: dict[str, Any] | None) -> tuple[Any, bool]:
+    if not isinstance(expr, dict):
+        return None, False
+    kind = expr.get("kind")
+    if kind == "string":
+        return expr.get("value"), True
+    if kind == "number":
+        return expr.get("value"), True
+    if kind == "bool":
+        return bool(expr.get("value")), True
+    if kind == "null":
+        return None, True
+    return None, False
 
 
 def is_catalog_sort_function(func: dict[str, Any]) -> bool:

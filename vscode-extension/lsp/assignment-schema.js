@@ -26,6 +26,7 @@ const ARRAY = { kind: "array" };
 const OBJECT = { kind: "object" };
 const NULL = { kind: "null" };
 const NULL_OR_STRING = { kind: "oneOf", options: [NULL, STRINGISH] };
+const SCALAR = { kind: "scalar" };
 
 function enumOf(values) {
   return { kind: "enum", values };
@@ -309,21 +310,14 @@ const NUMERIC_RANGE_SPEC = objectShape(
 );
 
 const MATCH_SPEC = { kind: "match" };
+const VARIABLE_MATCH_SPEC = oneOf(MATCH_SPEC, arrayOf(SCALAR));
 
 const VARIABLE_TYPE_ITEM_SPEC = objectShape(
   {
     type: enumOf(["string", "integer", "boolean", "array", "object"]),
   },
   {
-    match: MATCH_SPEC,
-    value: ANY,
-  },
-  {
-    rules: [
-      forbidKeyWhenPresent("value", "match", {
-        message: 'Table item cannot define both "value" and "match".',
-      }),
-    ],
+    match: VARIABLE_MATCH_SPEC,
   },
 );
 
@@ -906,6 +900,12 @@ function collectValueDiagnostics(value, spec, fallbackRange = null, skipRules = 
     }
     return [typeDiagnostic(fallbackRange || value.range, `Expected reference <...> or numeric range inline table for match but got ${describeValue(value)}`, "invalid-assignment-value-type")];
   }
+  if (spec.kind === "scalar") {
+    if (value instanceof StringExpr || value instanceof NumberExpr || value instanceof BoolExpr || value instanceof NullExpr) {
+      return [];
+    }
+    return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+  }
   if (spec.kind === "enum") {
     if (value instanceof StringExpr && value.quoted === false && spec.values.includes(value.value)) {
       return [];
@@ -1254,6 +1254,9 @@ function describeSpec(spec) {
   }
   if (spec.kind === "match") {
     return "reference <...> or numeric range inline table";
+  }
+  if (spec.kind === "scalar") {
+    return "scalar value";
   }
   if (spec.kind === "enum") {
     return `one of ${spec.values.map((value) => JSON.stringify(value)).join(", ")}`;

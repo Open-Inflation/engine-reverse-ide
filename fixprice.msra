@@ -37,7 +37,7 @@ from=<UNSTANDARD_HEADERS.REQUEST.x-key>
 
 [app.variables.delivery_type]
 @Nullable
-types=[{"type"=string, "match"=<DOCUMENT.REGEXES.DELIVERY_TYPE>}]
+types=[{"type"=string, "match"=["store", "pickup", "courier"]}]
 description="Delivery mode used by the catalog."
 from=<UNSTANDARD_HEADERS.REQUEST.x-delivery-type>
 

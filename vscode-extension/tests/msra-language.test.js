@@ -525,7 +525,20 @@ test("example tables inputs must match declared function input types", () => {
   assert.match(diagnostic.message, /integer/);
 });
 
-test("variable type items reject value and match together", () => {
+test("variable type items accept scalar match lists", () => {
+  const text = [
+    "[app]",
+    "[app.variables.delivery_type]",
+    'types=[{"type"=string, "match"=["store", "pickup", "courier"]}]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///variable-match-list.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
+test("variable type items reject legacy value keys", () => {
   const text = [
     "[app]",
     "[app.variables.city_id]",
@@ -534,11 +547,10 @@ test("variable type items reject value and match together", () => {
   ].join("\n");
   const document = parseDocument(text, "file:///conflicting-variable-type-value-match.msra");
   const analysis = analyzeDocument(document);
-  const diagnostic = analysis.diagnostics.find((item) => item.code === "conflicting-inline-table-keys");
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "unknown-inline-table-key");
 
-  assert.ok(diagnostic, "expected value and match to conflict inside variable type items");
+  assert.ok(diagnostic, "expected legacy value keys to be rejected inside variable type items");
   assert.match(diagnostic.message, /value/);
-  assert.match(diagnostic.message, /match/);
 });
 
 test("@ReadOnly annotation on app.variables stays valid", () => {
@@ -1159,6 +1171,10 @@ test("python codegen generates both bundled msra documents without failing", () 
       const managerModule = readFileSync(path.join(packageDir, "manager.py"), "utf8");
       assert.match(managerModule, /def city_id\(self\) -> int \| None:/);
       assert.match(managerModule, /if value is None:\s+self\._city_id = None/);
+      if (testCase.packageName === "fixpriceapi") {
+        assert.match(managerModule, /allowed_values = \['store', 'pickup', 'courier'\]/);
+        assert.match(managerModule, /if value not in allowed_values:/);
+      }
     }
   } finally {
     rmSync(workDir, { recursive: true, force: true });
