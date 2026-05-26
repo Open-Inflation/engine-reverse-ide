@@ -73,26 +73,18 @@ raise="Текст запроса должен состоять только из
 
 В Python-выходе для regex остаются `REGEX` и `ERROR`.
 
-## 4. `app.func.*.examples` не превращаются в generated tests or fixtures
+## 4. `app.func.*.examples` теперь генерируют contract tests, но snapshot-артефакты всё ещё требуют runtime capture
 
-В `examples/example/example.msra` у функции есть примеры:
+В `examples/example/example.msra` и `examples/fixprice/*.msraf` `@Test`-примеры теперь попадают в generated Python-пакет:
 
-```msra
-[app.func.A3A417.examples.smoke]
-@Test
-@Docs
-inputs={"query"="example"}
+- `tests/conftest.py` получает session fixtures для `api` и для канонических JSON-ответов;
+- `tests/api_test.py` получает `@autotest_hook`, `@autotest_params`, `@autotest_depends_on` и manual checks для `text`/`image` примеров;
+- бизнес-код получает `@autotest` на тех endpoint-методах, для которых выбран canonical JSON example.
 
-[app.func.A3A417.examples.alt_query]
-@Docs
-inputs={"query"="example2"}
-```
+Что всё ещё нельзя восстановить из одного MSRA-файла:
 
-Codegen не добавляет в Python-пакет:
-
-- fixtures для этих примеров;
-- generated contract tests;
-- отдельную runtime-логику, которая бы использовала `@Test`.
+- содержимое `tests/__snapshots__/*.json` и `*.schema.json` не выводится из контракта, потому что source-файл не содержит живой payload ответа;
+- эти артефакты появляются, когда тесты реально прогоняются и snapshot plugin фиксирует ответ.
 
 ## 5. `FUNCRESULT`-ссылки поддержаны только в LSP-контексте примеров
 

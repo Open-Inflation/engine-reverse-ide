@@ -21,6 +21,8 @@ def generate_docs_project(
     output_dir: Path,
     package_name: str,
     group_tree: dict[str, Any],
+    *,
+    tests_context: dict[str, Any] | None = None,
 ) -> None:
     docs_root = output_dir / "docs"
     if docs_root.exists():
@@ -34,7 +36,7 @@ def generate_docs_project(
     static_root.mkdir(parents=True, exist_ok=True)
     templates_root.mkdir(parents=True, exist_ok=True)
 
-    context = build_docs_project_context(project, package_name, group_tree)
+    context = build_docs_project_context(project, package_name, group_tree, tests_context=tests_context)
 
     write_text(
         output_dir / "README.md",
@@ -107,6 +109,8 @@ def build_docs_project_context(
     project: dict[str, Any],
     package_name: str,
     group_tree: dict[str, Any],
+    *,
+    tests_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     app = project["app"]
     docs_descriptions = config_section("docs", "descriptions")
@@ -167,6 +171,7 @@ def build_docs_project_context(
             "requires_camoufox": str(app.get("browser", "")) == "camoufox",
             "top_groups": top_groups,
         },
+        "tests": build_readme_tests_context(project, package_name, tests_context),
         "readme": readme_context,
         "pipeline_script_code": pipeline_script_code,
         "pipeline_script_code_rst": textwrap.indent(pipeline_script_code, "    "),
@@ -219,6 +224,23 @@ def build_readme_context(
         "socials": socials,
         "principle_text": str(readme_config.get("principle_text", "Библиотека полностью повторяет сетевую работу обычного пользователя на сайте.")),
         "pipeline_script_code": pipeline_script_code,
+    }
+
+
+def build_readme_tests_context(
+    project: dict[str, Any],
+    package_name: str,
+    tests_context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    client_class_name = root_client_class_name(project)
+    has_autotests = False
+    if isinstance(tests_context, dict):
+        api_test = tests_context.get("api_test")
+        if isinstance(api_test, dict):
+            has_autotests = any(bool(api_test.get(key)) for key in ("hooks", "providers", "manual_tests", "data_cases"))
+    return {
+        "has_autotests": has_autotests,
+        "autotest_start_class": f"{package_name}.{client_class_name}",
     }
 
 

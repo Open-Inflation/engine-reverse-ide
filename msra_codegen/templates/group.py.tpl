@@ -5,7 +5,9 @@ from pathlib import Path
 import re
 from typing import TYPE_CHECKING, Any, Literal
 
+{% if has_autotests %}
 from human_requests import autotest
+{% endif %}
 from human_requests.abstraction import HttpMethod
 from urllib.parse import urlencode
 

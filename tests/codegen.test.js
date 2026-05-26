@@ -294,11 +294,17 @@ test("python codegen generates both bundled msra documents without failing", () 
       const pyprojectText = readFileSync(path.join(testCase.outputDir, "pyproject.toml"), "utf8");
       const requirementsText = readFileSync(path.join(testCase.outputDir, "requirements.txt"), "utf8");
       const licenseText = readFileSync(path.join(testCase.outputDir, "LICENSE"), "utf8");
+      const packageDir = path.join(testCase.outputDir, testCase.packageName);
+      const testsDir = path.join(testCase.outputDir, "tests");
+      const conftestText = readFileSync(path.join(testsDir, "conftest.py"), "utf8");
+      const apiTestText = readFileSync(path.join(testsDir, "api_test.py"), "utf8");
       const readmePipelineCode = extractMarkdownCodeFence(readmeText);
       const quickStartPipelineCode = extractRstPythonCodeBlock(quickStartText);
       assert.match(readmeText, /# Usage/);
-      assert.doesNotMatch(readmeText, /## Автотесты API \(pytest \+ snapshots\)/);
+      assert.match(readmeText, /## Автотесты API \(pytest \+ snapshots\)/);
       assert.match(readmeText, /### Принцип работы/);
+      assert.match(readmeText, /pytest-jsonschema-snapshot/);
+      assert.match(readmeText, /pytest-anyio/);
       if (testCase.packageName === "fixprice_api") {
         assert.match(readmeText, /^Аснинхронный неофициальный API клиент для сайта fix-price\.com$/m);
         assert.match(pyprojectText, /^description = "Аснинхронный неофициальный API клиент для сайта fix-price\.com"$/m);
@@ -336,34 +342,59 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.ok(pyprojectText.includes(`license = "${testCase.license}"`));
       assert.match(pyprojectText, /^keywords = \[/m);
       assert.match(pyprojectText, /^classifiers = \[/m);
+      assert.match(
+        pyprojectText,
+        /\[project\.optional-dependencies\][\s\S]*tests = \[\r?\n\s*"pytest",\r?\n\s*"pytest-anyio",\r?\n\s*"pytest-jsonschema-snapshot"\r?\n\]/,
+      );
       assert.match(pyprojectText, /Programming Language :: Python :: 3/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3\.10/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3\.13/);
       assert.doesNotMatch(pyprojectText, /Programming Language :: Python :: 3\.14/);
       assert.match(pyprojectText, /Operating System :: Microsoft :: Windows/);
       assert.match(pyprojectText, /Topic :: Utilities/);
+      assert.ok(existsSync(path.join(testsDir, "__snapshots__")), "expected tests/__snapshots__ to be generated");
+      assert.match(conftestText, /def anyio_backend\(\):/);
+      assert.match(conftestText, /async def api\(\):/);
+      assert.doesNotMatch(conftestText, /abstraction/);
+      assert.match(apiTestText, /from human_requests import autotest_data, autotest_depends_on, autotest_hook, autotest_params/);
+      assert.match(apiTestText, /from human_requests\.autotest import AutotestCallContext, AutotestContext, AutotestDataContext/);
+      assert.doesNotMatch(apiTestText, /abstraction/);
+      if (testCase.packageName === "fixprice_api") {
+        const advertisingEndpointText = readFileSync(path.join(packageDir, "endpoints", "advertising.py"), "utf8");
+        const catalogEndpointText = readFileSync(path.join(packageDir, "endpoints", "catalog", "catalog.py"), "utf8");
+        const catalogProductsEndpointText = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
+        const generalEndpointText = readFileSync(path.join(packageDir, "endpoints", "general.py"), "utf8");
+        const geolocationEndpointText = readFileSync(path.join(packageDir, "endpoints", "geolocation.py"), "utf8");
+        assert.match(advertisingEndpointText, /@autotest/);
+        assert.match(catalogEndpointText, /@autotest/);
+        assert.match(catalogProductsEndpointText, /@autotest/);
+        assert.match(geolocationEndpointText, /@autotest/);
+        assert.doesNotMatch(generalEndpointText, /@autotest/);
+      }
       if (testCase.packageName === "fixprice_api") {
         assert.match(pyprojectText, /keywords = \[\r?\n\s*"fixprice",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
-        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"aiohttp",\r?\n\s*"aiohttp-retry"\r?\n\]/);
+        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"rich",\r?\n\s*"aiohttp",\r?\n\s*"aiohttp-retry"\r?\n\]/);
         assert.strictEqual(
           normalizeNewlines(requirementsText).trimEnd(),
           [
             "camoufox[geoip]",
             "human_requests",
             "Pillow",
+            "rich",
             "aiohttp",
             "aiohttp-retry",
           ].join("\n"),
         );
       } else {
         assert.match(pyprojectText, /keywords = \[\r?\n\s*"ozon",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
-        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow"\r?\n\]/);
+        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"rich"\r?\n\]/);
         assert.strictEqual(
           normalizeNewlines(requirementsText).trimEnd(),
           [
             "camoufox[geoip]",
             "human_requests",
             "Pillow",
+            "rich",
           ].join("\n"),
         );
       }
@@ -378,8 +409,7 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(licenseText, /GNU GENERAL PUBLIC LICENSE/);
       }
       assert.ok(!existsSync(path.join(testCase.outputDir, "LICENSES")));
-      const packageDir = path.join(testCase.outputDir, testCase.packageName);
-      const compileResult = spawnSync("python", ["-m", "compileall", "-q", packageDir], {
+      const compileResult = spawnSync("python", ["-m", "compileall", "-q", packageDir, testsDir], {
         cwd: repoRoot,
         encoding: "utf8",
       });
@@ -394,11 +424,65 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(exampleText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
         assert.match(readmeText, /https:\/\/t\.me\/miskler_dev/);
         assert.match(readmeText, /https:\/\/discord\.gg\/UnJnGHNbBp/);
+
+        const jsonDebugScript = [
+          "import sys",
+          "sys.path.insert(0, sys.argv[1])",
+          "from fixprice_api.abstraction.output import Output",
+          "try:",
+          "    Output.from_raw(b'{bad json').json()",
+          "except Exception:",
+          "    pass",
+        ].join("\n");
+        const jsonDebugResult = spawnSync("python", ["-c", jsonDebugScript, testCase.outputDir], {
+          cwd: repoRoot,
+          encoding: "utf8",
+        });
+        assert.strictEqual(jsonDebugResult.status, 0, jsonDebugResult.stderr || jsonDebugResult.stdout);
+        assert.match(jsonDebugResult.stdout, /JSON parse failed/);
+        assert.match(jsonDebugResult.stdout, /Fragment:/);
       } else {
         assert.match(readmeText, /Пример поиска по одному запросу/);
         assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query='example'\)\)\.json\(\)/);
       }
     }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("python codegen emits schemashot-backed text tests for @Test text examples", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-text-tests-"));
+  const inputPath = path.join(workDir, "text-example.msra");
+  const outputDir = path.join(workDir, "generated");
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const source = normalizeNewlines(readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8"))
+    .replace('package_name="ozon_api"', 'package_name="text_api"')
+    .replace(
+      "[app.func.A3A417.examples.smoke]\n@Test\n@Docs\n",
+      "[app.func.A3A417.examples.smoke]\n@Test\n@Docs\ntype=text\n",
+    );
+
+  try {
+    writeFileSync(inputPath, source, "utf8");
+    writeFileSync(
+      path.join(workDir, "warmup.py"),
+      readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
+      "utf8",
+    );
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const apiTestText = readFileSync(path.join(outputDir, "tests", "api_test.py"), "utf8");
+    assert.match(apiTestText, /async def test_class_product_feed_smoke\(api, schemashot\):/);
+    assert.match(apiTestText, /schemashot/);
+    assert.match(apiTestText, /response\.text/);
+    assert.match(apiTestText, /assert_json_match\(text, 'ClassProduct\.feed\.smoke'\)/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

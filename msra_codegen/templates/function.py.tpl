@@ -1,4 +1,6 @@
+{% if autotest_enabled %}
     @autotest
+{% endif %}
     async def {{ method_name }}(self{% if signature %}, {{ signature }}{% endif %}) -> {{ return_annotation }}:
 {% if description %}
         """{{ description }}"""

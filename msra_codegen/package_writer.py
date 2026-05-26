@@ -16,6 +16,7 @@ from .codegen_context import (
 from .file_utils import write_text
 from .package_metadata import render_pyproject, render_requirements_txt, write_root_license
 from .project_model import build_group_tree, top_level_groups
+from .tests_generator import build_tests_project_context, generate_tests_project
 from .template_engine import render_template
 
 
@@ -43,6 +44,8 @@ def generate_project(
     if extractors_root.exists():
         shutil.rmtree(extractors_root)
     extractors_root.mkdir(parents=True, exist_ok=True)
+
+    tests_context = build_tests_project_context(project, package_name)
 
     write_text(
         output_dir / "pyproject.toml",
@@ -80,7 +83,13 @@ def generate_project(
     endpoints_root.mkdir(parents=True, exist_ok=True)
     write_text(endpoints_root / "__init__.py", render_endpoints_init(project, package_name, group_tree))
     for group_node in top_level_groups(group_tree):
-        write_group_package(group_node, project, package_name, endpoints_root)
+        write_group_package(
+            group_node,
+            project,
+            package_name,
+            endpoints_root,
+            autotest_function_ids=tests_context["autotest_function_ids"],
+        )
 
     for script in dict.fromkeys(collect_warmup_scripts(project) + collect_extractor_assets(project)):
         source = source_root / script
@@ -95,4 +104,17 @@ def generate_project(
 
     from .docs_generator import generate_docs_project
 
-    generate_docs_project(project, output_dir, package_name, group_tree)
+    generate_docs_project(
+        project,
+        output_dir,
+        package_name,
+        group_tree,
+        tests_context=tests_context,
+    )
+    generate_tests_project(
+        project,
+        output_dir,
+        package_name,
+        group_tree,
+        tests_context=tests_context,
+    )

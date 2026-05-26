@@ -79,6 +79,9 @@ The generator writes:
 - `<package-name>/abstraction/regexes.py`
 - `<package-name>/endpoints/*.py`
 - referenced `extractors/*.js` assets
+- `tests/conftest.py`
+- `tests/api_test.py`
+- `tests/__snapshots__/`
 - `docs/requirements.txt`
 - `docs/source/conf.py`
 - `docs/source/index.rst`

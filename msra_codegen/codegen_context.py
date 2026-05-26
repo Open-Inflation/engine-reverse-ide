@@ -319,6 +319,8 @@ def build_pipeline_steps_context(
 def build_function_context(
     func: dict[str, Any],
     root_client_name: str,
+    *,
+    autotest_enabled: bool = False,
 ) -> dict[str, Any]:
     transport = str(func.get("transport", "fetch"))
     method = str(func.get("method", "GET"))
@@ -361,6 +363,7 @@ def build_function_context(
     return {
         "method_name": method_name,
         "description": escape_docstring(func.get("description")) if func.get("description") else "",
+        "autotest_enabled": autotest_enabled,
         "signature": ", ".join(signature_parts),
         "signature_specs": signature_specs,
         "return_annotation": render_return_annotation(func),
@@ -538,8 +541,13 @@ def render_variable_block(variable: dict[str, Any]) -> str:
 def render_function_block(
     func: dict[str, Any],
     root_client_name: str,
+    *,
+    autotest_enabled: bool = False,
 ) -> str:
-    return render_template("function.py.tpl", build_function_context(func, root_client_name))
+    return render_template(
+        "function.py.tpl",
+        build_function_context(func, root_client_name, autotest_enabled=autotest_enabled),
+    )
 
 
 def build_manager_context(
@@ -603,10 +611,24 @@ def build_group_context(
     group_node: dict[str, Any],
     project: dict[str, Any],
     package_name: str,
+    *,
+    autotest_function_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     root_client_name = root_client_class_name(project)
     child_nodes = list(group_node.get("children", {}).values())
     module_depth = module_package_depth_for_group(group_node)
+    autotest_function_ids = set(autotest_function_ids or set())
+    function_contexts = [
+        {
+            "code": render_function_block(
+                func,
+                root_client_name,
+                autotest_enabled=str(func["id"]) in autotest_function_ids,
+            ),
+            "autotest_enabled": str(func["id"]) in autotest_function_ids,
+        }
+        for func in sorted(group_node.get("functions", []), key=lambda item: item["name"])
+    ]
     return {
         "package_name": package_name,
         "root_client_name": root_client_name,
@@ -632,12 +654,8 @@ def build_group_context(
             }
             for child in child_nodes
         ],
-        "functions": [
-            {
-                "code": render_function_block(func, root_client_name),
-            }
-            for func in sorted(group_node.get("functions", []), key=lambda item: item["name"])
-        ],
+        "functions": function_contexts,
+        "has_autotests": any(func_context["autotest_enabled"] for func_context in function_contexts),
     }
 
 
@@ -645,10 +663,17 @@ def render_group_block(
     group_node: dict[str, Any],
     project: dict[str, Any],
     package_name: str,
+    *,
+    autotest_function_ids: set[str] | None = None,
 ) -> str:
     return render_template(
         "group.py.tpl",
-        build_group_context(group_node, project, package_name),
+        build_group_context(
+            group_node,
+            project,
+            package_name,
+            autotest_function_ids=autotest_function_ids,
+        ),
     )
 
 
@@ -663,18 +688,32 @@ def render_group_template(
     group_node: dict[str, Any],
     project: dict[str, Any],
     package_name: str,
+    *,
+    autotest_function_ids: set[str] | None = None,
 ) -> str:
-    return render_group_block(group_node, project, package_name)
+    return render_group_block(
+        group_node,
+        project,
+        package_name,
+        autotest_function_ids=autotest_function_ids,
+    )
 
 
 def render_group_init_template(
     group_node: dict[str, Any],
     project: dict[str, Any],
     package_name: str,
+    *,
+    autotest_function_ids: set[str] | None = None,
 ) -> str:
     return render_template(
         "group_init.py.tpl",
-        build_group_context(group_node, project, package_name),
+        build_group_context(
+            group_node,
+            project,
+            package_name,
+            autotest_function_ids=autotest_function_ids,
+        ),
     )
 
 
@@ -700,11 +739,18 @@ def write_group_package(
     project: dict[str, Any],
     package_name: str,
     endpoints_root: Path,
+    *,
+    autotest_function_ids: set[str] | None = None,
 ) -> None:
     package_dir = module_output_dir_for_group(group_node, endpoints_root)
     if group_node.get("children"):
         package_dir.mkdir(parents=True, exist_ok=True)
-    context = build_group_context(group_node, project, package_name)
+    context = build_group_context(
+        group_node,
+        project,
+        package_name,
+        autotest_function_ids=autotest_function_ids,
+    )
     if group_node.get("children"):
         write_text(
             package_dir / "__init__.py",
@@ -715,7 +761,13 @@ def write_group_package(
         render_template("group.py.tpl", context),
     )
     for child in group_node.get("children", {}).values():
-        write_group_package(child, project, package_name, endpoints_root)
+        write_group_package(
+            child,
+            project,
+            package_name,
+            endpoints_root,
+            autotest_function_ids=autotest_function_ids,
+        )
 
 
 def is_catalog_sort_function(func: dict[str, Any]) -> bool:
