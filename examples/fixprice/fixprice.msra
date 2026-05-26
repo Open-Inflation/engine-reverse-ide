@@ -92,8 +92,8 @@ regex="^[A-Za-z]\\d{3}$"
 [app.defaults.func.headers]
 referrer=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>
 cors_mode=cors
-credentials=include
-headers={Accept="application/json, text/plain, */*"}+<UNSTANDARD_HEADERS.REQUEST>
+credentials=same-origin
+headers={Accept="application/json, text/plain, */*"}#+<UNSTANDARD_HEADERS.REQUEST>
 
 [app.func]
 !include("catalog/tree.msraf")
