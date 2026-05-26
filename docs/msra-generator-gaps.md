@@ -1,11 +1,11 @@
 # Ограничения генератора
 
-Эта страница фиксирует ограничения codegen на примере `examples/example.msra`.
+Эта страница фиксирует ограничения codegen на примере `examples/example/example.msra`.
 Она описывает то, что не отражено в сгенерированном Python-коде.
 
 ## 1. Вложенные `url.params.*` ниже прямого уровня не попадают в генерацию
 
-В `examples/example.msra` есть вложенный параметр:
+В `examples/example/example.msra` есть вложенный параметр:
 
 ```msra
 [app.func.A3A417.url.params.from_global.params.text]
@@ -24,7 +24,7 @@ match=<DOCUMENT.REGEXES.TEXT_REQUEST>
 
 ## 2. `body` учитывается только частично
 
-В `examples/example.msra` у body есть не только `type` и `from`, но и:
+В `examples/example/example.msra` у body есть не только `type` и `from`, но и:
 
 - `charset`
 - `boundary`
@@ -59,7 +59,7 @@ from={"key": <VARIABLES.city_id>, "key3": <INPUT.query>}
 
 ## 3. `app.regexes.*.actions` не генерируются
 
-В `examples/example.msra` regex-правило описано не только через `regex` и `raise`, но и через цепочку действий:
+В `examples/example/example.msra` regex-правило описано не только через `regex` и `raise`, но и через цепочку действий:
 
 ```msra
 [app.regexes.TEXT_REQUEST]
@@ -75,7 +75,7 @@ raise="Текст запроса должен состоять только из
 
 ## 4. `app.func.*.examples` не превращаются в generated tests or fixtures
 
-В `examples/example.msra` у функции есть примеры:
+В `examples/example/example.msra` у функции есть примеры:
 
 ```msra
 [app.func.A3A417.examples.smoke]

@@ -8,7 +8,7 @@
     "msra-lsp": "./bin/msra.js"
   },
   "scripts": {
-    "check": "node ./bin/msra.js check examples/example.msra",
+    "check": "node ./bin/msra.js check examples/example/example.msra",
     "serve": "node ./bin/msra.js serve",
     "test:vscode": "npm test --workspace vscode-extension",
     "test:codegen": "node --test tests/codegen.test.js",

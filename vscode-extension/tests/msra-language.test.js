@@ -96,7 +96,7 @@ function createFuncResultFixture({
 }
 
 test("example document stays valid and keeps the documented path", () => {
-  const examplePath = path.resolve(__dirname, "..", "..", "examples", "example.msra");
+  const examplePath = path.resolve(__dirname, "..", "..", "examples", "example", "example.msra");
   const text = readFileSync(examplePath, "utf8");
   const document = parseDocument(text, examplePath);
   const analysis = analyzeDocument(document);
@@ -2122,7 +2122,7 @@ test("FUNCRESULT rejects @Key selectors below -1", () => {
 
 test("completion is field-aware for groups enums and static values", () => {
   const repoRoot = path.resolve(__dirname, "..", "..");
-  const examplePath = path.join(repoRoot, "examples", "example.msra");
+  const examplePath = path.join(repoRoot, "examples", "example", "example.msra");
   const server = new MsraLanguageServer({
     onRequest() {},
     onNotification() {},

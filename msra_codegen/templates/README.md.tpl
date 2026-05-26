@@ -42,3 +42,11 @@ python -m camoufox fetch
 ```
 
 Для более подробной информации смотрите референсы [документации]({{ readme.docs_url }}).
+
+<div align="center">
+
+### Report
+
+If you have any problems using it / suggestions, do not hesitate to write to the [project's GitHub]({{ readme.issues_url }})!
+
+</div>

@@ -10,6 +10,7 @@ from urllib.parse import quote
 from .codegen_context import abstraction_exports, build_group_context
 from .core_naming import group_public_import_path, root_client_class_name
 from .file_utils import write_text
+from .generator_config import config_section
 from .project_model import top_level_groups
 from .readme_pipeline import build_readme_pipeline_code, build_readme_pipeline_note
 from .template_engine import render_template
@@ -108,6 +109,7 @@ def build_docs_project_context(
     group_tree: dict[str, Any],
 ) -> dict[str, Any]:
     app = project["app"]
+    docs_descriptions = config_section("docs", "descriptions")
     client_class_name = root_client_class_name(project)
     exports = list(dict.fromkeys([client_class_name, *abstraction_exports(project)]))
     top_groups = [
@@ -131,21 +133,26 @@ def build_docs_project_context(
         "root_package": build_module_page_context(
             title=package_name,
             import_path=package_name,
-            description=app.get("description") or f"Generated client package for {project_title}.",
+            description=app.get("description")
+            or str(docs_descriptions.get("root_package", "Generated client package for {project_title}.")).format(
+                project_title=project_title
+            ),
             class_names=exports,
             child_pages=[],
         ),
         "manager_module": build_module_page_context(
             title=f"{package_name}.manager",
             import_path=f"{package_name}.manager",
-            description=f"Generated client manager for {project_title}.",
+            description=str(docs_descriptions.get("manager", "Generated client manager for {project_title}.")).format(
+                project_title=project_title
+            ),
             class_names=[client_class_name],
             child_pages=[],
         ),
         "endpoints_module": build_module_page_context(
             title=f"{package_name}.endpoints",
             import_path=f"{package_name}.endpoints",
-            description="Generated endpoint package.",
+            description=str(docs_descriptions.get("endpoints", "Generated endpoint package.")),
             class_names=[group["class_name"] for group in top_groups],
             child_pages=[group["import_path"] for group in top_groups],
         ),
@@ -173,6 +180,7 @@ def build_readme_context(
     pipeline_script_code: str,
 ) -> dict[str, Any]:
     app = project["app"]
+    readme_config = config_section("readme")
     package_owner = str(app.get("package_owner") or package_name).strip() or package_name
     package_owner_lower = package_owner.lower()
     package_name_slug = package_name.replace("_", "-")
@@ -209,7 +217,7 @@ def build_readme_context(
         "license_badge_url": f"https://img.shields.io/github/license/{package_owner}/{package_name}",
         "license_url": f"{repo_url}/blob/main/LICENSE",
         "socials": socials,
-        "principle_text": "Библиотека полностью повторяет сетевую работу обычного пользователя на сайте.",
+        "principle_text": str(readme_config.get("principle_text", "Библиотека полностью повторяет сетевую работу обычного пользователя на сайте.")),
         "pipeline_script_code": pipeline_script_code,
     }
 
@@ -217,24 +225,27 @@ def build_readme_context(
 def build_readme_social_links(social: Any) -> list[dict[str, Any]]:
     if not isinstance(social, dict):
         return []
-    badges = {
-        "discord": "https://img.shields.io/discord/792572437292253224?label=Discord&labelColor=%232c2f33&color=%237289da",
-        "telegram": "https://img.shields.io/badge/Telegram-24A1DE",
-    }
-    labels = {
-        "discord": "Discord",
-        "telegram": "Telegram",
-    }
+    readme_socials = config_section("readme").get("socials", [])
     links: list[dict[str, Any]] = []
-    for key in ("discord", "telegram"):
+    if not isinstance(readme_socials, list):
+        return links
+    for item in readme_socials:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "").strip()
+        if not key:
+            continue
         url = str(social.get(key) or "").strip()
         if not url:
+            continue
+        badge_url = str(item.get("badge_url", "")).strip()
+        if not badge_url:
             continue
         links.append(
             {
                 "key": key,
-                "label": labels[key],
-                "badge_url": badges[key],
+                "label": str(item.get("label", key.title())),
+                "badge_url": badge_url,
                 "url": url,
             }
         )

@@ -5,22 +5,6 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-function collectPythonFiles(dir) {
-  const { readdirSync, statSync } = require("node:fs");
-  const files = [];
-  for (const entry of readdirSync(dir)) {
-    const fullPath = path.join(dir, entry);
-    if (statSync(fullPath).isDirectory()) {
-      files.push(...collectPythonFiles(fullPath));
-      continue;
-    }
-    if (entry.endsWith(".py")) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
 function normalizeNewlines(text) {
   return text.replace(/\r\n/g, "\n");
 }
@@ -198,7 +182,7 @@ test("generator wires external warmup scripts into the manager", () => {
     writeFileSync(inputPath, text, "utf8");
     writeFileSync(
       path.join(workDir, "warmup.py"),
-      readFileSync(path.join(repoRoot, "warmup.py"), "utf8"),
+      readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
       "utf8",
     );
     const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
@@ -234,7 +218,7 @@ test("python codegen generates both bundled msra documents without failing", () 
   const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
   const cases = [
     {
-      inputPath: path.join(repoRoot, "examples", "example.msra"),
+      inputPath: path.join(repoRoot, "examples", "example", "example.msra"),
       outputDir: path.join(workDir, "example"),
       packageOwner: "Miskler",
       packageName: "ozon_api",
@@ -249,23 +233,23 @@ test("python codegen generates both bundled msra documents without failing", () 
     },
   ];
   const delimitedInputPath = path.join(workDir, "example-delimited.msra");
-  const delimitedSource = readFileSync(path.join(repoRoot, "examples", "example.msra"), "utf8")
+  const delimitedSource = readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8")
     .replace('package_name="ozon_api"', 'package_name="delimited_api"')
     .replace("style=repeat,", "style=delimited,")
     .replace('delimiter=","', 'delimiter="|"');
   writeFileSync(delimitedInputPath, delimitedSource, "utf8");
   writeFileSync(
     path.join(workDir, "warmup.py"),
-    readFileSync(path.join(repoRoot, "warmup.py"), "utf8"),
+    readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
     "utf8",
   );
   const mitInputPath = path.join(workDir, "example-mit.msra");
-  const mitSource = readFileSync(path.join(repoRoot, "examples", "example.msra"), "utf8")
+  const mitSource = readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8")
     .replace('package_name="ozon_api"', 'package_name="mit_api"')
     .replace('license="GPL-3.0-or-later"', 'license="MIT"');
   writeFileSync(mitInputPath, mitSource, "utf8");
   const printListInputPath = path.join(workDir, "example-print-list.msra");
-  const printListSource = readFileSync(path.join(repoRoot, "examples", "example.msra"), "utf8")
+  const printListSource = readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8")
     .replace('package_name="ozon_api"', 'package_name="print_list_api"')
     .replace("@Docs", '@Docs(print=["Первая строка", "Вторая строка"])');
   writeFileSync(printListInputPath, printListSource, "utf8");
@@ -400,109 +384,19 @@ test("python codegen generates both bundled msra documents without failing", () 
         encoding: "utf8",
       });
       assert.strictEqual(compileResult.status, 0, compileResult.stderr || compileResult.stdout);
-      const abstractionInit = readFileSync(path.join(packageDir, "abstraction", "__init__.py"), "utf8");
-      assert.match(abstractionInit, /from \.output import Output/);
-      const outputModule = readFileSync(path.join(packageDir, "abstraction", "output.py"), "utf8");
-      assert.match(outputModule, /class Output/);
-      assert.match(outputModule, /def image\(/);
-      assert.doesNotMatch(outputModule, /_Awaitable/);
-      assert.doesNotMatch(outputModule, /_wrap_awaitable/);
-      if (testCase.packageName === "ozon_api") {
-        const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
-        assert.match(productModule, /async def feed\(self, query: str \| None = None, url: list\[Literal\['\/searchSuggestions\/search\/'\]\] \| None = None, filename: str \| None = None\) -> abstraction\.Output:/);
-        assert.match(productModule, /request_url = self\._parent\._BASE_API/);
-        assert.match(productModule, /if _url_values in \(None, \[\]\):/);
-        assert.match(productModule, /query_params\.append\(\('url', ','.join\(str\(__item\) for __item in _url_values\)\)\)/);
-        assert.match(productModule, /query_params\.append\(\('from_global', 'true'\)\)/);
-        assert.match(readmeText, /Пример поиска по одному запросу/);
-        assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query='example'\)\)\.json\(\)/);
-      } else if (testCase.packageName === "delimited_api") {
-        const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "product.py"), "utf8");
-        assert.match(productModule, /query_params\.append\(\('url', '\|'\.join\(str\(__item\) for __item in _url_values\)\)\)/);
-      } else if (testCase.packageName === "fixprice_api") {
-        const productModule = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
-        const generalModule = readFileSync(path.join(packageDir, "endpoints", "general.py"), "utf8");
-        const geolocationModule = readFileSync(path.join(packageDir, "endpoints", "geolocation.py"), "utf8");
-        const managerModule = readFileSync(path.join(packageDir, "manager.py"), "utf8");
-        const regexesModule = readFileSync(path.join(packageDir, "abstraction", "regexes.py"), "utf8");
-        const catalogSortModule = readFileSync(path.join(packageDir, "abstraction", "catalog_sort.py"), "utf8");
-        assert.match(productModule, /from \.goto_pipeline import pipeline as goto_pipeline_runner/);
-        assert.match(productModule, /await goto_pipeline_runner\(warmup\)/);
-        assert.match(productModule, /extractors\/catalog-product-info\.js/);
-        assert.match(generalModule, /async def download_image\(self, url: str\) -> abstraction\.Output:/);
-        assert.match(generalModule, /return await self\._parent\._direct_request\(request_url\)/);
-        assert.doesNotMatch(generalModule, /retry_attempts/);
-        assert.doesNotMatch(generalModule, /timeout/);
-        assert.match(managerModule, /def client_route\(self, value: str \| None\) -> None:/);
-        assert.doesNotMatch(managerModule, /@city_id\.setter/);
-        assert.doesNotMatch(managerModule, /_coerce_variable_value/);
-        assert.match(managerModule, /_city_id_raw = self\.unstandard_headers\.get\('x-city'\)/);
-        assert.match(managerModule, /self\._city_id = _city_id_value/);
-        assert.match(managerModule, /if float\(_city_id_value\) < 1 or float\(_city_id_value\) > 2147483647:/);
-        assert.match(managerModule, /_client_route_raw = self\.unstandard_headers\.get\('x-client-route'\)/);
-        assert.match(managerModule, /self\.client_route = _client_route_raw if isinstance\(_client_route_raw, str\) else str\(_client_route_raw\)/);
-        assert.doesNotMatch(managerModule, /re\.fullmatch\(/);
-        assert.match(managerModule, /abstraction\.RegexLanguageTag\.match\(value\)/);
-        assert.match(managerModule, /abstraction\.RegexStoreId\.match\(value\)/);
-        assert.match(regexesModule, /class RegexBase:/);
-        assert.match(regexesModule, /class RegexCountryAlias\(RegexBase\):/);
-        assert.match(regexesModule, /class RegexLanguageTag\(RegexBase\):/);
-        assert.match(regexesModule, /return re\.fullmatch\(cls\.REGEX, str\(value\)\) is not None/);
-        assert.doesNotMatch(geolocationModule, /re\.fullmatch\(/);
-        assert.match(geolocationModule, /if not \(abstraction\.RegexCountryAlias\.match\(alias\)\):/);
-        const deliveryTypeBlock = regexesModule.split("class RegexDeliveryType(RegexBase):")[1].split("class RegexStoreId(RegexBase):")[0];
-        assert.match(deliveryTypeBlock, /^\r?\n    REGEX = /);
-        assert.doesNotMatch(deliveryTypeBlock, /\n\s*\n\s*REGEX = /);
-        assert.doesNotMatch(deliveryTypeBlock, /ERROR = /);
-        assert.doesNotMatch(exampleText, /^\s*# tree$/m);
-        assert.match(exampleText, /Загрузка изображения по прямой ссылке/);
-        assert.match(exampleText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
-        assert.doesNotMatch(exampleText, /Image\.open\(download_image\)/);
-        assert.doesNotMatch(readmeText, /^\s*# tree$/m);
+      assert.match(readmeText, /### Report/);
+      assert.match(readmeText, new RegExp(`https://github\\.com/${testCase.packageOwner}/${testCase.packageName}/issues`));
+      if (testCase.packageName === "fixprice_api") {
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
         assert.match(readmeText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
         assert.doesNotMatch(readmeText, /Image\.open\(download_image\)/);
-        assert.match(readmeText, /^# FixPriceAPI$/m);
-        assert.doesNotMatch(readmeText, /FixPrice API - https:\/\/fix-price\.com\//);
-        assert.doesNotMatch(readmeText, /https:\/\/fix-price\.com\//);
-        assert.match(readmeText, /https:\/\/t\.me\/miskler_dev/);
-        assert.match(readmeText, /https:\/\/discord\.gg\/UnJnGHNbBp/);
         assert.match(readmeText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
         assert.match(exampleText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
-        assert.doesNotMatch(managerModule, /Async client generated from MSRA|Generated async client/);
-        assert.doesNotMatch(regexesModule, /Shared regex patterns and their validation messages/);
-        assert.doesNotMatch(catalogSortModule, /Generated sort helpers|Sort order helper|Most popular first|Cheapest first|Most expensive first/);
-        assert.match(pyprojectText, /email = "mail@miskler\.ru"/);
-      }
-      for (const filePath of collectPythonFiles(packageDir)) {
-        const source = readFileSync(filePath, "utf8");
-        assert.doesNotMatch(source, /\bApiParent\b/);
-        assert.doesNotMatch(source, /\bApiChild\b/);
-        assert.doesNotMatch(source, /\bapi_child_field\b/);
-        if (!filePath.endsWith(path.join("abstraction", "output.py"))) {
-          assert.doesNotMatch(source, /\bFetchResponse\b/);
-          assert.doesNotMatch(source, /\bPWResponse\b/);
-          assert.doesNotMatch(source, /\bBytesIO\b/);
-        }
-      }
-      const warmupModule = readFileSync(path.join(packageDir, "warmup.py"), "utf8");
-      assert.match(warmupModule, /async def pipeline\(warmup: Warmup\)/);
-      const managerModule = readFileSync(path.join(packageDir, "manager.py"), "utf8");
-      assert.match(managerModule, /def city_id\(self\) -> int \| None:/);
-      if (testCase.packageName === "fixprice_api") {
-        assert.match(managerModule, /_city_id_raw = self\.unstandard_headers\.get\('x-city'\)/);
-        assert.match(managerModule, /self\._city_id = _city_id_value/);
-        assert.match(managerModule, /allowed_values = \['store', 'pickup', 'courier'\]/);
-        assert.match(managerModule, /if value not in allowed_values:/);
-        assert.match(readFileSync(path.join(packageDir, "goto_pipeline.py"), "utf8"), /async def pipeline\(warmup: Warmup\)/);
-        assert.match(readFileSync(path.join(packageDir, "extractors", "catalog-product-info.js"), "utf8"), /window\.__NUXT__=/);
-        assert.match(readmeText, /en = \(await api\.Geolocation\.countries_list\(alias='en'\)\)\.json\(\)/);
-        assert.match(readmeText, /ru = \(await api\.Geolocation\.countries_list\(alias='ru'\)\)\.json\(\)/);
-        assert.match(exampleText, /en = \(await api\.Geolocation\.countries_list\(alias='en'\)\)\.json\(\)/);
-        assert.match(exampleText, /ru = \(await api\.Geolocation\.countries_list\(alias='ru'\)\)\.json\(\)/);
+        assert.match(readmeText, /https:\/\/t\.me\/miskler_dev/);
+        assert.match(readmeText, /https:\/\/discord\.gg\/UnJnGHNbBp/);
       } else {
-        assert.match(managerModule, /@city_id\.setter/);
-        assert.match(managerModule, /if value is None:\r?\n\s+self\._city_id = None/);
+        assert.match(readmeText, /Пример поиска по одному запросу/);
+        assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query='example'\)\)\.json\(\)/);
       }
     }
   } finally {

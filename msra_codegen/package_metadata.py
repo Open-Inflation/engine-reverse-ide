@@ -13,20 +13,8 @@ from jinja2 import TemplateNotFound
 
 from .core_naming import root_client_class_name
 from .file_utils import write_text
+from .generator_config import config_section
 from .template_engine import render_template
-
-
-PYTHON_RELEASES_API_URL = "https://www.python.org/api/v2/downloads/release/"
-PYTHON_RELEASES_API_TIMEOUT_SECONDS = 15.0
-BASE_RUNTIME_DEPENDENCIES = [
-    "camoufox[geoip]",
-    "human_requests",
-    "Pillow",
-]
-DIRECT_RUNTIME_DEPENDENCIES = [
-    "aiohttp",
-    "aiohttp-retry",
-]
 
 
 def render_pyproject(project: dict[str, Any], package_name: str) -> str:
@@ -35,12 +23,13 @@ def render_pyproject(project: dict[str, Any], package_name: str) -> str:
     min_required_python = str(project["app"].get("min_required_python", "3.10") or "3.10").strip()
     description = str(project["app"].get("description", "") or "").strip()
     runtime_dependencies = collect_runtime_dependencies(project)
+    licenses_config = config_section("licenses")
     return render_template(
         "pyproject.toml.tpl",
         {
             "authors_block": render_authors_block(authors),
             "description": json.dumps(description, ensure_ascii=False),
-            "license": project["app"].get("license", "MIT"),
+            "license": project["app"].get("license", licenses_config.get("default", "MIT")),
             "keywords_block": render_keywords_block(project["app"].get("keywords", [])),
             "classifiers_block": render_classifiers_block(min_required_python),
             "requires_python": f">={min_required_python}",
@@ -82,8 +71,12 @@ def latest_supported_python_minor() -> int:
 
 
 def load_python_release_families() -> list[tuple[int, int]]:
+    python_config = config_section("python")
     try:
-        with urlopen(PYTHON_RELEASES_API_URL, timeout=PYTHON_RELEASES_API_TIMEOUT_SECONDS) as response:
+        with urlopen(
+            str(python_config.get("releases_api_url", "https://www.python.org/api/v2/downloads/release/")),
+            timeout=float(python_config.get("releases_api_timeout_seconds", 15.0)),
+        ) as response:
             data = json.load(response)
     except OSError as exc:  # pragma: no cover - depends on network availability
         raise RuntimeError(
@@ -121,6 +114,7 @@ def extract_python_release_versions(data: Any) -> list[Version]:
 
 
 def render_classifiers_block(min_required_python: str) -> str:
+    classifiers_config = config_section("classifiers")
     match = re.fullmatch(r"(\d+)\.(\d+)", min_required_python.strip())
     if not match:
         version_labels = [f"Programming Language :: Python :: {min_required_python.strip()}"]
@@ -138,13 +132,7 @@ def render_classifiers_block(min_required_python: str) -> str:
             version_labels.append(f"Programming Language :: Python :: {major}.{start_minor}")
     version_labels.extend(
         [
-            "Operating System :: Microsoft :: Windows",
-            "Operating System :: POSIX :: Linux",
-            "Intended Audience :: Developers",
-            "Intended Audience :: Information Technology",
-            "Topic :: Software Development :: Libraries :: Python Modules",
-            "Topic :: Internet",
-            "Topic :: Utilities",
+            *[str(item) for item in classifiers_config.get("static", []) if str(item).strip()],
         ]
     )
     return render_toml_string_list("classifiers", version_labels)
@@ -166,9 +154,12 @@ def render_toml_string_list(key: str, values: Any) -> str:
 
 
 def collect_runtime_dependencies(project: dict[str, Any]) -> list[str]:
-    dependencies = list(BASE_RUNTIME_DEPENDENCIES)
+    runtime_config = config_section("runtime_dependencies")
+    dependencies = [str(item).strip() for item in runtime_config.get("base", []) if str(item).strip()]
     if any(func.get("transport") == "direct" for func in project.get("functions", [])):
-        dependencies.extend(DIRECT_RUNTIME_DEPENDENCIES)
+        dependencies.extend(
+            str(item).strip() for item in runtime_config.get("direct", []) if str(item).strip()
+        )
     return dependencies
 
 
@@ -177,7 +168,11 @@ def render_requirements_txt(project: dict[str, Any]) -> str:
 
 
 def write_root_license(output_dir: Path, project: dict[str, Any]) -> None:
-    license_name = resolve_license_template_name(str(project["app"].get("license", "MIT") or "").strip() or "MIT")
+    licenses_config = config_section("licenses")
+    license_name = resolve_license_template_name(
+        str(project["app"].get("license", licenses_config.get("default", "MIT")) or "").strip()
+        or str(licenses_config.get("default", "MIT"))
+    )
     authors = project["app"].get("authors", [])
     license_text = render_license_text(license_name, authors)
     write_text(output_dir / "LICENSE", license_text)
@@ -185,8 +180,9 @@ def write_root_license(output_dir: Path, project: dict[str, Any]) -> None:
 
 def resolve_license_template_name(license_name: str) -> str:
     normalized = license_name.strip()
-    if normalized in {"GPL-3.0", "GPL-3.0+"}:
-        return "GPL-3.0-or-later"
+    aliases = config_section("licenses").get("aliases", {})
+    if isinstance(aliases, dict) and normalized in aliases:
+        return str(aliases[normalized]).strip()
     return normalized
 
 

@@ -1,0 +1,47 @@
+[python]
+releases_api_url = "https://www.python.org/api/v2/downloads/release/"
+releases_api_timeout_seconds = 15.0
+
+[runtime_dependencies]
+base = [
+    "camoufox[geoip]",
+    "human_requests",
+    "Pillow",
+]
+direct = [
+    "aiohttp",
+    "aiohttp-retry",
+]
+
+[classifiers]
+static = [
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet",
+    "Topic :: Utilities",
+]
+
+[licenses]
+default = "MIT"
+aliases = { "GPL-3.0" = "GPL-3.0-or-later", "GPL-3.0+" = "GPL-3.0-or-later" }
+
+[readme]
+principle_text = "Библиотека полностью повторяет сетевую работу обычного пользователя на сайте."
+
+[[readme.socials]]
+key = "discord"
+label = "Discord"
+badge_url = "https://img.shields.io/discord/792572437292253224?label=Discord&labelColor=%232c2f33&color=%237289da"
+
+[[readme.socials]]
+key = "telegram"
+label = "Telegram"
+badge_url = "https://img.shields.io/badge/Telegram-24A1DE"
+
+[docs.descriptions]
+root_package = "Generated client package for {project_title}."
+manager = "Generated client manager for {project_title}."
+endpoints = "Generated endpoint package."
