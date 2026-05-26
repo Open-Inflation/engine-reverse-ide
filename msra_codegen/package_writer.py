@@ -83,10 +83,6 @@ def generate_project(
         render_template("abstraction/__init__.py.tpl", abstraction_context),
     )
     write_text(
-        abstraction_root / "output.py",
-        render_template("abstraction/output.py.tpl", {}),
-    )
-    write_text(
         abstraction_root / "regexes.py",
         render_template("abstraction/regexes.py.tpl", abstraction_context),
     )

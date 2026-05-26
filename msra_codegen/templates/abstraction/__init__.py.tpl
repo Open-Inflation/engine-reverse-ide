@@ -1,4 +1,4 @@
-from .output import Output
+from human_requests.abstraction import Output
 {% if has_regexes %}
 {% for regex in regexes %}
 from .regexes import {{ regex.class_name }}

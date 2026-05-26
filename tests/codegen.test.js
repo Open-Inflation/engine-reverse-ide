@@ -121,6 +121,7 @@ function buildGeneratedPackageProbeScript() {
     "make_module(",
     "    \"human_requests.abstraction\",",
     "    HttpMethod=types.SimpleNamespace(GET=\"GET\", POST=\"POST\", PUT=\"PUT\", PATCH=\"PATCH\", DELETE=\"DELETE\", HEAD=\"HEAD\", OPTIONS=\"OPTIONS\"),",
+    "    Output=DummyObject,",
     "    Proxy=DummyProxy,",
     "    FetchResponse=DummyObject,",
     ")",
@@ -678,7 +679,7 @@ test("python codegen generates both bundled msra documents without failing", () 
         const jsonDebugScript = [
           "import sys",
           "sys.path.insert(0, sys.argv[1])",
-          "from fixprice_api.abstraction.output import Output",
+          "from human_requests.abstraction import Output",
           "try:",
           "    Output.from_raw(b'{bad json').json()",
           "except Exception:",
