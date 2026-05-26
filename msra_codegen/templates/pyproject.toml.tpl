@@ -13,7 +13,6 @@ license = "{{ license }}"
 {{ keywords_block }}
 {{ classifiers_block }}
 {{ dependencies_block }}
-{{ optional_dependencies_block }}
 
 [tool.setuptools]
 include-package-data = true

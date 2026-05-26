@@ -14,6 +14,13 @@ direct = [
     "aiohttp-retry",
 ]
 
+[development_dependencies]
+base = [
+    "pytest",
+    "pytest-anyio",
+    "pytest-jsonschema-snapshot",
+]
+
 [classifiers]
 static = [
     "Operating System :: Microsoft :: Windows",
@@ -41,3 +48,39 @@ badge_url = "https://img.shields.io/discord/792572437292253224?label=Discord&lab
 key = "telegram"
 label = "Telegram"
 badge_url = "https://img.shields.io/badge/Telegram-24A1DE"
+
+[github.workflows.tests]
+name = "tests"
+schedule_cron = "17 3 * * *"
+runner = ["self-hosted"]
+python_version = "3.12"
+checkout_action = "actions/checkout@v4"
+setup_python_action = "actions/setup-python@v5"
+install_commands = [
+    "python -m venv venv",
+    "venv/bin/python -m pip install -U pip",
+    "venv/bin/python -m pip install -r requirements-dev.txt",
+]
+run_commands = [
+    "set -o pipefail",
+    "venv/bin/python -m pytest --jsss-ci-cd --save-original --tb=short 2>&1 | tee error.log",
+]
+report_playwright_failure_action = "Miskler/human-requests-bot@v11"
+report_schema_action = "Miskler/pytest-jsonschema-snapshot-bot@v14"
+github_token_secret = "GITHUB_TOKEN"
+log_path = "error.log"
+screenshot_path = "screenshot.png"
+
+[github.workflows.publish]
+name = "publish"
+python_version = "3.12"
+checkout_action = "actions/checkout@v4"
+setup_python_action = "actions/setup-python@v5"
+setup_python_cache = "pip"
+upload_pages_action = "actions/upload-pages-artifact@v3"
+deploy_pages_action = "actions/deploy-pages@v4"
+pypi_action = "pypa/gh-action-pypi-publish@release/v1"
+target_options = ["docs", "package", "all"]
+pages_environment_name = "github-pages"
+pypi_environment_name = "pypi"
+github_token_secret = "GITHUB_TOKEN"

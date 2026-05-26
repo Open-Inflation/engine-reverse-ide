@@ -73,6 +73,11 @@ python -m pip install -r .\msra_codegen\requirements.txt
 The generator writes:
 
 - `pyproject.toml`
+- `requirements.txt`
+- `requirements-dev.txt`
+- `Makefile`
+- `.github/workflows/tests.yml`
+- `.github/workflows/publish.yml`
 - `<package-name>/__init__.py`
 - `<package-name>/manager.py`
 - `<package-name>/abstraction/__init__.py`

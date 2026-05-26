@@ -457,6 +457,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       const quickStartText = readFileSync(path.join(testCase.outputDir, "docs", "source", "quick_start.rst"), "utf8");
       const pyprojectText = readFileSync(path.join(testCase.outputDir, "pyproject.toml"), "utf8");
       const requirementsText = readFileSync(path.join(testCase.outputDir, "requirements.txt"), "utf8");
+      const requirementsDevText = readFileSync(path.join(testCase.outputDir, "requirements-dev.txt"), "utf8");
       const licenseText = readFileSync(path.join(testCase.outputDir, "LICENSE"), "utf8");
       const packageDir = path.join(testCase.outputDir, testCase.packageName);
       const testsDir = path.join(testCase.outputDir, "tests");
@@ -506,16 +507,22 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.ok(pyprojectText.includes(`license = "${testCase.license}"`));
       assert.match(pyprojectText, /^keywords = \[/m);
       assert.match(pyprojectText, /^classifiers = \[/m);
-      assert.match(
-        pyprojectText,
-        /\[project\.optional-dependencies\][\s\S]*tests = \[\r?\n\s*"pytest",\r?\n\s*"pytest-anyio",\r?\n\s*"pytest-jsonschema-snapshot"\r?\n\]/,
-      );
       assert.match(pyprojectText, /Programming Language :: Python :: 3/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3\.10/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3\.13/);
       assert.doesNotMatch(pyprojectText, /Programming Language :: Python :: 3\.14/);
       assert.match(pyprojectText, /Operating System :: Microsoft :: Windows/);
       assert.match(pyprojectText, /Topic :: Utilities/);
+      assert.strictEqual(
+        normalizeNewlines(requirementsDevText).trimEnd(),
+        [
+          "-r requirements.txt",
+          "-r docs/requirements.txt",
+          "pytest",
+          "pytest-anyio",
+          "pytest-jsonschema-snapshot",
+        ].join("\n"),
+      );
       assert.ok(existsSync(path.join(testsDir, "__snapshots__")), "expected tests/__snapshots__ to be generated");
       assert.match(conftestText, /def anyio_backend\(\):/);
       assert.match(conftestText, /async def api\(\):/);
@@ -533,6 +540,29 @@ test("python codegen generates both bundled msra documents without failing", () 
         },
       );
       assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
+      const packageNameSlug = testCase.packageName.replace(/_/g, "-");
+      const makefileText = readFileSync(path.join(testCase.outputDir, "Makefile"), "utf8");
+      const testsWorkflowText = readFileSync(
+        path.join(testCase.outputDir, ".github", "workflows", "tests.yml"),
+        "utf8",
+      );
+      const publishWorkflowText = readFileSync(
+        path.join(testCase.outputDir, ".github", "workflows", "publish.yml"),
+        "utf8",
+      );
+      assert.match(makefileText, /pip install -r requirements-dev\.txt/);
+      assert.match(makefileText, new RegExp(`pytest --cov=${testCase.packageName}`));
+      assert.match(makefileText, new RegExp(`python -m mypy ${testCase.packageName}`));
+      assert.match(testsWorkflowText, /name: tests/);
+      assert.match(testsWorkflowText, /uses: actions\/checkout@v4/);
+      assert.match(testsWorkflowText, /pip install -r requirements-dev\.txt/);
+      assert.match(testsWorkflowText, /uses: Miskler\/human-requests-bot@v11/);
+      assert.match(testsWorkflowText, /uses: Miskler\/pytest-jsonschema-snapshot-bot@v14/);
+      assert.match(publishWorkflowText, /uses: \.\/\.github\/workflows\/tests\.yml/);
+      assert.match(publishWorkflowText, /uses: actions\/upload-pages-artifact@v3/);
+      assert.match(publishWorkflowText, /uses: actions\/deploy-pages@v4/);
+      assert.match(publishWorkflowText, /uses: pypa\/gh-action-pypi-publish@release\/v1/);
+      assert.match(publishWorkflowText, new RegExp(`https://pypi\\.org/project/${packageNameSlug}/`));
       if (testCase.packageName === "fixprice_api") {
         const docsBuildDir = buildSphinxTextDocs(testCase.outputDir, repoRoot);
         const managerDocsText = readFileSync(

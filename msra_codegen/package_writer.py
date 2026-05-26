@@ -14,9 +14,10 @@ from .codegen_context import (
     render_manager_template,
     write_group_package,
 )
+from .github_workflows import generate_github_workflows_project
 from .core_naming import normalize_script_path
 from .file_utils import write_text
-from .package_metadata import render_pyproject, render_requirements_txt, write_root_license
+from .package_metadata import render_pyproject, render_requirements_dev_txt, render_requirements_txt, write_root_license
 from .project_model import build_group_tree, top_level_groups
 from .tests_generator import build_tests_project_context, generate_tests_project
 from .template_engine import render_template
@@ -73,6 +74,10 @@ def generate_project(
         output_dir / "requirements.txt",
         render_requirements_txt(project),
     )
+    write_text(
+        output_dir / "requirements-dev.txt",
+        render_requirements_dev_txt(project),
+    )
     write_text(package_root / "__init__.py", render_init(project, package_name))
     stale_abstraction_file = package_root / "abstraction.py"
     if stale_abstraction_file.exists():
@@ -122,6 +127,7 @@ def generate_project(
     if legacy_license_dir.exists():
         shutil.rmtree(legacy_license_dir)
     write_root_license(output_dir, project)
+    generate_github_workflows_project(project, output_dir, package_name)
 
     from .docs_generator import generate_docs_project
 

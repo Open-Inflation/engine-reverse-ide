@@ -34,15 +34,6 @@ def render_pyproject(project: dict[str, Any], package_name: str) -> str:
             "classifiers_block": render_classifiers_block(min_required_python),
             "requires_python": f">={min_required_python}",
             "dependencies_block": render_toml_string_list("dependencies", runtime_dependencies),
-            "optional_dependencies_block": render_optional_dependencies_block(
-                {
-                    "tests": [
-                        "pytest",
-                        "pytest-anyio",
-                        "pytest-jsonschema-snapshot",
-                    ]
-                }
-            ),
             "package_name": package_name,
             "autotest_start_class": f"{package_name}.{client_class_name}",
         },
@@ -162,17 +153,6 @@ def render_toml_string_list(key: str, values: Any) -> str:
     return f"{key} = [\n    " + ",\n    ".join(items) + "\n]"
 
 
-def render_optional_dependencies_block(optional_dependencies: dict[str, list[str]]) -> str:
-    lines = []
-    for key, values in optional_dependencies.items():
-        rendered_values = render_toml_string_list(key, values)
-        if rendered_values:
-            lines.append(rendered_values)
-    if not lines:
-        return ""
-    return "[project.optional-dependencies]\n" + "\n".join(lines)
-
-
 def collect_runtime_dependencies(project: dict[str, Any]) -> list[str]:
     runtime_config = config_section("runtime_dependencies")
     dependencies = [str(item).strip() for item in runtime_config.get("base", []) if str(item).strip()]
@@ -183,8 +163,22 @@ def collect_runtime_dependencies(project: dict[str, Any]) -> list[str]:
     return dependencies
 
 
+def collect_dev_dependencies() -> list[str]:
+    dev_config = config_section("development_dependencies")
+    return [str(item).strip() for item in dev_config.get("base", []) if str(item).strip()]
+
+
 def render_requirements_txt(project: dict[str, Any]) -> str:
     return "\n".join(collect_runtime_dependencies(project)) + "\n"
+
+
+def render_requirements_dev_txt(project: dict[str, Any]) -> str:
+    lines = [
+        "-r requirements.txt",
+        "-r docs/requirements.txt",
+        *collect_dev_dependencies(),
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def write_root_license(output_dir: Path, project: dict[str, Any]) -> None:
