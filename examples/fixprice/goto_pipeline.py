@@ -1,4 +1,4 @@
-from . import Warmup
+from human_requests.abstraction import Warmup
 
 
 async def pipeline(warmup: Warmup):

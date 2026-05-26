@@ -3,7 +3,7 @@ from human_requests.network_analyzer.anomaly_sniffer import (
 )
 from human_requests import HumanBrowser, HumanContext, HumanPage
 
-from . import Warmup
+from human_requests.abstraction import Warmup
 
 
 async def pipeline(warmup: Warmup):
