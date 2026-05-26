@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "{{ package_name }}"
 dynamic = ["version"]
-description = "Generated async Python client from MSRA"
+description = {{ description }}
 readme = "README.md"
 requires-python = "{{ requires_python }}"
 license = "{{ license }}"

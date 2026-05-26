@@ -181,10 +181,12 @@ def build_readme_context(
     workflow_url = f"{repo_url}/actions/workflows/tests.yml"
     workflow_runs_url = f"https://api.github.com/repos/{package_owner}/{package_name}/actions/workflows/tests.yml/runs?per_page=1&status=completed"
     display_title = str(app.get("name") or package_name).strip() or package_name
+    description = str(app.get("description") or "").strip()
     socials = build_readme_social_links(app.get("social"))
     return {
         "title": display_title,
         "project_line": display_title,
+        "description": description,
         "package_owner": package_owner,
         "package_owner_lower": package_owner_lower,
         "package_name": package_name,

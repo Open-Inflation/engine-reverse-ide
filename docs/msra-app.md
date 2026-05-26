@@ -9,7 +9,7 @@
 | `package_owner` | GitHub owner или organization | Используется для ссылок и бейджей в `README.md`, включая GitHub repo URL, GitHub Pages docs URL и GitHub Actions badges. Значение должно быть статическим и соответствовать имени owner/organization на GitHub. |
 | `social` | Ссылки на соцсети | Inline table со статическими ссылками для README-бейджей, например `social={telegram="https://t.me/...", discord="https://discord.gg/..."}`. |
 | `authors` | Список авторов | Попадает в package metadata. Каждый элемент содержит `name` и `email`. |
-| `description` | Краткое описание проекта | Используется в документации и в метаданных сгенерированного пакета. |
+| `description` | Краткое описание проекта | Используется в документации, в README и в метаданных сгенерированного пакета. |
 | `license` | Идентификатор лицензии | Попадает в package metadata и рендерится из локального шаблона в `msra_codegen/templates/licenses/` в корневой `LICENSE` сгенерированного проекта. |
 | `keywords` | Список ключевых слов | Попадает в `project.keywords` в `pyproject.toml` и помогает классифицировать пакет на PyPI. |
 | `min_required_python` | Минимально поддерживаемая версия Python | Попадает в `requires-python` и используется для генерации Python version classifiers в `pyproject.toml`. Верхняя граница classifiers определяется по официальному `python.org/api/v2/downloads/release/`: генератор берёт предпоследний стабильный `3.x` family и включает его полностью. |
@@ -45,6 +45,7 @@
 - `package_name` задаёт имя generated Python-пакета; generator больше не пытается выводить его из `name`.
 - `package_owner` задаёт GitHub owner/organization, из которого собираются ссылки и бейджи в generated `README.md`.
 - `social` задаёт внешние ссылки для README-бейджей, сейчас поддерживаются ключи `telegram` и `discord`.
+- `description` попадает в `pyproject.toml` и выводится отдельной строкой в generated `README.md`, если оно не пустое.
 - `license` используется и для `pyproject.toml`, и для корневого `LICENSE` в сгенерированном проекте; текст лицензии берётся только из локального шаблона в `msra_codegen/templates/licenses/`.
 - `keywords` попадает в `project.keywords` без дополнительной трансформации.
 - `min_required_python` задаёт нижнюю границу `requires-python`; generator также расширяет его в Python version classifiers, поднимая верхнюю границу по официальному `python.org/api/v2/downloads/release/` и беря предпоследний стабильный `3.x` family как включительный предел.

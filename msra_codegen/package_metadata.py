@@ -24,10 +24,12 @@ def render_pyproject(project: dict[str, Any], package_name: str) -> str:
     client_class_name = root_client_class_name(project)
     authors = project["app"].get("authors", [])
     min_required_python = str(project["app"].get("min_required_python", "3.10") or "3.10").strip()
+    description = str(project["app"].get("description", "") or "").strip()
     return render_template(
         "pyproject.toml.tpl",
         {
             "authors_block": render_authors_block(authors),
+            "description": json.dumps(description, ensure_ascii=False),
             "license": project["app"].get("license", "MIT"),
             "keywords_block": render_keywords_block(project["app"].get("keywords", [])),
             "classifiers_block": render_classifiers_block(min_required_python),

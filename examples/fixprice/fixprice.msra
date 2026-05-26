@@ -6,7 +6,7 @@ name="FixPriceAPI"
 package_name="fixprice_api"
 package_owner="Open-Inflation"
 social={telegram="https://t.me/miskler_dev", discord="https://discord.gg/UnJnGHNbBp"}
-description=""
+description="Аснинхронный неофициальный API клиент для сайта fix-price.com"
 version="0.2.4.1"
 authors=[
     {name="Miskler", email="mail@miskler.ru"},

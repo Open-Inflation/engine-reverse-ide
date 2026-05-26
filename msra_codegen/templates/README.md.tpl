@@ -12,6 +12,10 @@
 [![{{ social.label }}]({{ social.badge_url }})]({{ social.url }})
 {% endfor %}
 
+{% if readme.description %}
+{{ readme.description }}
+{% endif %}
+
 **[⭐ Star us on GitHub]({{ readme.repo_url }})** | **[📚 Read the Docs]({{ readme.docs_url }})** | **[🐛 Report Bug]({{ readme.issues_url }})**
 
 ### Принцип работы

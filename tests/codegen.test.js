@@ -314,6 +314,13 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(readmeText, /# Usage/);
       assert.doesNotMatch(readmeText, /## Автотесты API \(pytest \+ snapshots\)/);
       assert.match(readmeText, /### Принцип работы/);
+      if (testCase.packageName === "fixprice_api") {
+        assert.match(readmeText, /^Аснинхронный неофициальный API клиент для сайта fix-price\.com$/m);
+        assert.match(pyprojectText, /^description = "Аснинхронный неофициальный API клиент для сайта fix-price\.com"$/m);
+      } else {
+        assert.match(readmeText, /Ozon API integration for catalog browsing and cart flows/);
+        assert.match(pyprojectText, /^description = "Ozon API integration for catalog browsing and cart flows"$/m);
+      }
       assert.match(readmeText, /```py[\s\S]*async def main\(\):/);
       assert.doesNotMatch(readmeText, /examples\/pipeline\.py/);
       assert.ok(readmePipelineCode, "expected README to contain a python code block");
