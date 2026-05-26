@@ -11,5 +11,4 @@
    :maxdepth: 4
    :caption: References
 
-   {{ package_name }}
    api

@@ -483,6 +483,10 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.ok(quickStartPipelineCode, "expected quick_start.rst to contain a python code block");
       assert.strictEqual(normalizeNewlines(readmePipelineCode).trimEnd(), normalizeNewlines(exampleText).trimEnd());
       assert.strictEqual(normalizeNewlines(quickStartPipelineCode).trimEnd(), normalizeNewlines(exampleText).trimEnd());
+      if (testCase.packageName === "fixprice_api") {
+        assert.match(quickStartText, /python -m camoufox fetch/);
+      }
+      assert.match(quickStartText, /The public API is documented in :doc:`api`\./);
       assert.match(readmeText, new RegExp(`https://github\\.com/${testCase.packageOwner}/${testCase.packageName}`));
       assert.match(readmeText, new RegExp(`https://${testCase.packageOwner.toLowerCase()}\\.github\\.io/${testCase.packageName}/quick_start`));
       assert.match(readmeText, new RegExp(`https://pypi\\.org/project/${testCase.packageName.replaceAll("_", "-")}/`));

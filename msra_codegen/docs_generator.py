@@ -74,10 +74,6 @@ def generate_docs_project(
         render_template("docs/source/api.rst.tpl", context),
     )
     write_text(
-        source_root / f"{package_name}.rst",
-        render_template("docs/source/module.rst.tpl", context["root_package"]),
-    )
-    write_text(
         api_root / f"{package_name}.manager.rst",
         render_template("docs/source/module.rst.tpl", context["manager_module"]),
     )
@@ -134,13 +130,6 @@ def build_docs_project_context(
         "client_class_name": client_class_name,
         "has_catalog_sort": "CatalogSort" in exports,
         "current_year": str(date.today().year),
-        "root_package": build_module_page_context(
-            title=package_name,
-            import_path=package_name,
-            description=str(app.get("description") or ""),
-            class_names=exports,
-            child_pages=[],
-        ),
         "manager_module": build_module_page_context(
             title=f"{package_name}.manager",
             import_path=f"{package_name}.manager",

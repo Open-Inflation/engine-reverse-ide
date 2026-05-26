@@ -6,6 +6,9 @@ Install the generated client:
 .. code-block:: console
 
     pip install {{ package_name }}
+{% if quick_start.requires_camoufox %}
+    python -m camoufox fetch
+{% endif %}
 
 Import the client:
 
@@ -13,4 +16,4 @@ Import the client:
 
 {{ pipeline_script_code_rst }}
 
-The public API is documented in :doc:`{{ package_name }}` and :doc:`api`.
+The public API is documented in :doc:`api`.
