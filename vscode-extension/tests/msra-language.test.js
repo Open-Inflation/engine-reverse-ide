@@ -211,6 +211,7 @@ test("app metadata accepts authors description and license", () => {
     'package_owner="Miskler"',
     'social={telegram="https://t.me/miskler_dev", discord="https://discord.gg/UnJnGHNbBp"}',
     'authors=[{name="Miskler", email="miskler@gmail.com"}, {name="Another Author", email="author@example.com"}]',
+    'logo="./logo.png"',
     'description="Ozon API integration for catalog browsing and cart flows"',
     'license="GPL-3.0-or-later"',
     'keywords=["ozon", "api", "browser", "catalog"]',
@@ -229,6 +230,7 @@ test("app metadata rejects malformed authors and license values", () => {
     'package_owner="bad owner!"',
     'social={telegram="not-a-url"}',
     'authors=[{name="Miskler"}]',
+    'logo="./logo.txt"',
     'license="GNU General Public License"',
     'min_required_python="3.x"',
     "",
@@ -237,6 +239,7 @@ test("app metadata rejects malformed authors and license values", () => {
   const analysis = analyzeDocument(document);
   const invalidPackageOwner = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
   const invalidSocial = analysis.diagnostics.filter((item) => item.code === "invalid-assignment-value-type").find((item) => /URL like/.test(item.message));
+  const invalidLogo = analysis.diagnostics.filter((item) => item.code === "invalid-assignment-value-type").find((item) => /relative image path/.test(item.message));
   const missingEmail = analysis.diagnostics.find((item) => item.code === "missing-inline-table-key");
   const invalidValues = analysis.diagnostics.filter((item) => item.code === "invalid-assignment-value-type");
   const invalidLicense = invalidValues.find((item) => /license abbreviation/.test(item.message));
@@ -246,12 +249,28 @@ test("app metadata rejects malformed authors and license values", () => {
   assert.match(invalidPackageOwner.message, /GitHub owner/);
   assert.ok(invalidSocial, "expected social URLs to require https links");
   assert.match(invalidSocial.message, /URL like/);
+  assert.ok(invalidLogo, "expected logo paths to require a local image file");
+  assert.match(invalidLogo.message, /relative image path/);
   assert.ok(missingEmail, "expected authors entries to require an email");
   assert.match(missingEmail.message, /email/);
   assert.ok(invalidLicense, "expected app.license to require a short license identifier");
   assert.match(invalidLicense.message, /license abbreviation/);
   assert.ok(invalidPython, "expected min_required_python to require a dotted version string");
   assert.match(invalidPython.message, /3\.10/);
+});
+
+test("app logo must use a local raster image path", () => {
+  const text = [
+    "[app]",
+    'logo="./logo.txt"',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///invalid-app-logo.msra");
+  const analysis = analyzeDocument(document);
+  const diagnostic = analysis.diagnostics.find((item) => item.code === "invalid-assignment-value-type");
+
+  assert.ok(diagnostic, "expected app.logo to require an image path");
+  assert.match(diagnostic.message, /relative image path/);
 });
 
 test("version and name cannot be dynamic", () => {

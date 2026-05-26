@@ -11,6 +11,7 @@ from .codegen_context import abstraction_exports, build_group_context
 from .core_naming import group_public_import_path, root_client_class_name
 from .file_utils import write_text
 from .generator_config import config_section
+from .logo_assets import build_logo_assets
 from .project_model import top_level_groups
 from .readme_pipeline import build_readme_pipeline_code, build_readme_pipeline_note
 from .template_engine import render_template
@@ -28,15 +29,23 @@ def generate_docs_project(
     if docs_root.exists():
         shutil.rmtree(docs_root)
 
-    source_root = docs_root / "source"
-    api_root = source_root / "_api"
-    static_root = source_root / "_static"
-    templates_root = source_root / "_templates"
+    docs_source_root = docs_root / "source"
+    api_root = docs_source_root / "_api"
+    static_root = docs_source_root / "_static"
+    templates_root = docs_source_root / "_templates"
     api_root.mkdir(parents=True, exist_ok=True)
     static_root.mkdir(parents=True, exist_ok=True)
     templates_root.mkdir(parents=True, exist_ok=True)
 
-    context = build_docs_project_context(project, package_name, group_tree, tests_context=tests_context)
+    project_source_root = Path(project["source_path"]).resolve().parent
+    logo_context = build_logo_assets(project, project_source_root, static_root)
+    context = build_docs_project_context(
+        project,
+        package_name,
+        group_tree,
+        tests_context=tests_context,
+        logo_context=logo_context,
+    )
 
     write_text(
         output_dir / "README.md",
@@ -54,23 +63,23 @@ def generate_docs_project(
         render_template("docs/requirements.txt.tpl", context),
     )
     write_text(
-        source_root / "Makefile",
+        docs_source_root / "Makefile",
         render_template("docs/source/Makefile.tpl", context),
     )
     write_text(
-        source_root / "conf.py",
+        docs_source_root / "conf.py",
         render_template("docs/source/conf.py.tpl", context),
     )
     write_text(
-        source_root / "index.rst",
+        docs_source_root / "index.rst",
         render_template("docs/source/index.rst.tpl", context),
     )
     write_text(
-        source_root / "quick_start.rst",
+        docs_source_root / "quick_start.rst",
         render_template("docs/source/quick_start.rst.tpl", context),
     )
     write_text(
-        source_root / "api.rst",
+        docs_source_root / "api.rst",
         render_template("docs/source/api.rst.tpl", context),
     )
     write_text(
@@ -107,6 +116,7 @@ def build_docs_project_context(
     group_tree: dict[str, Any],
     *,
     tests_context: dict[str, Any] | None = None,
+    logo_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     app = project["app"]
     docs_descriptions = config_section("docs", "descriptions")
@@ -119,13 +129,13 @@ def build_docs_project_context(
     project_title = str(app["name"] or package_name)
     index_title = f"{project_title} documentation"
     pipeline_script_code = build_readme_pipeline_code(project, package_name, client_class_name)
-    readme_context = build_readme_context(project, package_name, pipeline_script_code)
     return {
         "title": index_title,
         "title_underline": "=" * len(index_title),
         "project_name": project_title,
         "project_version": str(app["version"]),
         "package_name": package_name,
+        "logo": logo_context,
         "browser": str(app.get("browser", "")),
         "client_class_name": client_class_name,
         "has_catalog_sort": "CatalogSort" in exports,
@@ -156,7 +166,12 @@ def build_docs_project_context(
             "top_groups": top_groups,
         },
         "tests": build_readme_tests_context(project, package_name, tests_context),
-        "readme": readme_context,
+        "readme": build_readme_context(
+            project,
+            package_name,
+            pipeline_script_code,
+            logo_context=logo_context,
+        ),
         "pipeline_script_code": pipeline_script_code,
         "pipeline_script_code_rst": textwrap.indent(pipeline_script_code, "    "),
         "pipeline_note": build_readme_pipeline_note(project),
@@ -167,6 +182,8 @@ def build_readme_context(
     project: dict[str, Any],
     package_name: str,
     pipeline_script_code: str,
+    *,
+    logo_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     app = project["app"]
     readme_config = config_section("readme")
@@ -184,6 +201,7 @@ def build_readme_context(
         "title": display_title,
         "project_line": display_title,
         "description": description,
+        "logo": logo_context,
         "package_owner": package_owner,
         "package_owner_lower": package_owner_lower,
         "package_name": package_name,

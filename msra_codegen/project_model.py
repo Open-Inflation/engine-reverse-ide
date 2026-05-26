@@ -90,6 +90,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         "package_owner": str(get_plain_value(get_assignment(app_table, "package_owner", ""))),
         "social": get_plain_value(get_assignment(app_table, "social", {})),
         "authors": get_plain_value(get_assignment(app_table, "authors", [])),
+        "logo": str(get_plain_value(get_assignment(app_table, "logo", ""))).strip(),
         "license": str(get_plain_value(get_assignment(app_table, "license", "MIT"))),
         "keywords": get_plain_value(get_assignment(app_table, "keywords", [])),
         "min_required_python": str(get_plain_value(get_assignment(app_table, "min_required_python", "3.10"))),

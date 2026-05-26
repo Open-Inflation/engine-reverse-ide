@@ -369,6 +369,10 @@ const PACKAGE_OWNER_SPEC = patternOf(
   /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/,
   "GitHub owner or organization name like Open-Inflation",
 );
+const APP_LOGO_SPEC = patternOf(
+  /^(?:\.\.?[\\/])?(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.(?:png|jpe?g|webp)$/i,
+  "relative image path like ./path.png",
+);
 const SOCIAL_URL_SPEC = patternOf(
   /^https?:\/\/\S+$/i,
   "URL like https://t.me/your-channel",
@@ -598,6 +602,7 @@ const TABLE_SCHEMAS = [
     package_owner: PACKAGE_OWNER_SPEC,
     social: SOCIAL_SPEC,
     authors: arrayOf(AUTHOR_ITEM_SPEC),
+    logo: APP_LOGO_SPEC,
     keywords: arrayOf(STRING),
     description: STRING,
     license: LICENSE_SPEC,
@@ -620,6 +625,10 @@ const TABLE_SCHEMAS = [
       forbidDynamicValue("social", {
         code: "invalid-social-dynamic",
         message: 'Social links cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("logo", {
+        code: "invalid-logo-dynamic",
+        message: 'Logo path cannot be dynamic. References and other dynamic expressions are not allowed.',
       }),
       forbidDynamicValue("version", {
         code: "invalid-version-dynamic",

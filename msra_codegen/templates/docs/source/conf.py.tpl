@@ -75,6 +75,10 @@ templates_path = ["_templates"]
 
 html_theme_options = {
     "sidebar_hide_name": True,
+{% if logo %}
+    "light_logo": "{{ logo.light_name }}",
+    "dark_logo": "{{ logo.dark_name }}",
+{% endif %}
 }
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

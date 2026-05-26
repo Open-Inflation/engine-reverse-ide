@@ -17,6 +17,17 @@ function normalizeSphinxText(text) {
     .trim();
 }
 
+const BLACK_LOGO_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFElEQVR4nGNgwAH+QzEDEy4VcAAAUjYCAcOOWeoAAAAASUVORK5CYII=";
+const COLORED_LOGO_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAGElEQVR4nGNgwAb+MzD8B2EQmwmrCmQAAKneA//Q/YnfAAAAAElFTkSuQmCC";
+
+function writeLogoFixture(filePath) {
+  writeFileSync(filePath, Buffer.from(BLACK_LOGO_PNG_BASE64, "base64"));
+}
+
+function writeColoredLogoFixture(filePath) {
+  writeFileSync(filePath, Buffer.from(COLORED_LOGO_PNG_BASE64, "base64"));
+}
+
 function extractMarkdownCodeFence(text, language = "py") {
   const normalized = normalizeNewlines(text);
   const startToken = `\`\`\`${language}\n`;
@@ -382,6 +393,108 @@ test("generator omits empty class docstrings when the app description is missing
     const managerText = readFileSync(path.join(outputDir, packageName, "manager.py"), "utf8");
     assert.doesNotMatch(managerText, /""""""/);
     assert.match(managerText, /class OzonAPI:\r?\n\s+timeout_ms: float = 35000/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("generator copies app logo and emits automatic dark mode variants", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-logo-"));
+  const inputPath = path.join(workDir, "logo.msra");
+  const outputDir = path.join(workDir, "generated");
+  const packageName = "logo_api";
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const logoPath = path.join(workDir, "logo.png");
+  writeLogoFixture(logoPath);
+  const text = [
+    "[app]",
+    'name="LogoAPI"',
+    'package_name="logo_api"',
+    'logo="./logo.png"',
+    'description="Logo docs project"',
+    "",
+  ].join("\n");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const readmeText = readFileSync(path.join(outputDir, "README.md"), "utf8");
+    const confText = readFileSync(path.join(outputDir, "docs", "source", "conf.py"), "utf8");
+    const logoLightPath = path.join(outputDir, "docs", "source", "_static", "logo-light.png");
+    const logoDarkPath = path.join(outputDir, "docs", "source", "_static", "logo-dark.png");
+    assert.match(readmeText, /<picture>/);
+    assert.match(readmeText, /docs\/source\/_static\/logo-light\.png/);
+    assert.match(readmeText, /docs\/source\/_static\/logo-dark\.png/);
+    assert.match(confText, /"light_logo": "logo-light\.png"/);
+    assert.match(confText, /"dark_logo": "logo-dark\.png"/);
+    assert.ok(existsSync(logoLightPath), "expected light logo asset to be generated");
+    assert.ok(existsSync(logoDarkPath), "expected dark logo asset to be generated");
+
+    const inspectLogoScript = [
+      "from PIL import Image",
+      "import sys",
+      "for path in sys.argv[1:]:",
+      "    image = Image.open(path).convert('RGBA')",
+      "    center = image.getpixel((1, 1))",
+      "    corner = image.getpixel((0, 0))",
+      "    print(f\"{center}|{corner}\")",
+    ].join("\n");
+    const inspectResult = spawnSync(
+      "python",
+      ["-c", inspectLogoScript, logoLightPath, logoDarkPath],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(inspectResult.status, 0, inspectResult.stderr || inspectResult.stdout);
+    const [lightPixel, darkPixel] = normalizeNewlines(inspectResult.stdout).trim().split("\n");
+    assert.strictEqual(lightPixel, "(0, 0, 0, 255)|(0, 0, 0, 0)");
+    assert.strictEqual(darkPixel, "(255, 255, 255, 255)|(255, 255, 255, 0)");
+
+    const docsBuildDir = buildSphinxTextDocs(outputDir, repoRoot);
+    assert.ok(existsSync(path.join(docsBuildDir, "_api", `${packageName}.manager.txt`)));
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("generator rejects colored app logos", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-logo-colored-"));
+  const inputPath = path.join(workDir, "logo.msra");
+  const outputDir = path.join(workDir, "generated");
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const logoPath = path.join(workDir, "logo.png");
+  writeColoredLogoFixture(logoPath);
+  const text = [
+    "[app]",
+    'name="LogoAPI"',
+    'package_name="logo_api"',
+    'logo="./logo.png"',
+    'description="Logo docs project"',
+    "",
+  ].join("\n");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    const combinedOutput = `${result.stdout || ""}${result.stderr || ""}`;
+
+    assert.notStrictEqual(result.status, 0, "expected codegen to fail for a colored logo");
+    assert.match(combinedOutput, /app\.logo must be a monochrome black-and-white raster image/);
+    assert.match(combinedOutput, /colored pixel at \(\d+, \d+\)/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
