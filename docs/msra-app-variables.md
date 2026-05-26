@@ -17,13 +17,14 @@
 | Ключ | Что делает |
 | --- | --- |
 | `type` | Базовый тип ветки: `string`, `integer`, `boolean`, `array`, `object` или `null` |
-| `match` | Дополнительная валидация: диапазон, regex-ссылка или whitelist значений |
+| `match` | Дополнительная валидация: диапазон, regex-ссылка или whitelist значений | Если задан literal-array значений, generated type сужается до `Literal[...]`, а setter валидирует значение по этому whitelist. |
 
 ### Что меняется
 
 - `types` влияет на coercion в generated client.
 - Если значение не совпадает с ожидаемым типом, runtime выбрасывает `ValueError` или `TypeError` в зависимости от места проверки.
 - `match` сужает допустимые значения после type coercion.
+- Если `match` задан literal-array значений, generated property annotation сужается до `Literal[...]`, а setter проверяет membership по этому списку.
 - Если `null` присутствует в `types`, generated type тоже становится nullable.
 
 ## `from`
@@ -36,4 +37,3 @@
 - затем приводит его к одному из типов из `types`;
 - после этого проверяет `match`, `@Nullable` и остальные ограничения;
 - итоговое значение кладётся в backing field клиента и доступно как `VARIABLES.<name>`.
-

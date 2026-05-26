@@ -111,7 +111,7 @@ def build_docs_project_context(
     app = project["app"]
     docs_descriptions = config_section("docs", "descriptions")
     client_class_name = root_client_class_name(project)
-    exports = list(dict.fromkeys([client_class_name, "Warmup", *abstraction_exports(project)]))
+    exports = list(dict.fromkeys([client_class_name, *abstraction_exports(project)]))
     top_groups = [
         build_group_docs_context(group_node, project, package_name)
         for group_node in top_level_groups(group_tree)

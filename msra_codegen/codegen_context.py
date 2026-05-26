@@ -106,7 +106,7 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
         "backing_name": f"_{variable['name']}",
         "capture_expr": render_expr(variable.get("from"), self_ref="self"),
         "capture_kind": primary_type_name(non_null_type_names) or "string",
-        "getter_return": type_annotation_from_types(non_null_type_names, nullable=has_null),
+        "getter_return": build_variable_type_annotation(non_null_type_names, nullable=has_null, match_values=match_values),
         "has_integer": "integer" in non_null_type_names,
         "has_boolean": "boolean" in non_null_type_names,
         "has_number": "number" in non_null_type_names,
@@ -122,6 +122,21 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
     }
     context["warmup_code"] = build_variable_warmup_code(context)
     return context
+
+
+def build_variable_type_annotation(
+    type_names: set[str],
+    *,
+    nullable: bool,
+    match_values: list[Any] | None,
+) -> str:
+    if match_values:
+        literal_values = ", ".join(render_simple_value(value) for value in match_values)
+        annotation = f"Literal[{literal_values}]"
+        if nullable:
+            return f"{annotation} | None"
+        return annotation
+    return type_annotation_from_types(type_names, nullable=nullable)
 
 
 def build_variable_warmup_code(variable: dict[str, Any]) -> str:

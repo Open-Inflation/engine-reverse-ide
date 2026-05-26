@@ -118,11 +118,22 @@ function buildGeneratedPackageProbeScript() {
     "make_module(\"aiohttp_retry\", ExponentialRetry=DummyObject, RetryClient=DummyObject)",
     "make_module(\"camoufox\", AsyncCamoufox=DummyObject, DefaultAddons=types.SimpleNamespace(UBO=object()))",
     "make_module(\"human_requests\", HumanBrowser=DummyObject, HumanContext=DummyObject, HumanPage=DummyObject, autotest=autotest)",
+    "@dataclasses.dataclass",
+    "class Warmup:",
+    "    browser: object",
+    "    context: object",
+    "    page: object",
+    "    sniffer: object | None",
+    "    timeout_ms: int",
+    "    test_mode: bool",
+    "    prefixes: dict[str, str]",
+    "",
     "make_module(",
     "    \"human_requests.abstraction\",",
     "    HttpMethod=types.SimpleNamespace(GET=\"GET\", POST=\"POST\", PUT=\"PUT\", PATCH=\"PATCH\", DELETE=\"DELETE\", HEAD=\"HEAD\", OPTIONS=\"OPTIONS\"),",
     "    Output=DummyObject,",
     "    Proxy=DummyProxy,",
+    "    Warmup=Warmup,",
     "    FetchResponse=DummyObject,",
     ")",
     "make_module(\"human_requests.network_analyzer\", package=True)",
@@ -140,12 +151,14 @@ function buildGeneratedPackageProbeScript() {
     "sys.path.insert(0, output_dir)",
     "",
     "pkg = importlib.import_module(package_name)",
+    "human_requests_abstraction = sys.modules[\"human_requests.abstraction\"]",
     "client_class_name = pkg.__all__[0]",
     "client_cls = getattr(pkg, client_class_name)",
     "warmup_cls = pkg.Warmup",
     "",
     "assert dataclasses.is_dataclass(client_cls)",
     "assert dataclasses.is_dataclass(warmup_cls)",
+    "assert warmup_cls is human_requests_abstraction.Warmup",
     "field_names = [field.name for field in dataclasses.fields(client_cls)]",
     "base_field_names = [\"timeout_ms\", \"headless\", \"test_mode\", \"proxy\", \"browser_opts\"]",
     "assert field_names[:len(base_field_names)] == base_field_names",
@@ -324,7 +337,6 @@ test("generator wires external warmup scripts into the manager", () => {
     const managerText = readFileSync(path.join(outputDir, packageName, "manager.py"), "utf8");
     assert.match(managerText, /from \.pipelines\.warmup import pipeline as warmup_runner/);
     assert.match(managerText, /await warmup_runner\(warmup\)/);
-    assert.match(managerText, /Warmup\(/);
     assert.match(managerText, /humanize=0\.5/);
     assert.match(managerText, /block_images=True/);
     assert.match(managerText, /sniffer=sniffer/);
@@ -610,7 +622,7 @@ test("python codegen generates both bundled msra documents without failing", () 
         );
         assert.ok(
           normalizedManagerDocsText.includes(
-            "proxy: str | dict | human_requests.abstraction.Proxy | None = None Proxy settings for browser startup and direct requests. When omitted or set to None, the client reads the proxy from the environment.",
+            "proxy: str | dict | Proxy | None = None Proxy settings for browser startup and direct requests. When omitted or set to None, the client reads the proxy from the environment.",
           ),
         );
         assert.ok(
@@ -636,6 +648,11 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.ok(
           normalizedManagerDocsText.includes(
             "prefixes: dict[str, str] Resolved shared prefix values configured for the app.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "delivery_type: Literal['store', 'pickup', 'courier'] | None",
           ),
         );
         const advertisingEndpointText = readFileSync(path.join(packageDir, "endpoints", "advertising.py"), "utf8");
