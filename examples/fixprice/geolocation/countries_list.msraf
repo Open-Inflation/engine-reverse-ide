@@ -17,10 +17,10 @@ from=<INPUT.alias>
 
 [GEOLOCATION_COUNTRIES_LIST.examples.en]
 @Test
-@Docs
+@Docs(print="Первая страна en: "<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.en.JSON[0]>)
 inputs={"alias"="en"}
 
 [GEOLOCATION_COUNTRIES_LIST.examples.ru]
 @Test
-@Docs
+@Docs(print="Первая страна ru: "<FUNCRESULT.GEOLOCATION_COUNTRIES_LIST.ru.JSON[0]>)
 inputs={"alias"="ru"}

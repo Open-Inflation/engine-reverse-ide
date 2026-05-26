@@ -902,6 +902,10 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.doesNotMatch(readmeText, /Image\.open\(download_image\)/);
         assert.match(readmeText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
         assert.match(exampleText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
+        assert.match(exampleText, /print\(f"Первый товар: \{products_list\[0\]\}"\)/);
+        assert.match(exampleText, /print\(f"Информация о товаре: \{info\}"\)/);
+        assert.match(exampleText, /print\(f"Первая страна en: \{en\[0\]\}"\)/);
+        assert.match(exampleText, /print\(f"Первый магазин: \{search\[0\]\}"\)/);
         assert.match(readmeText, /https:\/\/t\.me\/miskler_dev/);
         assert.match(readmeText, /https:\/\/discord\.gg\/UnJnGHNbBp/);
 
