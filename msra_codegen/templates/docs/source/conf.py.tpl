@@ -36,6 +36,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.doctest",
     "sphinx.ext.duration",
+    "jsoncrack_for_sphinx",
 ]
 
 autodoc_mock_imports = [
@@ -67,7 +68,10 @@ default_role = "any"
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
+    "human_requests": ("https://miskler.github.io/human-requests/", None),
 }
+
+json_schema_dir = str(HERE.parents[2] / "tests" / "__snapshots__")
 
 html_theme = "furo"
 html_static_path = ["_static"]

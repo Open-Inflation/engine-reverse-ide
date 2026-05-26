@@ -639,6 +639,8 @@ test("python codegen generates both bundled msra documents without failing", () 
       const readmeText = readFileSync(path.join(testCase.outputDir, "README.md"), "utf8");
       const exampleText = readFileSync(path.join(testCase.outputDir, "example.py"), "utf8");
       const quickStartText = readFileSync(path.join(testCase.outputDir, "docs", "source", "quick_start.rst"), "utf8");
+      const docsRequirementsText = readFileSync(path.join(testCase.outputDir, "docs", "requirements.txt"), "utf8");
+      const docsConfText = readFileSync(path.join(testCase.outputDir, "docs", "source", "conf.py"), "utf8");
       const pyprojectText = readFileSync(path.join(testCase.outputDir, "pyproject.toml"), "utf8");
       const requirementsText = readFileSync(path.join(testCase.outputDir, "requirements.txt"), "utf8");
       const requirementsDevText = readFileSync(path.join(testCase.outputDir, "requirements-dev.txt"), "utf8");
@@ -671,6 +673,10 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(quickStartText, /python -m camoufox fetch/);
       }
       assert.match(quickStartText, /The public API is documented in :doc:`api`\./);
+      assert.match(docsRequirementsText, /jsoncrack-for-sphinx/);
+      assert.match(docsConfText, /"jsoncrack_for_sphinx"/);
+      assert.match(docsConfText, /"human_requests": \("https:\/\/miskler\.github\.io\/human-requests\/", None\)/);
+      assert.match(docsConfText, /json_schema_dir = str\(HERE\.parents\[2\] \/ "tests" \/ "__snapshots__"\)/);
       assert.match(readmeText, new RegExp(`https://github\\.com/${testCase.packageOwner}/${testCase.packageName}`));
       assert.match(readmeText, new RegExp(`https://${testCase.packageOwner.toLowerCase()}\\.github\\.io/${testCase.packageName}/quick_start`));
       assert.match(readmeText, new RegExp(`https://pypi\\.org/project/${testCase.packageName.replaceAll("_", "-")}/`));
