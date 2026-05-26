@@ -80,14 +80,19 @@ regex="^(store|pickup|courier)$"
 regex="^[A-Za-z]\\d{3}$"
 
 [app.groups.Catalog]
+description="Группа функций для работы с каталогом товаров."
 
 [app.groups.Catalog.Products]
+description="Функции для получения информации о товарах, их наличии и балансе."
 
 [app.groups.Geolocation]
+description="Группа функций для работы с геолокацией, получения информации о странах, регионах и городах."
 
 [app.groups.Advertising]
+description="Группа функций для получения информации о рекламных акциях и брендах на главной странице."
 
 [app.groups.General]
+description="Разные функции, не вошедшие в другие группы."
 
 [app.defaults.func.headers]
 referrer=<DOCUMENT.PREFIXES.MAIN_SITE_ORIGIN>

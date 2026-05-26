@@ -321,6 +321,8 @@ def build_function_context(
     root_client_name: str,
     *,
     autotest_enabled: bool = False,
+    root_import_prefix: str,
+    package_root_expr: str,
 ) -> dict[str, Any]:
     transport = str(func.get("transport", "fetch"))
     method = str(func.get("method", "GET"))
@@ -367,6 +369,7 @@ def build_function_context(
         "signature": ", ".join(signature_parts),
         "signature_specs": signature_specs,
         "return_annotation": render_return_annotation(func),
+        "root_import_prefix": root_import_prefix,
         "transport": transport,
         "method": method,
         "url_expr": url_expr,
@@ -387,6 +390,7 @@ def build_function_context(
                 if extractor_script
                 else None
             ),
+            "package_root_expr": package_root_expr,
             "goto_pipeline_module": goto_pipeline.get("module") if goto_pipeline else None,
             "goto_pipeline_function": goto_pipeline.get("function") if goto_pipeline else None,
         },
@@ -543,10 +547,18 @@ def render_function_block(
     root_client_name: str,
     *,
     autotest_enabled: bool = False,
+    root_import_prefix: str,
+    package_root_expr: str,
 ) -> str:
     return render_template(
         "function.py.tpl",
-        build_function_context(func, root_client_name, autotest_enabled=autotest_enabled),
+        build_function_context(
+            func,
+            root_client_name,
+            autotest_enabled=autotest_enabled,
+            root_import_prefix=root_import_prefix,
+            package_root_expr=package_root_expr,
+        ),
     )
 
 
@@ -617,6 +629,7 @@ def build_group_context(
     root_client_name = root_client_class_name(project)
     child_nodes = list(group_node.get("children", {}).values())
     module_depth = module_package_depth_for_group(group_node)
+    package_root_expr = f"Path(__file__).resolve().parents[{module_depth}]"
     autotest_function_ids = set(autotest_function_ids or set())
     function_contexts = [
         {
@@ -624,6 +637,8 @@ def build_group_context(
                 func,
                 root_client_name,
                 autotest_enabled=str(func["id"]) in autotest_function_ids,
+                root_import_prefix="." * (module_depth + 1),
+                package_root_expr=package_root_expr,
             ),
             "autotest_enabled": str(func["id"]) in autotest_function_ids,
         }
@@ -633,6 +648,7 @@ def build_group_context(
         "package_name": package_name,
         "root_client_name": root_client_name,
         "root_import_prefix": "." * (module_depth + 1),
+        "package_root_expr": package_root_expr,
         "group_name": ".".join(group_node["path"]) or "MSRA",
         "class_name": class_name_for_group(group_node["path"]),
         "module_name": module_file_name_for_group(group_node["path"]),
@@ -780,7 +796,7 @@ def is_catalog_sort_function(func: dict[str, Any]) -> bool:
     return values == ["sold", "abc", "min", "max"]
 
 
-def collect_extractor_assets(project: dict[str, Any]) -> list[str]:
+def collect_extractor_scripts(project: dict[str, Any]) -> list[str]:
     scripts: list[str] = []
     for func in project["functions"]:
         extractor = func.get("extractor")
@@ -789,6 +805,15 @@ def collect_extractor_assets(project: dict[str, Any]) -> list[str]:
         script = extractor.get("script")
         if isinstance(script, str) and script:
             scripts.append(script)
+    return scripts
+
+
+def collect_goto_pipeline_scripts(project: dict[str, Any]) -> list[str]:
+    scripts: list[str] = []
+    for func in project["functions"]:
+        extractor = func.get("extractor")
+        if not extractor:
+            continue
         goto_pipeline = extractor.get("goto_pipeline")
         if isinstance(goto_pipeline, dict):
             path = goto_pipeline.get("path")

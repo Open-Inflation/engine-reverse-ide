@@ -9,6 +9,14 @@ function normalizeNewlines(text) {
   return text.replace(/\r\n/g, "\n");
 }
 
+function normalizeSphinxText(text) {
+  return normalizeNewlines(text)
+    .replace(/-\n\s+/g, "-")
+    .replace(/\n\s+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function extractMarkdownCodeFence(text, language = "py") {
   const normalized = normalizeNewlines(text);
   const startToken = `\`\`\`${language}\n`;
@@ -50,6 +58,125 @@ function extractRstPythonCodeBlock(text) {
     break;
   }
   return block.join("\n");
+}
+
+function buildGeneratedPackageProbeScript() {
+  return [
+    "from __future__ import annotations",
+    "",
+    "import dataclasses",
+    "import importlib",
+    "import sys",
+    "import types",
+    "",
+    "",
+    "def make_module(name: str, *, package: bool = False, **attrs):",
+    "    module = types.ModuleType(name)",
+    "    module.__dict__.update(attrs)",
+    "    if package:",
+    "        module.__path__ = []",
+    "    sys.modules[name] = module",
+    "    parent_name, _, child_name = name.rpartition(\".\")",
+    "    if parent_name and parent_name in sys.modules:",
+    "        setattr(sys.modules[parent_name], child_name, module)",
+    "    return module",
+    "",
+    "",
+    "class DummyObject:",
+    "    def __init__(self, *args, **kwargs):",
+    "        self.args = args",
+    "        self.kwargs = kwargs",
+    "",
+    "    def __getattr__(self, _name):",
+    "        return self",
+    "",
+    "    def __call__(self, *args, **kwargs):",
+    "        return self",
+    "",
+    "",
+    "class DummyProxy:",
+    "    env_sentinel = object()",
+    "",
+    "    def __init__(self, value=None):",
+    "        self.value = value",
+    "",
+    "    @staticmethod",
+    "    def from_env():",
+    "        return DummyProxy.env_sentinel",
+    "",
+    "    def as_dict(self):",
+    "        return {\"proxy\": self.value}",
+    "",
+    "    def as_str(self):",
+    "        return \"proxy://example\"",
+    "",
+    "",
+    "def autotest(func):",
+    "    return func",
+    "",
+    "",
+    "make_module(\"aiohttp_retry\", ExponentialRetry=DummyObject, RetryClient=DummyObject)",
+    "make_module(\"camoufox\", AsyncCamoufox=DummyObject, DefaultAddons=types.SimpleNamespace(UBO=object()))",
+    "make_module(\"human_requests\", HumanBrowser=DummyObject, HumanContext=DummyObject, HumanPage=DummyObject, autotest=autotest)",
+    "make_module(",
+    "    \"human_requests.abstraction\",",
+    "    HttpMethod=types.SimpleNamespace(GET=\"GET\", POST=\"POST\", PUT=\"PUT\", PATCH=\"PATCH\", DELETE=\"DELETE\", HEAD=\"HEAD\", OPTIONS=\"OPTIONS\"),",
+    "    Proxy=DummyProxy,",
+    "    FetchResponse=DummyObject,",
+    ")",
+    "make_module(\"human_requests.network_analyzer\", package=True)",
+    "make_module(\"human_requests.network_analyzer.anomaly_sniffer\", HeaderAnomalySniffer=DummyObject, WaitHeader=DummyObject, WaitSource=types.SimpleNamespace(REQUEST=\"REQUEST\"))",
+    "make_module(\"rich\", package=True)",
+    "make_module(\"rich.console\", Console=DummyObject)",
+    "make_module(\"rich.highlighter\", ReprHighlighter=DummyObject)",
+    "make_module(\"rich.panel\", Panel=DummyObject)",
+    "make_module(\"rich.syntax\", Syntax=DummyObject)",
+    "make_module(\"rich.table\", Table=DummyObject)",
+    "make_module(\"rich.text\", Text=DummyObject)",
+    "",
+    "output_dir = sys.argv[1]",
+    "package_name = sys.argv[2]",
+    "sys.path.insert(0, output_dir)",
+    "",
+    "pkg = importlib.import_module(package_name)",
+    "client_class_name = pkg.__all__[0]",
+    "client_cls = getattr(pkg, client_class_name)",
+    "warmup_cls = pkg.Warmup",
+    "",
+    "assert dataclasses.is_dataclass(client_cls)",
+    "assert dataclasses.is_dataclass(warmup_cls)",
+    "field_names = [field.name for field in dataclasses.fields(client_cls)]",
+    "base_field_names = [\"timeout_ms\", \"headless\", \"test_mode\", \"proxy\", \"browser_opts\"]",
+    "assert field_names[:len(base_field_names)] == base_field_names",
+    "group_field_names = field_names[len(base_field_names):]",
+    "assert group_field_names",
+    "assert [field.name for field in dataclasses.fields(warmup_cls)] == [\"browser\", \"context\", \"page\", \"sniffer\", \"timeout_ms\", \"test_mode\", \"prefixes\"]",
+    "",
+    "instance = client_cls(proxy=None, browser_opts=None)",
+    "assert instance.proxy is DummyProxy.env_sentinel",
+    "assert instance.browser_opts == {}",
+    "assert instance.timeout_ms == client_cls.__dataclass_fields__[\"timeout_ms\"].default",
+    "for field_name in group_field_names:",
+    "    assert field_name in instance.__dict__",
+    "    group = getattr(instance, field_name)",
+    "    assert instance.__dict__[field_name] is group",
+    "    assert getattr(group, \"_parent\", None) is instance",
+  ].join("\n");
+}
+
+function buildSphinxTextDocs(outputDir, repoRoot) {
+  const docsSourceDir = path.join(outputDir, "docs", "source");
+  const docsBuildDir = path.join(outputDir, "docs", "_build", "text");
+  const result = spawnSync(
+    "python",
+    ["-m", "sphinx", "-b", "text", "-E", docsSourceDir, docsBuildDir],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+    },
+  );
+  assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+  return docsBuildDir;
 }
 
 function createPythonReleasesApiFixture(workDir) {
@@ -194,7 +321,7 @@ test("generator wires external warmup scripts into the manager", () => {
 
     const packageDir = path.join(outputDir, packageName);
     const managerText = readFileSync(path.join(outputDir, packageName, "manager.py"), "utf8");
-    assert.match(managerText, /from \.warmup import pipeline as warmup_runner/);
+    assert.match(managerText, /from \.pipelines\.warmup import pipeline as warmup_runner/);
     assert.match(managerText, /await warmup_runner\(warmup\)/);
     assert.match(managerText, /Warmup\(/);
     assert.match(managerText, /humanize=0\.5/);
@@ -202,10 +329,46 @@ test("generator wires external warmup scripts into the manager", () => {
     assert.match(managerText, /sniffer=sniffer/);
     assert.match(managerText, /prefixes=\{/);
     assert.doesNotMatch(managerText, /render_pipeline_steps\(/);
+    assert.ok(existsSync(path.join(packageDir, "pipelines", "__init__.py")), "expected pipelines package to be generated");
+    assert.ok(existsSync(path.join(packageDir, "pipelines", "warmup.py")), "expected warmup pipeline to live under pipelines/");
+    assert.ok(!existsSync(path.join(packageDir, "warmup.py")), "expected no legacy root-level warmup.py");
 
-    const warmupModule = readFileSync(path.join(packageDir, "warmup.py"), "utf8");
+    const warmupModule = readFileSync(path.join(packageDir, "pipelines", "warmup.py"), "utf8");
     assert.match(warmupModule, /async def pipeline\(warmup: Warmup\)/);
     assert.match(warmupModule, /MAIN_SITE_URL/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("generator omits empty class docstrings when the app description is missing", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-nodoc-"));
+  const inputPath = path.join(workDir, "nodoc.msra");
+  const outputDir = path.join(workDir, "generated");
+  const packageName = "nodoc_api";
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const text = readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8")
+    .replace('package_name="ozon_api"', 'package_name="nodoc_api"')
+    .replace(/^description="Ozon API integration for catalog browsing and cart flows"$/m, "");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    writeFileSync(
+      path.join(workDir, "warmup.py"),
+      readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
+      "utf8",
+    );
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const managerText = readFileSync(path.join(outputDir, packageName, "manager.py"), "utf8");
+    assert.doesNotMatch(managerText, /""""""/);
+    assert.match(managerText, /class OzonAPI:\r?\n\s+timeout_ms: float = 35000/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -359,18 +522,105 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(apiTestText, /from human_requests import autotest_data, autotest_depends_on, autotest_hook, autotest_params/);
       assert.match(apiTestText, /from human_requests\.autotest import AutotestCallContext, AutotestContext, AutotestDataContext/);
       assert.doesNotMatch(apiTestText, /abstraction/);
+      const probeResult = spawnSync(
+        "python",
+        ["-c", buildGeneratedPackageProbeScript(), testCase.outputDir, testCase.packageName],
+        {
+          cwd: repoRoot,
+          env: buildCodegenPythonPath(pythonReleasesFixturePath),
+          encoding: "utf8",
+        },
+      );
+      assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
       if (testCase.packageName === "fixprice_api") {
+        const docsBuildDir = buildSphinxTextDocs(testCase.outputDir, repoRoot);
+        const managerDocsText = readFileSync(
+          path.join(docsBuildDir, "_api", `${testCase.packageName}.manager.txt`),
+          "utf8",
+        );
+        const normalizedManagerDocsText = normalizeSphinxText(managerDocsText);
+        assert.doesNotMatch(managerDocsText, /Attributes:/);
+        assert.doesNotMatch(managerDocsText, /@SniffHeaders/);
+        assert.doesNotMatch(managerDocsText, /\[app\.prefixes\]/);
+        assert.doesNotMatch(managerDocsText, /MSRA document/);
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "browser: HumanBrowser Browser session available to warmup scripts.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "context: HumanContext Browser context created during warmup.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "page: HumanPage Page used during warmup scripts.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "timeout_ms: float = 35000 Global timeout, in milliseconds, used by warmup and browser-backed requests.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "headless: bool = True Whether the browser is started without a visible window.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "test_mode: bool = False Enable the test-only warmup branch and its extra state.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "proxy: str | dict | human_requests.abstraction.Proxy | None = None Proxy settings for browser startup and direct requests. When omitted or set to None, the client reads the proxy from the environment.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "browser_opts: dict[str, Any] | None = None Extra keyword arguments forwarded to AsyncCamoufox during browser startup.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "sniffer: HeaderAnomalySniffer | None Optional header sniffer used during warmup when header sniffing is enabled.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "timeout_ms: int Effective timeout, in milliseconds, shared by warmup actions.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "test_mode: bool Whether the client was started in test mode.",
+          ),
+        );
+        assert.ok(
+          normalizedManagerDocsText.includes(
+            "prefixes: dict[str, str] Resolved shared prefix values configured for the app.",
+          ),
+        );
         const advertisingEndpointText = readFileSync(path.join(packageDir, "endpoints", "advertising.py"), "utf8");
-        const catalogEndpointText = readFileSync(path.join(packageDir, "endpoints", "catalog", "catalog.py"), "utf8");
-        const catalogProductsEndpointText = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
-        const generalEndpointText = readFileSync(path.join(packageDir, "endpoints", "general.py"), "utf8");
-        const geolocationEndpointText = readFileSync(path.join(packageDir, "endpoints", "geolocation.py"), "utf8");
-        assert.match(advertisingEndpointText, /@autotest/);
-        assert.match(catalogEndpointText, /@autotest/);
-        assert.match(catalogProductsEndpointText, /@autotest/);
-        assert.match(geolocationEndpointText, /@autotest/);
-        assert.doesNotMatch(generalEndpointText, /@autotest/);
-      }
+    const catalogEndpointText = readFileSync(path.join(packageDir, "endpoints", "catalog", "catalog.py"), "utf8");
+    const catalogProductsEndpointText = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
+    const generalEndpointText = readFileSync(path.join(packageDir, "endpoints", "general.py"), "utf8");
+    const geolocationEndpointText = readFileSync(path.join(packageDir, "endpoints", "geolocation.py"), "utf8");
+    assert.ok(existsSync(path.join(packageDir, "pipelines", "__init__.py")), "expected pipelines package to be generated");
+    assert.ok(existsSync(path.join(packageDir, "pipelines", "warmup.py")), "expected warmup pipeline to live under pipelines/");
+    assert.ok(existsSync(path.join(packageDir, "pipelines", "goto_pipeline.py")), "expected goto pipeline to live under pipelines/");
+    assert.ok(!existsSync(path.join(packageDir, "warmup.py")), "expected no legacy root-level warmup.py");
+    assert.ok(!existsSync(path.join(packageDir, "goto_pipeline.py")), "expected no legacy root-level goto_pipeline.py");
+    assert.match(advertisingEndpointText, /@autotest/);
+    assert.match(catalogEndpointText, /@autotest/);
+    assert.match(catalogProductsEndpointText, /@autotest/);
+    assert.match(catalogProductsEndpointText, /from \.\.\.pipelines\.goto_pipeline import pipeline as goto_pipeline_runner/);
+    assert.match(catalogProductsEndpointText, /Path\(__file__\)\.resolve\(\)\.parents\[2\] \/ 'extractors\/catalog-product-info\.js'/);
+    assert.match(geolocationEndpointText, /@autotest/);
+    assert.doesNotMatch(generalEndpointText, /@autotest/);
+  }
       if (testCase.packageName === "fixprice_api") {
         assert.match(pyprojectText, /keywords = \[\r?\n\s*"fixprice",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
         assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"rich",\r?\n\s*"aiohttp",\r?\n\s*"aiohttp-retry"\r?\n\]/);

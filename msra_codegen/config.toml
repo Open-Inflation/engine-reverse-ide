@@ -41,8 +41,3 @@ badge_url = "https://img.shields.io/discord/792572437292253224?label=Discord&lab
 key = "telegram"
 label = "Telegram"
 badge_url = "https://img.shields.io/badge/Telegram-24A1DE"
-
-[docs.descriptions]
-root_package = "Generated client package for {project_title}."
-manager = "Generated client manager for {project_title}."
-endpoints = "Generated endpoint package."

@@ -30,6 +30,16 @@ def root_client_class_name(project: dict[str, Any]) -> str:
     return pascal_case(name)
 
 
+def normalize_script_path(script_path: str) -> str:
+    normalized = script_path.strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.strip("/")
+    if normalized.startswith("pipelines/"):
+        normalized = normalized[len("pipelines/"):]
+    return normalized
+
+
 def module_file_name_for_group(path: list[str]) -> str:
     if not path:
         return "generated.py"
@@ -103,13 +113,11 @@ def group_path_from_expr(expr: Any) -> str:
 
 
 def script_module_name_from_path(script_path: str) -> str:
-    normalized = script_path.strip().replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
+    normalized = normalize_script_path(script_path)
     if normalized.endswith(".py"):
         normalized = normalized[:-3]
     normalized = normalized.strip("/")
-    return normalized.replace("/", ".") or "warmup"
+    return f"pipelines.{normalized.replace('/', '.')}" if normalized else "pipelines.warmup"
 
 
 def parse_script_reference(expr: Any) -> dict[str, str] | None:

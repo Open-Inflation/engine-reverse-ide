@@ -6,18 +6,29 @@ from typing import Any
 
 from .codegen_context import (
     build_abstraction_package_context,
-    collect_extractor_assets,
+    collect_extractor_scripts,
+    collect_goto_pipeline_scripts,
     collect_warmup_scripts,
     render_endpoints_init,
     render_init,
     render_manager_template,
     write_group_package,
 )
+from .core_naming import normalize_script_path
 from .file_utils import write_text
 from .package_metadata import render_pyproject, render_requirements_txt, write_root_license
 from .project_model import build_group_tree, top_level_groups
 from .tests_generator import build_tests_project_context, generate_tests_project
 from .template_engine import render_template
+
+
+def ensure_package_inits(target_dir: Path, package_root: Path) -> None:
+    current = target_dir
+    while current != package_root and package_root in current.parents:
+        init_file = current / "__init__.py"
+        if not init_file.exists():
+            write_text(init_file, "")
+        current = current.parent
 
 
 def generate_project(
@@ -35,15 +46,22 @@ def generate_project(
     package_root = output_dir / package_name
     abstraction_root = package_root / "abstraction"
     endpoints_root = package_root / "endpoints"
+    pipelines_root = package_root / "pipelines"
     legacy_postprocess_root = package_root / "postprocess"
     extractors_root = package_root / "extractors"
     package_root.mkdir(parents=True, exist_ok=True)
     abstraction_root.mkdir(parents=True, exist_ok=True)
+    if pipelines_root.exists():
+        shutil.rmtree(pipelines_root)
+    pipelines_root.mkdir(parents=True, exist_ok=True)
     if legacy_postprocess_root.exists():
         shutil.rmtree(legacy_postprocess_root)
     if extractors_root.exists():
         shutil.rmtree(extractors_root)
     extractors_root.mkdir(parents=True, exist_ok=True)
+    for stale_pipeline_file in [package_root / "warmup.py", package_root / "goto_pipeline.py"]:
+        if stale_pipeline_file.exists():
+            stale_pipeline_file.unlink()
 
     tests_context = build_tests_project_context(project, package_name)
 
@@ -91,9 +109,16 @@ def generate_project(
             autotest_function_ids=tests_context["autotest_function_ids"],
         )
 
-    for script in dict.fromkeys(collect_warmup_scripts(project) + collect_extractor_assets(project)):
+    for script in dict.fromkeys(collect_warmup_scripts(project) + collect_goto_pipeline_scripts(project)):
         source = source_root / script
-        target = package_root / script
+        target = pipelines_root / normalize_script_path(script)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        ensure_package_inits(target.parent, package_root)
+        shutil.copyfile(source, target)
+
+    for script in dict.fromkeys(collect_extractor_scripts(project)):
+        source = source_root / script
+        target = package_root / normalize_script_path(script)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
 

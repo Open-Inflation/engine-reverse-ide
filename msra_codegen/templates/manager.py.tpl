@@ -1,7 +1,7 @@
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import perf_counter, time
-from typing import Any
+from typing import Any, ClassVar
 
 from aiohttp_retry import ExponentialRetry, RetryClient
 from camoufox import AsyncCamoufox, DefaultAddons
@@ -19,44 +19,64 @@ from .endpoints.{{ group.module_name }} import {{ group.class_name }}
 
 @dataclass
 class Warmup:
+    """Runtime context passed to warmup scripts."""
     browser: HumanBrowser
+    """Browser session available to warmup scripts."""
     context: HumanContext
+    """Browser context created during warmup."""
     page: HumanPage
+    """Page used during warmup scripts."""
     sniffer: HeaderAnomalySniffer | None
+    """Optional header sniffer used during warmup when header sniffing is enabled."""
     timeout_ms: int
+    """Effective timeout, in milliseconds, shared by warmup actions."""
     test_mode: bool
+    """Whether the client was started in test mode."""
     prefixes: dict[str, str]
+    """Resolved shared prefix values configured for the app."""
 
 
+@dataclass
 class {{ client_class_name }}:
 {% if app_description %}
     """{{ app_description }}"""
-{% endif %}
 
-    def __init__(
-        self,
-        timeout_ms: float = {{ app.timeout_ms }},
-        headless: bool = True,
-        test_mode: bool = False,
-        proxy: str | dict | Proxy | None = None,
-        browser_opts: dict[str, Any] | None = None,
-    ):
-        self.timeout_ms = timeout_ms
-        self.headless = headless
-        self.test_mode = test_mode
-        self.proxy = Proxy.from_env() if proxy is None else proxy
-        self.browser_opts = {} if browser_opts is None else dict(browser_opts)
+{% endif %}
+    timeout_ms: float = {{ app.timeout_ms }}
+    """Global timeout, in milliseconds, used by warmup and browser-backed requests."""
+    headless: bool = True
+    """Whether the browser is started without a visible window."""
+    test_mode: bool = False
+    """Enable the test-only warmup branch and its extra state."""
+    proxy: str | dict | Proxy | None = None
+    """Proxy settings for browser startup and direct requests. When omitted or set to None, the client reads the proxy from the environment."""
+    browser_opts: dict[str, Any] | None = None
+    """Extra keyword arguments forwarded to AsyncCamoufox during browser startup."""
+
 {% for prefix in prefixes %}
-        self.{{ prefix.attr_name }} = {{ prefix.value }}
+    {{ prefix.attr_name }}: ClassVar[str] = {{ prefix.value }}
 {% endfor %}
-        self.session: HumanBrowser | None = None
-        self.ctx: HumanContext | None = None
-        self.page: HumanPage | None = None
-        self.unstandard_headers: dict[str, str] = {}
-        self.unstandard_urls: dict[str, list[str]] = {}
+
+{% for group in top_groups %}
+    {{ group.field_name }}: {{ group.class_name }} = field(init=False)
+{% if group.description %}
+    """{{ group.description }}"""
+{% endif %}
+{% endfor %}
+
+    def __post_init__(self):
+        self.proxy = Proxy.from_env() if self.proxy is None else self.proxy
+        self.browser_opts = {} if self.browser_opts is None else dict(self.browser_opts)
+        self.session = None
+        self.ctx = None
+        self.page = None
+        self.unstandard_headers = {}
+        self.unstandard_urls = {}
+
 {% for variable in variables %}
-        self.{{ variable.backing_name }}: {{ variable.getter_return }} = None
+        self.{{ variable.backing_name }} = None
 {% endfor %}
+
 {% for group in top_groups %}
         self.{{ group.field_name }} = {{ group.class_name }}(self)
 {% endfor %}

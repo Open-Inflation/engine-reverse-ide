@@ -211,11 +211,11 @@
 {% endif %}
 {% if has_goto_pipeline %}
             warmup = self._parent._make_warmup_context(page=page, sniffer=pipeline_sniffer)
-            from .{{ extractor.goto_pipeline_module }} import {{ extractor.goto_pipeline_function }} as goto_pipeline_runner
+            from {{ root_import_prefix }}{{ extractor.goto_pipeline_module }} import {{ extractor.goto_pipeline_function }} as goto_pipeline_runner
             await goto_pipeline_runner(warmup)
 {% endif %}
 {% if extractor.script_path_expr %}
-            evaluate_script = (Path(__file__).resolve().parent / {{ extractor.script_path_expr }}).read_text(encoding="utf-8")
+            evaluate_script = ({{ extractor.package_root_expr }} / {{ extractor.script_path_expr }}).read_text(encoding="utf-8")
             evaluate_result = await page.evaluate(evaluate_script)
             if isinstance(evaluate_result, dict):
                 result_type = str(evaluate_result.get("type", "")).lower()

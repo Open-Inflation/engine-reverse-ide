@@ -115,7 +115,7 @@ def build_docs_project_context(
     app = project["app"]
     docs_descriptions = config_section("docs", "descriptions")
     client_class_name = root_client_class_name(project)
-    exports = list(dict.fromkeys([client_class_name, *abstraction_exports(project)]))
+    exports = list(dict.fromkeys([client_class_name, "Warmup", *abstraction_exports(project)]))
     top_groups = [
         build_group_docs_context(group_node, project, package_name)
         for group_node in top_level_groups(group_tree)
@@ -137,26 +137,21 @@ def build_docs_project_context(
         "root_package": build_module_page_context(
             title=package_name,
             import_path=package_name,
-            description=app.get("description")
-            or str(docs_descriptions.get("root_package", "Generated client package for {project_title}.")).format(
-                project_title=project_title
-            ),
+            description=str(app.get("description") or ""),
             class_names=exports,
             child_pages=[],
         ),
         "manager_module": build_module_page_context(
             title=f"{package_name}.manager",
             import_path=f"{package_name}.manager",
-            description=str(docs_descriptions.get("manager", "Generated client manager for {project_title}.")).format(
-                project_title=project_title
-            ),
-            class_names=[client_class_name],
+            description=str(docs_descriptions.get("manager") or ""),
+            class_names=[client_class_name, "Warmup"],
             child_pages=[],
         ),
         "endpoints_module": build_module_page_context(
             title=f"{package_name}.endpoints",
             import_path=f"{package_name}.endpoints",
-            description=str(docs_descriptions.get("endpoints", "Generated endpoint package.")),
+            description=str(docs_descriptions.get("endpoints") or ""),
             class_names=[group["class_name"] for group in top_groups],
             child_pages=[group["import_path"] for group in top_groups],
         ),
