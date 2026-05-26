@@ -18,10 +18,15 @@ function normalizeSphinxText(text) {
 }
 
 const BLACK_LOGO_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFElEQVR4nGNgwAH+QzEDEy4VcAAAUjYCAcOOWeoAAAAASUVORK5CYII=";
+const WHITE_LOGO_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFUlEQVR4nGNgwAb+QwGIzYRVBTIAAFNDB/vcADVUAAAAAElFTkSuQmCC";
 const COLORED_LOGO_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAGElEQVR4nGNgwAb+MzD8B2EQmwmrCmQAAKneA//Q/YnfAAAAAElFTkSuQmCC";
 
 function writeLogoFixture(filePath) {
   writeFileSync(filePath, Buffer.from(BLACK_LOGO_PNG_BASE64, "base64"));
+}
+
+function writeWhiteLogoFixture(filePath) {
+  writeFileSync(filePath, Buffer.from(WHITE_LOGO_PNG_BASE64, "base64"));
 }
 
 function writeColoredLogoFixture(filePath) {
@@ -398,7 +403,7 @@ test("generator omits empty class docstrings when the app description is missing
   }
 });
 
-test("generator copies app logo and emits automatic dark mode variants", () => {
+test("generator copies black app logo and emits automatic dark mode variants", () => {
   const repoRoot = path.resolve(__dirname, "..");
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-logo-"));
   const inputPath = path.join(workDir, "logo.msra");
@@ -425,15 +430,11 @@ test("generator copies app logo and emits automatic dark mode variants", () => {
     });
     assert.strictEqual(result.status, 0, result.stderr || result.stdout);
 
-    const readmeText = readFileSync(path.join(outputDir, "README.md"), "utf8");
     const confText = readFileSync(path.join(outputDir, "docs", "source", "conf.py"), "utf8");
-    const logoLightPath = path.join(outputDir, "docs", "source", "_static", "logo-light.png");
-    const logoDarkPath = path.join(outputDir, "docs", "source", "_static", "logo-dark.png");
-    assert.match(readmeText, /<picture>/);
-    assert.match(readmeText, /docs\/source\/_static\/logo-light\.png/);
-    assert.match(readmeText, /docs\/source\/_static\/logo-dark\.png/);
-    assert.match(confText, /"light_logo": "logo-light\.png"/);
-    assert.match(confText, /"dark_logo": "logo-dark\.png"/);
+    const logoLightPath = path.join(outputDir, "docs", "source", "_static", "logo-light.webp");
+    const logoDarkPath = path.join(outputDir, "docs", "source", "_static", "logo-dark.webp");
+    assert.match(confText, /"light_logo": "logo-light\.webp"/);
+    assert.match(confText, /"dark_logo": "logo-dark\.webp"/);
     assert.ok(existsSync(logoLightPath), "expected light logo asset to be generated");
     assert.ok(existsSync(logoDarkPath), "expected dark logo asset to be generated");
 
@@ -458,6 +459,64 @@ test("generator copies app logo and emits automatic dark mode variants", () => {
     const [lightPixel, darkPixel] = normalizeNewlines(inspectResult.stdout).trim().split("\n");
     assert.strictEqual(lightPixel, "(0, 0, 0, 255)|(0, 0, 0, 0)");
     assert.strictEqual(darkPixel, "(255, 255, 255, 255)|(255, 255, 255, 0)");
+
+    const docsBuildDir = buildSphinxTextDocs(outputDir, repoRoot);
+    assert.ok(existsSync(path.join(docsBuildDir, "_api", `${packageName}.manager.txt`)));
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("generator copies white app logo and normalizes it to automatic dark mode variants", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-logo-white-"));
+  const inputPath = path.join(workDir, "logo.msra");
+  const outputDir = path.join(workDir, "generated");
+  const packageName = "logo_api";
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const logoPath = path.join(workDir, "logo.png");
+  writeWhiteLogoFixture(logoPath);
+  const text = [
+    "[app]",
+    'name="LogoAPI"',
+    'package_name="logo_api"',
+    'logo="./logo.png"',
+    'description="Logo docs project"',
+    "",
+  ].join("\n");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const logoLightPath = path.join(outputDir, "docs", "source", "_static", "logo-light.webp");
+    const logoDarkPath = path.join(outputDir, "docs", "source", "_static", "logo-dark.webp");
+    const inspectLogoScript = [
+      "from PIL import Image",
+      "import sys",
+      "for path in sys.argv[1:]:",
+      "    image = Image.open(path).convert('RGBA')",
+      "    center = image.getpixel((1, 1))",
+      "    corner = image.getpixel((0, 0))",
+      "    print(f\"{center}|{corner}\")",
+    ].join("\n");
+    const inspectResult = spawnSync(
+      "python",
+      ["-c", inspectLogoScript, logoLightPath, logoDarkPath],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(inspectResult.status, 0, inspectResult.stderr || inspectResult.stdout);
+    const [lightPixel, darkPixel] = normalizeNewlines(inspectResult.stdout).trim().split("\n");
+    assert.strictEqual(lightPixel, "(0, 0, 0, 255)|(255, 255, 255, 0)");
+    assert.strictEqual(darkPixel, "(255, 255, 255, 255)|(0, 0, 0, 0)");
 
     const docsBuildDir = buildSphinxTextDocs(outputDir, repoRoot);
     assert.ok(existsSync(path.join(docsBuildDir, "_api", `${packageName}.manager.txt`)));

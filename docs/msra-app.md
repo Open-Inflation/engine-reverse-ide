@@ -9,7 +9,7 @@
 | `package_owner` | GitHub owner или organization | Используется для ссылок и бейджей в `README.md`, включая GitHub repo URL, GitHub Pages docs URL и GitHub Actions badges. Значение должно быть статическим и соответствовать имени owner/organization на GitHub. |
 | `social` | Ссылки на соцсети | Inline table со статическими ссылками для README-бейджей, например `social={telegram="https://t.me/...", discord="https://discord.gg/..."}`. |
 | `authors` | Список авторов | Попадает в package metadata. Каждый элемент содержит `name` и `email`. |
-| `logo` | Логотип проекта | Локальный путь к монохромному растровому файлу относительно MSRA-файла, например `./path.png`. Генератор копирует его в `docs/source/_static/`, пишет светлую копию для README и автоматически создаёт белую инверсию для тёмной темы docs. Если в изображении есть цветные пиксели, генерация завершается runtime error. |
+| `logo` | Логотип проекта | Локальный путь к монохромному растровому файлу относительно MSRA-файла, например `./path.png`. Генератор копирует его в `docs/source/_static/` как `logo-light.webp` и `logo-dark.webp` и автоматически создаёт инверсионную пару для тёмной темы docs. Если в изображении есть цветные пиксели, генерация завершается runtime error. |
 | `description` | Краткое описание проекта | Используется в документации, в README и в метаданных сгенерированного пакета. |
 | `license` | Идентификатор лицензии | Попадает в package metadata и рендерится из локального шаблона в `msra_codegen/templates/licenses/` в корневой `LICENSE` сгенерированного проекта. |
 | `keywords` | Список ключевых слов | Попадает в `project.keywords` в `pyproject.toml` и помогает классифицировать пакет на PyPI. |
@@ -46,7 +46,7 @@
 - `package_name` задаёт имя generated Python-пакета; generator больше не пытается выводить его из `name`.
 - `package_owner` задаёт GitHub owner/organization, из которого собираются ссылки и бейджи в generated `README.md`.
 - `social` задаёт внешние ссылки для README-бейджей, сейчас поддерживаются ключи `telegram` и `discord`.
-- `logo` задаёт локальный монохромный растровый файл логотипа; generator копирует его в `docs/source/_static/` и автоматически рендерит светлую и тёмную версии для README и Furo sidebar. Цветные пиксели вызывают runtime error сборки.
+- `logo` задаёт локальный монохромный растровый файл логотипа; generator копирует его в `docs/source/_static/` как `logo-light.webp` и `logo-dark.webp`, автоматически определяет, был ли входной образец black или white, и рендерит светлую и тёмную версии для docs/Furo sidebar. Цветные пиксели вызывают runtime error сборки.
 - `description` попадает в `pyproject.toml` и выводится отдельной строкой в generated `README.md`, если оно не пустое.
 - `license` используется и для `pyproject.toml`, и для корневого `LICENSE` в сгенерированном проекте; текст лицензии берётся только из локального шаблона в `msra_codegen/templates/licenses/`.
 - runtime dependencies генерируются по содержимому проекта: базово это `camoufox[geoip]`, `human_requests`, `Pillow`, `rich`, а при наличии хотя бы одной функции с `transport=direct` генератор добавляет `aiohttp` и `aiohttp-retry`. Тот же список пишется в `pyproject.toml` и в root `requirements.txt`.

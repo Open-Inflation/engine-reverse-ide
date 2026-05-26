@@ -5,7 +5,7 @@ version="0.2.4.1"
 name="FixPriceAPI"
 package_name="fixprice_api"
 package_owner="Open-Inflation"
-logo="./logo-day.png"
+logo="./logo.png"
 social={telegram="https://t.me/miskler_dev", discord="https://discord.gg/UnJnGHNbBp"}
 description="Аснинхронный неофициальный API клиент для сайта fix-price.com"
 version="0.2.4.1"

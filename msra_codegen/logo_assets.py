@@ -6,8 +6,8 @@ from typing import Any
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 
-LOGO_LIGHT_NAME = "logo-light.png"
-LOGO_DARK_NAME = "logo-dark.png"
+LOGO_LIGHT_NAME = "logo-light.webp"
+LOGO_DARK_NAME = "logo-dark.webp"
 
 
 def build_logo_assets(
@@ -24,26 +24,16 @@ def build_logo_assets(
         raise FileNotFoundError(f'app.logo points to a missing file: {source_path}')
 
     source_image = load_logo_image(source_path)
-    validate_monochrome_logo(source_image, source_path)
+    source_polarity = detect_logo_polarity(source_image, source_path)
+    light_image, dark_image = build_logo_variants(source_image, source_polarity)
 
     light_target = static_root / LOGO_LIGHT_NAME
     dark_target = static_root / LOGO_DARK_NAME
-    render_logo_variant(source_image, light_target, invert=False)
-    render_logo_variant(source_image, dark_target, invert=True)
-
-    display_name = str(
-        project.get("app", {}).get("name")
-        or project.get("app", {}).get("package_name")
-        or "logo"
-    ).strip() or "logo"
+    save_logo_variant(light_image, light_target)
+    save_logo_variant(dark_image, dark_target)
     return {
         "light_name": LOGO_LIGHT_NAME,
         "dark_name": LOGO_DARK_NAME,
-        "light_static_path": f"_static/{LOGO_LIGHT_NAME}",
-        "dark_static_path": f"_static/{LOGO_DARK_NAME}",
-        "light_readme_path": f"docs/source/_static/{LOGO_LIGHT_NAME}",
-        "dark_readme_path": f"docs/source/_static/{LOGO_DARK_NAME}",
-        "alt": f"{display_name} logo",
     }
 
 
@@ -64,10 +54,11 @@ def load_logo_image(source_path: Path) -> Image.Image:
         ) from exc
 
 
-def validate_monochrome_logo(source_image: Image.Image, source_path: Path) -> None:
+def detect_logo_polarity(source_image: Image.Image, source_path: Path) -> str:
     pixels = source_image.load()
     width, height = source_image.size
     visible_pixels = 0
+    visible_red_sum = 0
     for y in range(height):
         for x in range(width):
             red, green, blue, alpha = pixels[x, y]
@@ -79,15 +70,30 @@ def validate_monochrome_logo(source_image: Image.Image, source_path: Path) -> No
                     "app.logo must be a monochrome black-and-white raster image; "
                     f"colored pixel at ({x}, {y}) is RGBA=({red}, {green}, {blue}, {alpha}): {source_path}"
                 )
+            visible_red_sum += red
     if visible_pixels == 0:
         raise ValueError(f"app.logo must contain at least one visible pixel: {source_path}")
+    return "white" if visible_red_sum * 2 >= visible_pixels * 255 else "black"
 
 
-def render_logo_variant(source_image: Image.Image, target_path: Path, *, invert: bool) -> None:
-    target_path.parent.mkdir(parents=True, exist_ok=True)
+def build_logo_variants(source_image: Image.Image, source_polarity: str) -> tuple[Image.Image, Image.Image]:
+    black_variant = source_image if source_polarity == "black" else invert_logo_image(source_image)
+    white_variant = source_image if source_polarity == "white" else invert_logo_image(source_image)
+    return black_variant, white_variant
+
+
+def invert_logo_image(source_image: Image.Image) -> Image.Image:
     red, green, blue, alpha = source_image.split()
     rgb = Image.merge("RGB", (red, green, blue))
-    if invert:
-        rgb = ImageOps.invert(rgb)
-    rendered = Image.merge("RGBA", (*rgb.split(), alpha))
-    rendered.save(target_path)
+    inverted_rgb = ImageOps.invert(rgb)
+    return Image.merge("RGBA", (*inverted_rgb.split(), alpha))
+
+
+def save_logo_variant(source_image: Image.Image, target_path: Path) -> None:
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        source_image.save(target_path, format="WEBP", lossless=True, method=6, exact=True)
+    except (OSError, ValueError) as exc:
+        raise ValueError(
+            f"app.logo output requires WebP support in Pillow: {target_path}"
+        ) from exc

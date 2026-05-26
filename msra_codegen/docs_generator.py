@@ -170,7 +170,6 @@ def build_docs_project_context(
             project,
             package_name,
             pipeline_script_code,
-            logo_context=logo_context,
         ),
         "pipeline_script_code": pipeline_script_code,
         "pipeline_script_code_rst": textwrap.indent(pipeline_script_code, "    "),
@@ -182,8 +181,6 @@ def build_readme_context(
     project: dict[str, Any],
     package_name: str,
     pipeline_script_code: str,
-    *,
-    logo_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     app = project["app"]
     readme_config = config_section("readme")
@@ -201,7 +198,6 @@ def build_readme_context(
         "title": display_title,
         "project_line": display_title,
         "description": description,
-        "logo": logo_context,
         "package_owner": package_owner,
         "package_owner_lower": package_owner_lower,
         "package_name": package_name,

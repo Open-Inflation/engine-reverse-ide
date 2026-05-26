@@ -1,14 +1,4 @@
 <div align="center">
-
-{% if readme.logo %}
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="{{ readme.logo.dark_readme_path }}">
-    <img alt="{{ readme.logo.alt }}" src="{{ readme.logo.light_readme_path }}">
-  </picture>
-</p>
-
-{% endif %}
 # {{ readme.title }}
 
 ![Tests last run (ISO)]({{ readme.workflow_last_run_badge_url }})
