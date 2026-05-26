@@ -12,13 +12,7 @@ license = "{{ license }}"
 {{ authors_block }}
 {{ keywords_block }}
 {{ classifiers_block }}
-dependencies = [
-    "camoufox[geoip]",
-    "human_requests",
-    "aiohttp",
-    "aiohttp-retry",
-    "Pillow"
-]
+{{ dependencies_block }}
 
 [tool.setuptools]
 include-package-data = true

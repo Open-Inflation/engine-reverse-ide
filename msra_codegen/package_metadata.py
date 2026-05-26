@@ -18,6 +18,15 @@ from .template_engine import render_template
 
 PYTHON_RELEASES_API_URL = "https://www.python.org/api/v2/downloads/release/"
 PYTHON_RELEASES_API_TIMEOUT_SECONDS = 15.0
+BASE_RUNTIME_DEPENDENCIES = [
+    "camoufox[geoip]",
+    "human_requests",
+    "Pillow",
+]
+DIRECT_RUNTIME_DEPENDENCIES = [
+    "aiohttp",
+    "aiohttp-retry",
+]
 
 
 def render_pyproject(project: dict[str, Any], package_name: str) -> str:
@@ -25,6 +34,7 @@ def render_pyproject(project: dict[str, Any], package_name: str) -> str:
     authors = project["app"].get("authors", [])
     min_required_python = str(project["app"].get("min_required_python", "3.10") or "3.10").strip()
     description = str(project["app"].get("description", "") or "").strip()
+    runtime_dependencies = collect_runtime_dependencies(project)
     return render_template(
         "pyproject.toml.tpl",
         {
@@ -34,6 +44,7 @@ def render_pyproject(project: dict[str, Any], package_name: str) -> str:
             "keywords_block": render_keywords_block(project["app"].get("keywords", [])),
             "classifiers_block": render_classifiers_block(min_required_python),
             "requires_python": f">={min_required_python}",
+            "dependencies_block": render_toml_string_list("dependencies", runtime_dependencies),
             "package_name": package_name,
             "autotest_start_class": f"{package_name}.{client_class_name}",
         },
@@ -152,6 +163,17 @@ def render_toml_string_list(key: str, values: Any) -> str:
     if len(items) == 1:
         return f"{key} = [{items[0]}]"
     return f"{key} = [\n    " + ",\n    ".join(items) + "\n]"
+
+
+def collect_runtime_dependencies(project: dict[str, Any]) -> list[str]:
+    dependencies = list(BASE_RUNTIME_DEPENDENCIES)
+    if any(func.get("transport") == "direct" for func in project.get("functions", [])):
+        dependencies.extend(DIRECT_RUNTIME_DEPENDENCIES)
+    return dependencies
+
+
+def render_requirements_txt(project: dict[str, Any]) -> str:
+    return "\n".join(collect_runtime_dependencies(project)) + "\n"
 
 
 def write_root_license(output_dir: Path, project: dict[str, Any]) -> None:

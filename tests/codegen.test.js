@@ -308,6 +308,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       const exampleText = readFileSync(path.join(testCase.outputDir, "example.py"), "utf8");
       const quickStartText = readFileSync(path.join(testCase.outputDir, "docs", "source", "quick_start.rst"), "utf8");
       const pyprojectText = readFileSync(path.join(testCase.outputDir, "pyproject.toml"), "utf8");
+      const requirementsText = readFileSync(path.join(testCase.outputDir, "requirements.txt"), "utf8");
       const licenseText = readFileSync(path.join(testCase.outputDir, "LICENSE"), "utf8");
       const readmePipelineCode = extractMarkdownCodeFence(readmeText);
       const quickStartPipelineCode = extractRstPythonCodeBlock(quickStartText);
@@ -359,8 +360,28 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(pyprojectText, /Topic :: Utilities/);
       if (testCase.packageName === "fixprice_api") {
         assert.match(pyprojectText, /keywords = \[\r?\n\s*"fixprice",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
+        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"aiohttp",\r?\n\s*"aiohttp-retry"\r?\n\]/);
+        assert.strictEqual(
+          normalizeNewlines(requirementsText).trimEnd(),
+          [
+            "camoufox[geoip]",
+            "human_requests",
+            "Pillow",
+            "aiohttp",
+            "aiohttp-retry",
+          ].join("\n"),
+        );
       } else {
         assert.match(pyprojectText, /keywords = \[\r?\n\s*"ozon",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
+        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow"\r?\n\]/);
+        assert.strictEqual(
+          normalizeNewlines(requirementsText).trimEnd(),
+          [
+            "camoufox[geoip]",
+            "human_requests",
+            "Pillow",
+          ].join("\n"),
+        );
       }
       if (testCase.license === "MIT") {
         assert.match(licenseText, /MIT License/);

@@ -47,6 +47,7 @@
 - `social` задаёт внешние ссылки для README-бейджей, сейчас поддерживаются ключи `telegram` и `discord`.
 - `description` попадает в `pyproject.toml` и выводится отдельной строкой в generated `README.md`, если оно не пустое.
 - `license` используется и для `pyproject.toml`, и для корневого `LICENSE` в сгенерированном проекте; текст лицензии берётся только из локального шаблона в `msra_codegen/templates/licenses/`.
+- runtime dependencies генерируются по содержимому проекта: базово это `camoufox[geoip]`, `human_requests`, `Pillow`, а при наличии хотя бы одной функции с `transport=direct` генератор добавляет `aiohttp` и `aiohttp-retry`. Тот же список пишется в `pyproject.toml` и в root `requirements.txt`.
 - `keywords` попадает в `project.keywords` без дополнительной трансформации.
 - `min_required_python` задаёт нижнюю границу `requires-python`; generator также расширяет его в Python version classifiers, поднимая верхнюю границу по официальному `python.org/api/v2/downloads/release/` и беря предпоследний стабильный `3.x` family как включительный предел.
 - Для шаблонов, где это нужно, generator подставляет значения вроде текущего года и списка copyright holders из `authors`.

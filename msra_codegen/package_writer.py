@@ -14,7 +14,7 @@ from .codegen_context import (
     write_group_package,
 )
 from .file_utils import write_text
-from .package_metadata import render_pyproject, write_root_license
+from .package_metadata import render_pyproject, render_requirements_txt, write_root_license
 from .project_model import build_group_tree, top_level_groups
 from .template_engine import render_template
 
@@ -47,6 +47,10 @@ def generate_project(
     write_text(
         output_dir / "pyproject.toml",
         render_pyproject(project, package_name),
+    )
+    write_text(
+        output_dir / "requirements.txt",
+        render_requirements_txt(project),
     )
     write_text(package_root / "__init__.py", render_init(project, package_name))
     stale_abstraction_file = package_root / "abstraction.py"
