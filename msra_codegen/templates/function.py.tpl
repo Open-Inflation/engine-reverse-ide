@@ -72,7 +72,7 @@
 {% endfor %}
 
         request_url = {{ url_expr }}
-        query_params = []
+        query_params: list[tuple[str, Any]] = []
 {% for param in query_params %}
 {% if param.kind == "from" and param.has_value_map %}
 {% if param.is_list %}
@@ -224,11 +224,21 @@
                 elif result_type in {"text", "text/plain"}:
                     text_override = str(evaluate_result.get("data", ""))
 {% endif %}
-            return await abstraction.Output.from_playwright_response(
-                resp,
+            response_raw: bytes | str = await resp.body()
+            if json_override is not None:
+                response_raw = json.dumps(json_override, ensure_ascii=False, separators=(",", ":"))
+            elif text_override is not None:
+                response_raw = text_override
+            return abstraction.Output.from_raw(
+                response_raw,
+                url=str(resp.url),
+                headers=await resp.all_headers(),
+                status_code=resp.status,
+                status_text=resp.status_text,
+                redirected=None,
+                response_type=resp.type,
                 page=page,
-                json_override=json_override,
-                text_override=text_override,
+                request=resp.request,
             )
         finally:
             try:

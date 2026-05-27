@@ -28,7 +28,7 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
                 "",
                 "async def main():",
                 f"    async with {client_class_name}() as api:",
-                "        pass",
+                "        assert api is not None",
                 "",
                 'if __name__ == "__main__":',
                 "    asyncio.run(main())",
@@ -45,6 +45,7 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
         deps = collect_funcresult_dependencies([node["example"].get("inputs"), node["example"].get("print")])
         dependencies[node["key"]] = {dep for dep in deps if dep in selected_node_keys and dep != node["key"]}
 
+    referenced_node_keys = {dependency_key for deps in dependencies.values() for dependency_key in deps}
     ordered_keys = topologically_order_functions(node_order, dependencies, order_index)
     nodes_by_key = {node["key"]: node for node in selected_nodes}
     output_var_names: dict[str, str] = {}
@@ -70,6 +71,7 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
 
         call_path = build_readme_call_path(func)
         output_var = readme_output_var_name(example_name)
+        assignment_var = output_var
         call_args = build_readme_call_args(example.get("inputs"), output_var_names)
         response_suffix = ".json()"
         if example_type == "text":
@@ -77,10 +79,12 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
         elif example_type == "image":
             response_suffix = ".image()"
         body_lines.append(
-            f"        {output_var} = (await {call_path}({call_args})){response_suffix}"
+            f"        {assignment_var} = (await {call_path}({call_args})){response_suffix}"
             if call_args
-            else f"        {output_var} = (await {call_path}()){response_suffix}"
+            else f"        {assignment_var} = (await {call_path}()){response_suffix}"
         )
+        if node_key not in referenced_node_keys:
+            body_lines.append(f"        _ = {output_var}")
         output_var_names[node_key] = output_var
         for print_line in render_readme_print_lines(example.get("print"), output_var_names):
             body_lines.append(print_line)
@@ -92,12 +96,11 @@ def build_readme_pipeline_code(project: dict[str, Any], package_name: str, clien
             "",
             "async def main():",
             f"    async with {client_class_name}() as api:",
+            "        assert api is not None",
         ]
     )
     if body_lines:
         lines.extend(body_lines)
-    else:
-        lines.append("        pass")
     lines.extend(
         [
             "",

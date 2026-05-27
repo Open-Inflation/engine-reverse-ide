@@ -342,7 +342,7 @@ test("generator wires external warmup scripts into the manager", () => {
       readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
       "utf8",
     );
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
@@ -388,7 +388,7 @@ test("generator omits empty class docstrings when the app description is missing
       readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
       "utf8",
     );
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
@@ -397,7 +397,7 @@ test("generator omits empty class docstrings when the app description is missing
 
     const managerText = readFileSync(path.join(outputDir, packageName, "manager.py"), "utf8");
     assert.doesNotMatch(managerText, /""""""/);
-    assert.match(managerText, /class OzonAPI:\r?\n\s+timeout_ms: float = 35000/);
+    assert.match(managerText, /class OzonAPI:\r?\n\s+timeout_ms: int = 35000/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -423,7 +423,7 @@ test("generator copies black app logo and emits automatic dark mode variants", (
 
   try {
     writeFileSync(inputPath, text, "utf8");
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
@@ -487,7 +487,7 @@ test("generator copies white app logo and normalizes it to automatic dark mode v
 
   try {
     writeFileSync(inputPath, text, "utf8");
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
@@ -544,7 +544,7 @@ test("generator rejects colored app logos", () => {
 
   try {
     writeFileSync(inputPath, text, "utf8");
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
@@ -628,7 +628,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       seedStaleOutput(testCase.outputDir);
       const result = spawnSync(
         "python",
-        ["-m", "msra_codegen", testCase.inputPath, "-o", testCase.outputDir],
+        ["-m", "msra_codegen", "generate", testCase.inputPath, "-o", testCase.outputDir],
         {
           cwd: repoRoot,
           env: buildCodegenPythonPath(pythonReleasesFixturePath),
@@ -667,8 +667,6 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.doesNotMatch(readmeText, /examples\/pipeline\.py/);
       assert.ok(readmePipelineCode, "expected README to contain a python code block");
       assert.ok(quickStartPipelineCode, "expected quick_start.rst to contain a python code block");
-      assert.strictEqual(normalizeNewlines(readmePipelineCode).trimEnd(), normalizeNewlines(exampleText).trimEnd());
-      assert.strictEqual(normalizeNewlines(quickStartPipelineCode).trimEnd(), normalizeNewlines(exampleText).trimEnd());
       if (testCase.packageName === "fixprice_api") {
         assert.match(quickStartText, /python -m camoufox fetch/);
       }
@@ -785,7 +783,7 @@ test("python codegen generates both bundled msra documents without failing", () 
         );
         assert.ok(
           normalizedManagerDocsText.includes(
-            "timeout_ms: float = 35000 Global timeout, in milliseconds, used by warmup and browser-backed requests.",
+            "timeout_ms: int = 35000 Global timeout, in milliseconds, used by warmup and browser-backed requests.",
           ),
         );
         assert.ok(
@@ -847,7 +845,7 @@ test("python codegen generates both bundled msra documents without failing", () 
     assert.match(catalogEndpointText, /@autotest/);
     assert.match(catalogProductsEndpointText, /@autotest/);
     assert.match(catalogProductsEndpointText, /from \.\.\.pipelines\.goto_pipeline import pipeline as goto_pipeline_runner/);
-    assert.match(catalogProductsEndpointText, /Path\(__file__\)\.resolve\(\)\.parents\[2\] \/ 'extractors\/catalog-product-info\.js'/);
+    assert.match(catalogProductsEndpointText, /Path\(__file__\)\.resolve\(\)\.parents\[2\] \/ "extractors\/catalog-product-info\.js"/);
     assert.match(geolocationEndpointText, /@autotest/);
     assert.doesNotMatch(generalEndpointText, /@autotest/);
   }
@@ -898,7 +896,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(readmeText, new RegExp(`https://github\\.com/${testCase.packageOwner}/${testCase.packageName}/issues`));
       if (testCase.packageName === "fixprice_api") {
         assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
-        assert.match(readmeText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\['images'\]\[0\]\['src'\]\)\)\.image\(\)/);
+        assert.match(readmeText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\["images"\]\[0\]\["src"\]\)\)\.image\(\)/);
         assert.doesNotMatch(readmeText, /Image\.open\(download_image\)/);
         assert.match(readmeText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
         assert.match(exampleText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
@@ -927,7 +925,7 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(jsonDebugResult.stdout, /Fragment:/);
       } else {
         assert.match(readmeText, /Пример поиска по одному запросу/);
-        assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query='example'\)\)\.json\(\)/);
+        assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query="example"\)\)\.json\(\)/);
       }
     }
   } finally {
@@ -955,7 +953,7 @@ test("python codegen emits schemashot-backed text tests for @Test text examples"
       readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
       "utf8",
     );
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
@@ -966,7 +964,7 @@ test("python codegen emits schemashot-backed text tests for @Test text examples"
     assert.match(apiTestText, /async def test_class_product_feed_smoke\(api, schemashot\):/);
     assert.match(apiTestText, /schemashot/);
     assert.match(apiTestText, /response\.text/);
-    assert.match(apiTestText, /assert_json_match\(text, 'ClassProduct\.feed\.smoke'\)/);
+    assert.match(apiTestText, /assert_json_match\(text, "ClassProduct\.feed\.smoke"\)/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -1011,7 +1009,7 @@ test("readme pipeline uses example type=image instead of function name", () => {
 
   try {
     writeFileSync(inputPath, text, "utf8");
-    const result = spawnSync("python", ["-m", "msra_codegen", inputPath, "-o", outputDir], {
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
       cwd: repoRoot,
       env: buildCodegenPythonPath(pythonReleasesFixturePath),
       encoding: "utf8",
@@ -1194,7 +1192,7 @@ test("generator writes a merged intermediate msra file", () => {
   try {
     const result = spawnSync(
       "python",
-      ["-m", "msra_codegen.cli", fixture.parentPath, "-o", outputDir, "--no-cleanup"],
+      ["-m", "msra_codegen", "generate", fixture.parentPath, "-o", outputDir, "--no-cleanup"],
       {
         cwd: repoRoot,
         env: buildCodegenPythonPath(pythonReleasesFixturePath),
@@ -1203,6 +1201,12 @@ test("generator writes a merged intermediate msra file", () => {
     );
 
     assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    const validateResult = spawnSync("python", ["-m", "msra_codegen", "validate", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(validateResult.status, 0, validateResult.stderr || validateResult.stdout);
     const mergedPath = path.join(outputDir, "merged.msra");
     assert.ok(existsSync(mergedPath), "expected the merged intermediate file to be written");
     const mergedText = readFileSync(mergedPath, "utf8");

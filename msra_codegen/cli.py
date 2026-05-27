@@ -9,26 +9,45 @@ from .bridge import load_msra_document
 from .msra_serializer import write_merged_msra_document
 from .package_writer import generate_project
 from .project_model import build_project
+from .validation import validate_generated_project
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="msra-codegen",
-        description="Generate an async Python client and Sphinx docs from an MSRA document.",
+        description="Generate or validate an async Python client and Sphinx docs from an MSRA document.",
     )
-    parser.add_argument("msra_file", type=Path, help="Path to the source .msra file")
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    generate_parser = subparsers.add_parser(
+        "generate",
+        help="Generate an async Python client and Sphinx docs from an MSRA document.",
+    )
+    generate_parser.add_argument("msra_file", type=Path, help="Path to the source .msra file")
+    generate_parser.add_argument(
         "-o",
         "--output",
         type=Path,
         default=Path("generated"),
         help="Output directory for the generated project (default: ./generated)",
     )
-    parser.add_argument(
+    generate_parser.add_argument(
         "--no-cleanup",
         action="store_true",
         help="Keep the existing output directory contents and preserve merged.msra after generation",
     )
+    generate_parser.set_defaults(handler=handle_generate)
+
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Validate a generated project with python syntax, black, isort, flake8, and mypy.",
+    )
+    validate_parser.add_argument(
+        "output_dir",
+        type=Path,
+        help="Path to a generated project directory",
+    )
+    validate_parser.set_defaults(handler=handle_validate)
     return parser
 
 
@@ -37,7 +56,11 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     parser = build_parser()
     args = parser.parse_args(argv)
+    args.handler(args)
+    return 0
 
+
+def handle_generate(args: argparse.Namespace) -> None:
     ast = load_msra_document(args.msra_file)
     output_root = args.output.resolve()
     if not args.no_cleanup:
@@ -61,7 +84,12 @@ def main(argv: list[str] | None = None) -> int:
     else:
         message += f" (docs in {output_root / 'docs'}, merged source cleaned)"
     print(message)
-    return 0
+
+
+def handle_validate(args: argparse.Namespace) -> None:
+    output_root = args.output_dir.resolve()
+    validate_generated_project(output_root)
+    print(f"Validated generated project in {output_root}")
 
 
 def remove_output_tree(output_root: Path) -> None:

@@ -1,7 +1,4 @@
-from human_requests.network_analyzer.anomaly_sniffer import (
-    HeaderAnomalySniffer, WaitHeader, WaitSource
-)
-from human_requests import HumanBrowser, HumanContext, HumanPage
+from human_requests.network_analyzer.anomaly_sniffer import WaitHeader, WaitSource
 
 from . import Warmup
 

@@ -17,6 +17,7 @@ from .codegen_context import (
 from .github_workflows import generate_github_workflows_project
 from .core_naming import normalize_script_path
 from .file_utils import write_text
+from .python_formatting import format_python_tree
 from .package_metadata import render_pyproject, render_requirements_dev_txt, render_requirements_txt, write_root_license
 from .project_model import build_group_tree, top_level_groups
 from .tests_generator import build_tests_project_context, generate_tests_project
@@ -145,3 +146,4 @@ def generate_project(
         group_tree,
         tests_context=tests_context,
     )
+    format_python_tree(output_dir)

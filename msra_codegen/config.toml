@@ -84,3 +84,40 @@ target_options = ["docs", "package", "all"]
 pages_environment_name = "github-pages"
 pypi_environment_name = "pypi"
 github_token_secret = "GITHUB_TOKEN"
+
+[[validation.checks]]
+name = "python-syntax"
+argv = ["{python_executable}", "-m", "compileall", "-q"]
+targets = ["{package_name}", "tests", "example.py", "docs/source/conf.py"]
+
+[validation]
+line_length = 200
+
+[[validation.checks]]
+name = "black"
+argv = ["{python_executable}", "-m", "black", "--check", "--line-length", "200"]
+targets = ["{package_name}", "tests", "example.py", "docs/source/conf.py"]
+
+[[validation.checks]]
+name = "isort"
+argv = [
+    "{python_executable}",
+    "-m",
+    "isort",
+    "--check-only",
+    "--profile",
+    "black",
+    "--line-length",
+    "200",
+]
+targets = ["{package_name}", "tests", "example.py", "docs/source/conf.py"]
+
+[[validation.checks]]
+name = "flake8"
+argv = ["{python_executable}", "-m", "flake8", "--max-line-length", "200"]
+targets = ["{package_name}", "tests", "example.py"]
+
+[[validation.checks]]
+name = "mypy"
+argv = ["{python_executable}", "-m", "mypy"]
+targets = ["{package_name}"]

@@ -59,10 +59,13 @@ node ..\bin\msra.js check ..\examples\example.msra
 This repo also includes a Python generator that turns an `.msra` document into an async Python client package and a matching Sphinx documentation tree.
 
 ```powershell
-python -m msra_codegen .\examples\fixprice\fixprice.msra -o .\generated
+python -m msra_codegen generate .\examples\fixprice\fixprice.msra -o .\generated
+python -m msra_codegen validate .\generated
 ```
 
 Use `--no-cleanup` if you want to keep the intermediate `merged.msra` file and preserve any existing files in the target directory.
+
+`validate` runs `python` syntax checks, `black`, `isort`, `flake8`, and `mypy` against the generated project tree.
 
 The generator uses Jinja2 templates, so install its Python dependency first if your environment does not already have it:
 

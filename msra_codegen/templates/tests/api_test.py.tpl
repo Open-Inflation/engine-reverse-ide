@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any  # noqa: F401
 
-import pytest
-from human_requests import autotest_data, autotest_depends_on, autotest_hook, autotest_params
-from human_requests.autotest import AutotestCallContext, AutotestContext, AutotestDataContext
+import pytest  # noqa: F401
+from human_requests import autotest_data, autotest_depends_on, autotest_hook, autotest_params  # noqa: F401
+from human_requests.autotest import AutotestCallContext, AutotestContext, AutotestDataContext  # noqa: F401
 
 {% for import in imports %}
 from {{ import.module }} import {{ import.class_name }}

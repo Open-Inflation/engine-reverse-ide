@@ -1,15 +1,13 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 from time import perf_counter, time
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast  # noqa: F401
 
 from aiohttp_retry import ExponentialRetry, RetryClient
 from camoufox import AsyncCamoufox, DefaultAddons
-from human_requests import HumanBrowser, HumanContext, HumanPage
+from human_requests import HumanBrowser, HumanPage
 from human_requests.abstraction import HttpMethod, Proxy, Warmup
-from human_requests.network_analyzer.anomaly_sniffer import (
-    HeaderAnomalySniffer, WaitHeader, WaitSource
-)
+from human_requests.network_analyzer.anomaly_sniffer import HeaderAnomalySniffer
 
 from . import abstraction
 {% for group in top_groups %}
@@ -23,7 +21,7 @@ class {{ client_class_name }}:
     """{{ app_description }}"""
 
 {% endif %}
-    timeout_ms: float = {{ app.timeout_ms }}
+    timeout_ms: int = {{ app.timeout_ms }}
     """Global timeout, in milliseconds, used by warmup and browser-backed requests."""
     headless: bool = True
     """Whether the browser is started without a visible window."""
@@ -47,7 +45,8 @@ class {{ client_class_name }}:
 
     def __post_init__(self):
         self.proxy = Proxy.from_env() if self.proxy is None else self.proxy
-        self.browser_opts = {} if self.browser_opts is None else dict(self.browser_opts)
+        browser_opts: dict[str, Any] = {} if self.browser_opts is None else dict(self.browser_opts)
+        self.browser_opts = browser_opts
         self.session = None
         self.ctx = None
         self.page = None
@@ -68,17 +67,18 @@ class {{ client_class_name }}:
 
     async def _warmup(self) -> None:
         px = self.proxy if isinstance(self.proxy, Proxy) else Proxy(self.proxy)
+        browser_opts: dict[str, Any] = {} if self.browser_opts is None else dict(self.browser_opts)
         br = await AsyncCamoufox(
             headless=self.headless,
             proxy=px.as_dict(),
             humanize={{ app.humanize }},
-            **self.browser_opts,
+            **browser_opts,
             block_images={{ app.block_images }},
             i_know_what_im_doing=True,
             exclude_addons=[DefaultAddons.UBO],
         ).start()
 
-        self.session = HumanBrowser.replace(br)
+        self.session = HumanBrowser.replace(cast(Any, br))
         self.ctx = await self.session.new_context()
         self.page = await self.ctx.new_page()
         self.page.on_error_screenshot_path = {{ warmup.on_error_screenshot_path }}
@@ -93,14 +93,13 @@ class {{ client_class_name }}:
         sniffer = None
 
 {% endif %}
-        warmup = self._make_warmup_context(page=self.page, sniffer=sniffer)
-
 {% if warmup.script_module and warmup.script_function and warmup.script_path_expr %}
+        warmup = self._make_warmup_context(page=self.page, sniffer=sniffer)
         from .{{ warmup.script_module }} import {{ warmup.script_function }} as warmup_runner
         await warmup_runner(warmup)
 {% endif %}
 
-        result_sniffer = await sniffer.complete() if sniffer else {"request": {}}
+        result_sniffer: dict[str, Any] = await sniffer.complete() if sniffer else {"request": {}}
 
         result = defaultdict(set)
 
@@ -164,16 +163,18 @@ class {{ client_class_name }}:
         headers: dict[str, Any] | None = None,
     ) -> abstraction.Output:
         request_headers = headers if headers is not None else {{ request.headers_expr }}
-        response = await self.page.fetch(
-            url=url,
-            method=method,
-            body=json_body,
-            mode=mode if mode is not None else {{ request.cors_mode_expr }},
-            credentials=credentials if credentials is not None else {{ request.credentials_expr }},
-            timeout_ms=self.timeout_ms,
-            referrer=referrer if referrer is not None else {{ request.referrer_expr }},
-            headers=request_headers,
-        )
+        fetch_kwargs: dict[str, Any] = {
+            "url": url,
+            "method": method,
+            "body": json_body,
+            "mode": mode if mode is not None else {{ request.cors_mode_expr }},
+            "credentials": credentials if credentials is not None else {{ request.credentials_expr }},
+            "timeout_ms": self.timeout_ms,
+            "headers": request_headers,
+        }
+        if referrer is not None:
+            fetch_kwargs["referrer"] = referrer
+        response = await self.page.fetch(**fetch_kwargs)
         return abstraction.Output.from_fetch_response(response)
 
     async def _direct_request(

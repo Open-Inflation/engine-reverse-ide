@@ -57,10 +57,10 @@ def render_init(project: dict[str, Any], package_name: str) -> str:
     return render_template(
         "init.py.tpl",
         {
-            "imports": (
-                [f"from .abstraction import {', '.join(exports)}"] if exports else []
+        "imports": (
+                [f"from .abstraction import {', '.join(exports)}  # noqa: F401"] if exports else []
             )
-            + [f"from .manager import {client_class_name}"],
+            + [f"from .manager import {client_class_name}  # noqa: F401"],
             "exports": exports,
             "client_class_name": client_class_name,
             "version": project["app"]["version"],
@@ -150,7 +150,7 @@ def build_variable_warmup_code(variable: dict[str, Any]) -> str:
         "else:",
     ]
     if variable.get("setter_enabled"):
-        value_lines = build_setter_variable_value_lines(variable, raw_name, target_expr)
+        value_lines = build_setter_variable_value_lines(variable, raw_name, value_name, target_expr)
     else:
         value_lines = build_variable_value_lines(variable, raw_name, value_name, target_expr)
     lines.extend(f"    {line}" for line in value_lines)
@@ -160,36 +160,40 @@ def build_variable_warmup_code(variable: dict[str, Any]) -> str:
 def build_setter_variable_value_lines(
     variable: dict[str, Any],
     raw_name: str,
+    value_name: str,
     target_expr: str,
 ) -> list[str]:
     label = variable["name"]
     kind = str(variable.get("capture_kind") or "string")
     lines: list[str] = []
     if kind == "integer":
-        lines.append(f"{target_expr} = int({raw_name})")
+        lines.append(f"{value_name} = int({raw_name})")
     elif kind == "number":
-        lines.append(f"{target_expr} = float({raw_name})")
+        lines.append(f"{value_name} = float({raw_name})")
     elif kind == "boolean":
         lines.extend(
             [
                 f"if isinstance({raw_name}, bool):",
-                f"    {target_expr} = {raw_name}",
+                f"    {value_name} = {raw_name}",
                 f"elif isinstance({raw_name}, str):",
                 f"    lowered = {raw_name}.strip().lower()",
                 '    if lowered in {"true", "1", "yes", "on"}:',
-                f"        {target_expr} = True",
+                f"        {value_name} = True",
                 '    elif lowered in {"false", "0", "no", "off"}:',
-                f"        {target_expr} = False",
+                f"        {value_name} = False",
                 "    else:",
                 f'        raise ValueError(f"`{label}` must be boolean-like")',
                 "else:",
-                f"    {target_expr} = bool({raw_name})",
+                f"    {value_name} = bool({raw_name})",
             ]
         )
     elif kind == "null":
-        lines.append(f"{target_expr} = None")
+        lines.append(f"{value_name} = None")
     else:
-        lines.append(f"{target_expr} = {raw_name} if isinstance({raw_name}, str) else str({raw_name})")
+        lines.append(f"{value_name} = {raw_name} if isinstance({raw_name}, str) else str({raw_name})")
+    if not variable.get("setter_enabled"):
+        lines.extend(build_variable_validation_lines(variable, value_name))
+    lines.append(f"{target_expr} = cast({variable['getter_return']}, {value_name})")
     return lines
 
 
@@ -377,6 +381,8 @@ def build_function_context(
         url_input = next((input_spec["name"] for input_spec in inputs if input_spec["name"] == "url"), None)
         if url_input:
             url_expr = url_input
+        else:
+            url_expr = render_simple_value("")
     return {
         "method_name": method_name,
         "description": escape_docstring(func.get("description")) if func.get("description") else "",
@@ -389,7 +395,7 @@ def build_function_context(
         "method": method,
         "url_expr": url_expr,
         "request": {
-            "referrer_expr": render_request_referrer(headers_spec, default_if_missing=False),
+            "referrer_expr": render_request_referrer(headers_spec),
             "cors_mode_expr": render_request_cors_mode(headers_spec, default_if_missing=False),
             "credentials_expr": render_request_credentials(headers_spec, default_if_missing=False),
             "headers_expr": render_request_headers(headers_spec, default_if_missing=False),
@@ -626,7 +632,7 @@ def build_manager_context(
             "script_function": warmup_script.get("function") if warmup_script else None,
         },
         "request": {
-            "referrer_expr": render_request_referrer(headers_spec, default_if_missing=True),
+            "referrer_expr": render_request_referrer(headers_spec),
             "cors_mode_expr": render_request_cors_mode(headers_spec, default_if_missing=True),
             "credentials_expr": render_request_credentials(headers_spec, default_if_missing=True),
             "headers_expr": render_request_headers(headers_spec, default_if_missing=True),

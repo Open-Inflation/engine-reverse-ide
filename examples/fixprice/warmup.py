@@ -1,7 +1,4 @@
-from human_requests.network_analyzer.anomaly_sniffer import (
-    HeaderAnomalySniffer, WaitHeader, WaitSource
-)
-from human_requests import HumanBrowser, HumanContext, HumanPage
+from human_requests.network_analyzer.anomaly_sniffer import WaitHeader, WaitSource
 
 from human_requests.abstraction import Warmup
 
@@ -12,7 +9,11 @@ async def pipeline(warmup: Warmup):
     await warmup.page.goto(start_url, wait_until="domcontentloaded")
     await warmup.page.wait_for_load_state("networkidle")
 
-    await warmup.sniffer.wait(
+    sniffer = warmup.sniffer
+    if sniffer is None:
+        raise RuntimeError("sniffer is required")
+
+    await sniffer.wait(
         tasks=[
             WaitHeader(
                 source=WaitSource.REQUEST,
@@ -21,10 +22,8 @@ async def pipeline(warmup: Warmup):
         ],
         timeout_ms=warmup.timeout_ms,
     )
-
-
-    #await warmup.page.wait_for_selector(
-    #    selector="body > pre",
-    #    timeout=warmup.timeout_ms,
-    #    state="visible",
-    #)
+    # await warmup.page.wait_for_selector(
+    #     selector="body > pre",
+    #     timeout=warmup.timeout_ms,
+    #     state="visible",
+    # )

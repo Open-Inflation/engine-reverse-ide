@@ -4,7 +4,7 @@ import re
 
 class RegexBase:
     REGEX = r""
-    ERROR = None
+    ERROR: str | None = None
 
     @classmethod
     def match(cls, value: Any) -> bool:

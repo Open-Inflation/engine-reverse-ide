@@ -12,6 +12,7 @@ from .core_naming import group_public_import_path, root_client_class_name
 from .file_utils import write_text
 from .generator_config import config_section
 from .logo_assets import build_logo_assets
+from .python_formatting import format_python_source
 from .project_model import top_level_groups
 from .readme_pipeline import build_readme_pipeline_code, build_readme_pipeline_note
 from .template_engine import render_template
@@ -128,7 +129,9 @@ def build_docs_project_context(
     ]
     project_title = str(app["name"] or package_name)
     index_title = f"{project_title} documentation"
-    pipeline_script_code = build_readme_pipeline_code(project, package_name, client_class_name)
+    pipeline_script_code = format_python_source(
+        build_readme_pipeline_code(project, package_name, client_class_name),
+    )
     return {
         "title": index_title,
         "title_underline": "=" * len(index_title),

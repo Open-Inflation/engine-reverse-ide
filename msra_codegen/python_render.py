@@ -30,9 +30,9 @@ def escape_regex_literal(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def render_request_referrer(headers_spec: dict[str, Any] | None, *, default_if_missing: bool) -> str | None:
+def render_request_referrer(headers_spec: dict[str, Any] | None) -> str | None:
     if not headers_spec or headers_spec.get("referrer") is None:
-        return "self._MAIN_SITE_ORIGIN" if default_if_missing else None
+        return None
     return render_ref_value(headers_spec.get("referrer"), self_ref="self")
 
 
