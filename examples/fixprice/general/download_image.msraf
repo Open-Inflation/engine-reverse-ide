@@ -12,6 +12,8 @@ type=string
 @Required
 description="Direct image URL."
 
+# TODO нужно явно задавать url как поле
+
 [GENERAL_DOWNLOAD_IMAGE.examples.download_image]
 @Test
 @Docs
