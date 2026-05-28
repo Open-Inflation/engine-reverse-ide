@@ -53,11 +53,9 @@ from .typespec import (
 
 def render_init(project: dict[str, Any], package_name: str) -> str:
     client_class_name = root_client_class_name(project)
-    exports = abstraction_exports(project)
     return render_template(
         "init.py.tpl",
         {
-            "exports": exports,
             "client_class_name": client_class_name,
             "version": project["app"]["version"],
         },

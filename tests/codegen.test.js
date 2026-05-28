@@ -170,7 +170,7 @@ function buildGeneratedPackageProbeScript() {
     "human_requests_abstraction = sys.modules[\"human_requests.abstraction\"]",
     "client_class_name = pkg.__all__[0]",
     "client_cls = getattr(pkg, client_class_name)",
-    "warmup_cls = pkg.Warmup",
+    "warmup_cls = human_requests_abstraction.Warmup",
     "",
     "assert dataclasses.is_dataclass(client_cls)",
     "assert dataclasses.is_dataclass(warmup_cls)",

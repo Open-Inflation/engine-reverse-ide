@@ -1,6 +1,6 @@
 from human_requests.network_analyzer.anomaly_sniffer import WaitHeader, WaitSource
 
-from . import Warmup
+from human_requests.abstraction import Warmup
 
 
 async def pipeline(warmup: Warmup):
