@@ -1,0 +1,14 @@
+1. См. ./1/*
+
+2. Сделать поддержку классов input'ов
+
+3. Авто-валидация кода по black/isort/flake8/mypy
+[![BlackCode](https://img.shields.io/badge/code%20style-black-black)](https://github.com/psf/black)
+[![mypy](https://img.shields.io/badge/type--checked-mypy-blue?logo=python)](https://mypy.readthedocs.io/en/stable/index.html)
+[![flake8](https://img.shields.io/badge/flake8-checked-blueviolet)](https://github.com/PyCQA/flake8)
+[![isort checked](https://img.shields.io/badge/isort-checked-yellow)](https://github.com/PyCQA/isort)
+
+
+[![Ruff](https://img.shields.io/badge/linting-Ruff-blue?logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
+
+4. Сделать пайплайны для engine на публикацию vsix и питон пакета генератора
