@@ -720,7 +720,8 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(conftestText, /async def api\(\):/);
       assert.doesNotMatch(conftestText, /abstraction/);
       assert.match(apiTestText, /from human_requests import autotest_data, autotest_depends_on, autotest_hook, autotest_params/);
-      assert.match(apiTestText, /from human_requests\.autotest import AutotestCallContext, AutotestContext, AutotestDataContext/);
+      assert.match(apiTestText, /from human_requests\.autotest import AutotestCallContext/);
+      assert.match(apiTestText, /from human_requests\.autotest import .*AutotestDataContext/);
       assert.doesNotMatch(apiTestText, /abstraction/);
       const probeResult = spawnSync(
         "python",

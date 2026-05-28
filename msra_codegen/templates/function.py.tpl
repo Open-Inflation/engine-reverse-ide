@@ -72,7 +72,7 @@
 {% endfor %}
 
         request_url = {{ url_expr }}
-        query_params: list[tuple[str, Any]] = []
+        query_params: list[tuple[str, object]] = []
 {% for param in query_params %}
 {% if param.kind == "from" and param.has_value_map %}
 {% if param.is_list %}

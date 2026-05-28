@@ -1,11 +1,22 @@
-from human_requests.abstraction import Output  # noqa: F401
+from human_requests.abstraction import Output as _Output
+
 {% if has_regexes %}
 {% for regex in regexes %}
-from .regexes import {{ regex.class_name }}  # noqa: F401
+from .regexes import {{ regex.class_name }} as _{{ regex.class_name }}
 {% endfor %}
 {% endif %}
 {% if has_catalog_sort %}
-from .catalog_sort import CatalogSort  # noqa: F401
+from .catalog_sort import CatalogSort as _CatalogSort
+{% endif %}
+
+Output = _Output
+{% if has_regexes %}
+{% for regex in regexes %}
+{{ regex.class_name }} = _{{ regex.class_name }}
+{% endfor %}
+{% endif %}
+{% if has_catalog_sort %}
+CatalogSort = _CatalogSort
 {% endif %}
 
 __all__ = [

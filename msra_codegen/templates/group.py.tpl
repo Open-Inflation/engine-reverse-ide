@@ -1,14 +1,25 @@
 from __future__ import annotations
 
-import json  # noqa: F401
-from pathlib import Path  # noqa: F401
-import re  # noqa: F401
-from typing import TYPE_CHECKING, Any, Literal  # noqa: F401
+from typing import TYPE_CHECKING
 
 {% if has_autotests %}
 from human_requests import autotest
 {% endif %}
-from human_requests.abstraction import HttpMethod  # noqa: F401
+{% if imports.literal %}
+from typing import Literal
+{% endif %}
+{% if imports.json %}
+import json
+{% endif %}
+{% if imports.path %}
+from pathlib import Path
+{% endif %}
+{% if imports.re %}
+import re
+{% endif %}
+{% if imports.http_method %}
+from human_requests.abstraction import HttpMethod
+{% endif %}
 from urllib.parse import urlencode
 
 from {{ root_import_prefix }} import abstraction

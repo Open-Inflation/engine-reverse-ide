@@ -1,8 +1,11 @@
-from . import {{ module_stem }}  # noqa: F401
-from .{{ module_stem }} import {{ class_name }}  # noqa: F401
+from . import {{ module_stem }} as _{{ module_stem }}
 {% for child in child_imports %}
-from . import {{ child.package_name }}  # noqa: F401
-from .{{ child.package_name }} import {{ child.class_name }}  # noqa: F401
+from . import {{ child.package_name }} as _{{ child.package_name }}
+{% endfor %}
+
+{{ class_name }} = _{{ module_stem }}.{{ class_name }}
+{% for child in child_imports %}
+{{ child.class_name }} = _{{ child.package_name }}.{{ child.class_name }}
 {% endfor %}
 
 __all__ = [

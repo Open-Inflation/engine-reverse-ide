@@ -1,15 +1,36 @@
 from __future__ import annotations
 
-from typing import Any  # noqa: F401
+{% if hooks or providers or data_cases %}
+from typing import TYPE_CHECKING
+{% endif %}
 
-import pytest  # noqa: F401
-from human_requests import autotest_data, autotest_depends_on, autotest_hook, autotest_params  # noqa: F401
-from human_requests.autotest import AutotestCallContext, AutotestContext, AutotestDataContext  # noqa: F401
+{% if providers %}
+import pytest
+{% endif %}
+{% if hooks or providers %}
+from human_requests import autotest_depends_on, autotest_hook, autotest_params
+{% endif %}
+{% if data_cases %}
+from human_requests import autotest_data
+{% endif %}
 
 {% for import in imports %}
 from {{ import.module }} import {{ import.class_name }}
 {% endfor %}
 
+{% if hooks or providers or data_cases %}
+if TYPE_CHECKING:
+{% if hooks %}
+    from human_requests.autotest import AutotestContext
+{% endif %}
+{% if providers %}
+    from human_requests.autotest import AutotestCallContext
+{% endif %}
+{% if data_cases %}
+    from human_requests.autotest import AutotestDataContext
+{% endif %}
+
+{% endif %}
 {% for hook in hooks %}
 {{ hook.hook_code }}
 

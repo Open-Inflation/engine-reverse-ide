@@ -57,10 +57,6 @@ def render_init(project: dict[str, Any], package_name: str) -> str:
     return render_template(
         "init.py.tpl",
         {
-        "imports": (
-                [f"from .abstraction import {', '.join(exports)}  # noqa: F401"] if exports else []
-            )
-            + [f"from .manager import {client_class_name}  # noqa: F401"],
             "exports": exports,
             "client_class_name": client_class_name,
             "version": project["app"]["version"],
@@ -376,6 +372,8 @@ def build_function_context(
     extractor = func.get("extractor") or {}
     goto_pipeline = extractor.get("goto_pipeline") or {}
     extractor_script = extractor.get("script")
+    validation = build_input_validation_context({"inputs": inputs})
+    query_params = build_query_param_context(func)
     url_expr = render_expr(url_spec.get("base"), self_ref="self._parent")
     if url_expr == "None":
         url_input = next((input_spec["name"] for input_spec in inputs if input_spec["name"] == "url"), None)
@@ -383,13 +381,25 @@ def build_function_context(
             url_expr = url_input
         else:
             url_expr = render_simple_value("")
+    return_annotation = render_return_annotation(func)
+    signature_text = ", ".join(signature_parts)
+    uses_json_import = any(param.get("list_style_style") == "json" for param in query_params) or bool(
+        goto_pipeline.get("module") and goto_pipeline.get("function")
+    )
+    uses_path_import = bool(extractor_script)
+    uses_re_import = any(
+        (validation_item.get("match_check_expr") or "").startswith("re.fullmatch(")
+        for validation_item in validation
+    )
+    uses_literal_import = "Literal[" in signature_text or "Literal[" in return_annotation
+    uses_http_method_import = transport != "direct"
     return {
         "method_name": method_name,
         "description": escape_docstring(func.get("description")) if func.get("description") else "",
         "autotest_enabled": autotest_enabled,
-        "signature": ", ".join(signature_parts),
+        "signature": signature_text,
         "signature_specs": signature_specs,
-        "return_annotation": render_return_annotation(func),
+        "return_annotation": return_annotation,
         "root_import_prefix": root_import_prefix,
         "transport": transport,
         "method": method,
@@ -402,8 +412,8 @@ def build_function_context(
         },
         "body_expr": render_expr(body.get("from"), self_ref="self._parent") if body else None,
         "body_type": body.get("type") if body else None,
-        "validation": build_input_validation_context({"inputs": inputs}),
-        "query_params": build_query_param_context(func),
+        "validation": validation,
+        "query_params": query_params,
         "extractor": {
             "render_html": bool(extractor.get("render_html", False)),
             "script_path_expr": (
@@ -415,6 +425,11 @@ def build_function_context(
             "goto_pipeline_module": goto_pipeline.get("module") if goto_pipeline else None,
             "goto_pipeline_function": goto_pipeline.get("function") if goto_pipeline else None,
         },
+        "uses_json_import": uses_json_import,
+        "uses_path_import": uses_path_import,
+        "uses_re_import": uses_re_import,
+        "uses_literal_import": uses_literal_import,
+        "uses_http_method_import": uses_http_method_import,
     }
 
 
@@ -593,11 +608,19 @@ def build_manager_context(
     warmup = project.get("warmup") or {}
     warmup_script = warmup.get("script") or {}
     top_groups = top_level_groups(group_tree)
+    variable_contexts = [
+        {
+            **build_variable_context(variable),
+            "code": render_variable_block(variable),
+        }
+        for variable in project["variables"]
+    ]
     return {
         "client_class_name": root_client_class_name(project),
         "app": app,
         "app_description": escape_docstring(app["description"]) if app.get("description") else "",
         "package_name": package_name,
+        "uses_classvar_import": bool(project["prefixes"]),
         "prefixes": [
             {
                 "name": prefix_name,
@@ -615,13 +638,8 @@ def build_manager_context(
             }
             for group in top_groups
         ],
-        "variables": [
-            {
-                **build_variable_context(variable),
-                "code": render_variable_block(variable),
-            }
-            for variable in project["variables"]
-        ],
+        "variables": variable_contexts,
+        "uses_literal_import": any("Literal[" in variable_context["code"] for variable_context in variable_contexts),
         "warmup": {
             "headers_sniffer": bool(warmup.get("headers_sniffer", False)),
             "on_error_screenshot_path": render_simple_value(
@@ -652,19 +670,26 @@ def build_group_context(
     module_depth = module_package_depth_for_group(group_node)
     package_root_expr = f"Path(__file__).resolve().parents[{module_depth}]"
     autotest_function_ids = set(autotest_function_ids or set())
-    function_contexts = [
-        {
-            "code": render_function_block(
-                func,
-                root_client_name,
-                autotest_enabled=str(func["id"]) in autotest_function_ids,
-                root_import_prefix="." * (module_depth + 1),
-                package_root_expr=package_root_expr,
-            ),
-            "autotest_enabled": str(func["id"]) in autotest_function_ids,
-        }
-        for func in sorted(group_node.get("functions", []), key=lambda item: item["name"])
-    ]
+    function_contexts = []
+    for func in sorted(group_node.get("functions", []), key=lambda item: item["name"]):
+        function_context = build_function_context(
+            func,
+            root_client_name,
+            autotest_enabled=str(func["id"]) in autotest_function_ids,
+            root_import_prefix="." * (module_depth + 1),
+            package_root_expr=package_root_expr,
+        )
+        function_contexts.append(
+            {
+                "code": render_template("function.py.tpl", function_context),
+                "autotest_enabled": function_context["autotest_enabled"],
+                "uses_http_method_import": function_context["uses_http_method_import"],
+                "uses_json_import": function_context["uses_json_import"],
+                "uses_path_import": function_context["uses_path_import"],
+                "uses_re_import": function_context["uses_re_import"],
+                "uses_literal_import": function_context["uses_literal_import"],
+            }
+        )
     return {
         "package_name": package_name,
         "root_client_name": root_client_name,
@@ -693,6 +718,13 @@ def build_group_context(
         ],
         "functions": function_contexts,
         "has_autotests": any(func_context["autotest_enabled"] for func_context in function_contexts),
+        "imports": {
+            "http_method": any(func_context.get("uses_http_method_import", False) for func_context in function_contexts),
+            "json": any(func_context.get("uses_json_import", False) for func_context in function_contexts),
+            "path": any(func_context.get("uses_path_import", False) for func_context in function_contexts),
+            "re": any(func_context.get("uses_re_import", False) for func_context in function_contexts),
+            "literal": any(func_context.get("uses_literal_import", False) for func_context in function_contexts),
+        },
     }
 
 

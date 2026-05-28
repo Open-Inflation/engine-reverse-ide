@@ -465,7 +465,7 @@ def render_hook_code(func: dict[str, Any], output_key: str) -> str:
     target = function_target_expr(func)
     lines = [
         f"@autotest_hook(target={target})",
-        f"def _capture_{output_key}(resp: Any, data: Any, ctx: AutotestContext) -> None:",
+        f"def _capture_{output_key}(resp, data, ctx: AutotestContext) -> None:",
         "    del resp",
         f"    ctx.state[{output_key!r}] = data",
     ]
@@ -484,7 +484,7 @@ def render_provider_code(
     for dependency_target in dependency_targets:
         lines.append(f"@autotest_depends_on({dependency_target})")
     lines.append(f"@autotest_params(target={function_target_expr(func)})")
-    lines.append(f"def _params_{function_output_key(func)}(ctx: AutotestCallContext) -> dict[str, Any]:")
+    lines.append(f"def _params_{function_output_key(func)}(ctx: AutotestCallContext) -> dict[str, object]:")
     lines.extend(
         [
             "    try:",
@@ -600,7 +600,7 @@ def build_autotest_data_cases(project: dict[str, Any]) -> list[dict[str, Any]]:
             "code": "\n".join(
                 [
                     '@autotest_data(name="unstandard_headers")',
-                    "def _unstandard_headers_data(ctx: AutotestDataContext) -> dict[str, Any]:",
+                    "def _unstandard_headers_data(ctx: AutotestDataContext) -> dict[str, object]:",
                     "    return ctx.api.unstandard_headers",
                 ]
             ),
@@ -610,7 +610,7 @@ def build_autotest_data_cases(project: dict[str, Any]) -> list[dict[str, Any]]:
             "code": "\n".join(
                 [
                     '@autotest_data(name="unstandard_urls")',
-                    "def _unstandard_urls_data(ctx: AutotestDataContext) -> dict[str, Any]:",
+                    "def _unstandard_urls_data(ctx: AutotestDataContext) -> dict[str, object]:",
                     "    return ctx.api.unstandard_urls",
                 ]
             ),

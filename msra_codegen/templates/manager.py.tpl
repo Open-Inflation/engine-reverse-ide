@@ -1,7 +1,13 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 from time import perf_counter, time
-from typing import Any, ClassVar, Literal, cast  # noqa: F401
+from typing import Any, cast
+{% if uses_classvar_import %}
+from typing import ClassVar
+{% endif %}
+{% if uses_literal_import %}
+from typing import Literal
+{% endif %}
 
 from aiohttp_retry import ExponentialRetry, RetryClient
 from camoufox import AsyncCamoufox, DefaultAddons
