@@ -1,6 +1,6 @@
 1. См. ./1/*
 
-2. Сделать поддержку классов input'ов
+2. См. ./2/*
 
 3. Авто-валидация кода по black/isort/flake8/mypy
 [![BlackCode](https://img.shields.io/badge/code%20style-black-black)](https://github.com/psf/black)
@@ -11,4 +11,10 @@
 
 [![Ruff](https://img.shields.io/badge/linting-Ruff-blue?logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 
-4. Сделать пайплайны для engine на публикацию vsix и питон пакета генератора
+4. Сделать пайплайны для:
+4. 1. публикацию vsix в маркетплейс
+4. 2. питон пакета генератора
+4. 3. lsp как npm пакет
+
+5. Анализатор экономии. Передаем msra и итоговую библиотеку, команда выдает сколько строк съекономлено.
+Логика такая: считаем кол-во строк + размер в КБ всех файлов msra и спутников .py/.js, дальше сравниваем с полученными файлами в питон пакете

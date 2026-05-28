@@ -5,7 +5,7 @@ async def info(
     url: str,
     detalization: Literal["short"] = "short",
     yes: bool | None = None,
-) -> PWResponse: ...
+) -> Output: ...
 
 @overload
 async def info(
@@ -16,7 +16,7 @@ async def info(
     slug: str,
     detalization: Literal["full", "short"] = "full",
     yes: bool | None = None,
-) -> PWResponse: ...
+) -> Output: ...
 
 @overload
 async def info(
@@ -24,7 +24,7 @@ async def info(
     *,
     detalization: Literal["full", "short"] = "short",
     yes: bool | None = None,
-) -> PWResponse: ...
+) -> Output: ...
 
 async def info(
     self,
@@ -35,7 +35,7 @@ async def info(
     slug: str | None = None,
     detalization: Literal["full", "short"] | None = None,
     yes: bool | None = None,
-) -> PWResponse:
+) -> Output:
     # Выбор overload'a
     matched: list[str] = []
 

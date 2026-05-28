@@ -1,0 +1,29 @@
+[app]
+name="FixPriceAPI"
+package_name="fixprice_api"
+package_owner="Open-Inflation"
+abstractions=["./example.py", "./example2.py"] # при генерации все вмерджится в одну папку из которой прокинуться все классы не имеющие _ префикс
+
+
+[app.func.CATALOG_PRODUCT_INFO]
+name="info"
+
+[app.func.CATALOG_PRODUCT_INFO.input.feed_sort]
+@Required
+type=<ABSTRACTIONS.CatalogFeedSort> # статически мы понимаем что на выходе ожидается {'orderBy': 'price', 'orderDirection': 'desc'} подобное
+
+[app.func.CATALOG_PRODUCT_INFO.input.place]
+type=<ABSTRACTIONS.BannerPlace> # статически мы понимаем что на выходе ожидается string
+# при применении абстракций values, match недопустимы, но допустимо const и default
+default=<ABSTRACTIONS.BannerPlace.MAIN_BANNERS>
+
+[app.func.CATALOG_PRODUCT_INFO.url]
+base="https://example.com/catalog/"
+
+[app.func.CATALOG_PRODUCT_INFO.url.params.sort]
+from=<INPUT.feed_sort.orderBy> # статический анализатор сразу подхватывает какие поля есть у абстракции
+[app.func.CATALOG_PRODUCT_INFO.url.params.order]
+from=<INPUT.feed_sort.orderDirection>
+
+[app.func.CATALOG_PRODUCT_INFO.url.params.place]
+from=<INPUT.place>
