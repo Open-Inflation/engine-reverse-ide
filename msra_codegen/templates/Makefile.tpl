@@ -13,14 +13,14 @@ test-quick:
 	pytest --tb=short
 
 lint:
-	python -m black --check {{ package_name }} tests
+	python -m ruff check {{ package_name }} tests example.py docs/source/conf.py
 
 type-check:
 	python -m mypy {{ package_name }}
 
 format:
-	black {{ package_name }}/ tests/
-	isort {{ package_name }}/ tests/
+	python -m ruff check --select I --fix {{ package_name }} tests example.py docs/source/conf.py
+	python -m ruff format {{ package_name }} tests example.py docs/source/conf.py
 
 clean:
 	rm -rf build/ dist/ *.egg-info/

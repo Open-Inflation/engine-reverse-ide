@@ -127,6 +127,14 @@ function buildGeneratedPackageProbeScript() {
     "        return \"proxy://example\"",
     "",
     "",
+    "class WarmupError(RuntimeError):",
+    "    pass",
+    "",
+    "",
+    "class MethodPipelineError(RuntimeError):",
+    "    pass",
+    "",
+    "",
     "def autotest(func):",
     "    return func",
     "",
@@ -150,6 +158,8 @@ function buildGeneratedPackageProbeScript() {
     "    Output=DummyObject,",
     "    Proxy=DummyProxy,",
     "    Warmup=Warmup,",
+    "    WarmupError=WarmupError,",
+    "    MethodPipelineError=MethodPipelineError,",
     "    FetchResponse=DummyObject,",
     ")",
     "make_module(\"human_requests.network_analyzer\", package=True)",
@@ -699,6 +709,11 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.ok(pyprojectText.includes(`license = "${testCase.license}"`));
       assert.match(pyprojectText, /^keywords = \[/m);
       assert.match(pyprojectText, /^classifiers = \[/m);
+      assert.match(pyprojectText, /\[tool\.ruff\]/);
+      assert.match(pyprojectText, /line-length = 200/);
+      assert.match(pyprojectText, /\[tool\.ruff\.lint\]/);
+      assert.match(pyprojectText, /select = \[/);
+      assert.match(pyprojectText, /ignore = \[/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3\.10/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3\.13/);
@@ -713,6 +728,8 @@ test("python codegen generates both bundled msra documents without failing", () 
           "pytest",
           "pytest-anyio",
           "pytest-jsonschema-snapshot",
+          "ruff",
+          "mypy",
         ].join("\n"),
       );
       assert.ok(existsSync(path.join(testsDir, "__snapshots__")), "expected tests/__snapshots__ to be generated");
@@ -745,6 +762,9 @@ test("python codegen generates both bundled msra documents without failing", () 
       );
       assert.match(makefileText, /pip install -r requirements-dev\.txt/);
       assert.match(makefileText, new RegExp(`pytest --cov=${testCase.packageName}`));
+      assert.match(makefileText, new RegExp(`python -m ruff check ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
+      assert.match(makefileText, new RegExp(`python -m ruff check --select I --fix ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
+      assert.match(makefileText, new RegExp(`python -m ruff format ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
       assert.match(makefileText, new RegExp(`python -m mypy ${testCase.packageName}`));
       assert.match(testsWorkflowText, /name: tests/);
       assert.match(testsWorkflowText, /uses: actions\/checkout@v4/);

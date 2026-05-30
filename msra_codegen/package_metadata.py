@@ -36,6 +36,7 @@ def render_pyproject(project: dict[str, Any], package_name: str) -> str:
             "dependencies_block": render_toml_string_list("dependencies", runtime_dependencies),
             "package_name": package_name,
             "autotest_start_class": f"{package_name}.{client_class_name}",
+            "ruff_block": render_ruff_block(),
         },
     )
 
@@ -58,6 +59,36 @@ def render_authors_block(authors: Any) -> str:
 
 def render_keywords_block(keywords: Any) -> str:
     return render_toml_string_list("keywords", keywords)
+
+
+def render_ruff_block() -> str:
+    ruff_config = config_section("ruff")
+    line_length = ruff_config.get("line_length")
+    if not isinstance(line_length, int):
+        raise RuntimeError("ruff.line_length must be an integer.")
+
+    lint_config = ruff_config.get("lint")
+    if not isinstance(lint_config, dict):
+        raise RuntimeError("ruff.lint must be a table.")
+
+    select = lint_config.get("select")
+    if not isinstance(select, list) or not select:
+        raise RuntimeError("ruff.lint.select must be a non-empty list.")
+
+    ignore = lint_config.get("ignore", [])
+    if not isinstance(ignore, list):
+        raise RuntimeError("ruff.lint.ignore must be a list.")
+
+    return "\n".join(
+        [
+            "[tool.ruff]",
+            f"line-length = {line_length}",
+            "",
+            "[tool.ruff.lint]",
+            render_toml_string_list("select", select),
+            render_toml_string_list("ignore", ignore),
+        ]
+    )
 
 
 @lru_cache(maxsize=1)

@@ -9,13 +9,12 @@ from typing import Iterable
 from .generator_config import config_section
 
 
-def get_python_line_length(default: int = 200) -> int:
-    validation_config = config_section("validation")
-    value = validation_config.get("line_length", default)
-    try:
-        return int(value)
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError("validation.line_length must be an integer.") from exc
+def get_python_line_length() -> int:
+    ruff_config = config_section("ruff")
+    value = ruff_config.get("line_length")
+    if not isinstance(value, int):
+        raise RuntimeError("ruff.line_length must be an integer.")
+    return value
 
 
 def format_python_source(source: str, *, line_length: int | None = None) -> str:
@@ -33,21 +32,24 @@ def format_python_files(paths: Iterable[Path], *, line_length: int | None = None
 
     effective_line_length = line_length if line_length is not None else get_python_line_length()
     file_args = [str(path) for path in path_list]
-    run_python_tool(
+    run_ruff_tool(
         [
             "-m",
-            "isort",
-            "--profile",
-            "black",
+            "ruff",
+            "check",
+            "--select",
+            "I",
+            "--fix",
             "--line-length",
             str(effective_line_length),
             *file_args,
         ]
     )
-    run_python_tool(
+    run_ruff_tool(
         [
             "-m",
-            "black",
+            "ruff",
+            "format",
             "--line-length",
             str(effective_line_length),
             *file_args,
@@ -64,7 +66,7 @@ def format_python_tree(root: Path, *, line_length: int | None = None) -> None:
     format_python_files(python_files, line_length=line_length)
 
 
-def run_python_tool(arguments: list[str]) -> None:
+def run_ruff_tool(arguments: list[str]) -> None:
     process = subprocess.run(
         [sys.executable, *arguments],
         capture_output=True,
@@ -78,7 +80,7 @@ def run_python_tool(arguments: list[str]) -> None:
 
     stderr = process.stderr.strip()
     stdout = process.stdout.strip()
-    details = stderr or stdout or "Python formatting command failed without output"
+    details = stderr or stdout or "ruff formatting command failed without output"
     raise RuntimeError(
         f"Formatting command failed with exit code {process.returncode}.\n"
         f"Command: {sys.executable} {' '.join(arguments)}\n"

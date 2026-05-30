@@ -74,9 +74,6 @@ raise="Alias страны должен состоять ровно из двух
 regex="^[a-z]{2}(?:-[A-Z]{2})?$"
 description="Языковой тег в формате xx или xx-YY, где xx - код языка из двух строчных букв, а YY - код страны из двух заглавных букв."
 
-[app.regexes.DELIVERY_TYPE]
-regex="^(store|pickup|courier)$"
-
 [app.regexes.STORE_ID]
 regex="^[A-Za-z]\\d{3}$"
 

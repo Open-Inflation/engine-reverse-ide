@@ -391,6 +391,7 @@ def build_function_context(
     )
     uses_literal_import = "Literal[" in signature_text or "Literal[" in return_annotation
     uses_http_method_import = transport != "direct"
+    uses_method_pipeline_error_import = bool(goto_pipeline.get("module") and goto_pipeline.get("function"))
     return {
         "method_name": method_name,
         "description": escape_docstring(func.get("description")) if func.get("description") else "",
@@ -428,6 +429,7 @@ def build_function_context(
         "uses_re_import": uses_re_import,
         "uses_literal_import": uses_literal_import,
         "uses_http_method_import": uses_http_method_import,
+        "uses_method_pipeline_error_import": uses_method_pipeline_error_import,
     }
 
 
@@ -619,6 +621,7 @@ def build_manager_context(
         "app_description": escape_docstring(app["description"]) if app.get("description") else "",
         "package_name": package_name,
         "uses_classvar_import": bool(project["prefixes"]),
+        "uses_warmup_error_import": bool(warmup_script.get("path") and warmup_script.get("module") and warmup_script.get("function")),
         "prefixes": [
             {
                 "name": prefix_name,
@@ -686,6 +689,7 @@ def build_group_context(
                 "uses_path_import": function_context["uses_path_import"],
                 "uses_re_import": function_context["uses_re_import"],
                 "uses_literal_import": function_context["uses_literal_import"],
+                "uses_method_pipeline_error_import": function_context["uses_method_pipeline_error_import"],
             }
         )
     return {
@@ -722,6 +726,9 @@ def build_group_context(
             "path": any(func_context.get("uses_path_import", False) for func_context in function_contexts),
             "re": any(func_context.get("uses_re_import", False) for func_context in function_contexts),
             "literal": any(func_context.get("uses_literal_import", False) for func_context in function_contexts),
+            "method_pipeline_error": any(
+                func_context.get("uses_method_pipeline_error_import", False) for func_context in function_contexts
+            ),
         },
     }
 

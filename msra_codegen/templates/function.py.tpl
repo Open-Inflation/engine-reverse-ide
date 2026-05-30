@@ -11,61 +11,125 @@
         if {{ item.name }} is None:
             raise ValueError("`{{ item.name }}` is required")
 {% endif %}
-{% set indent = "            " if not item.required else "        " %}
-{% if not item.required %}
-        if {{ item.name }} is not None:
-{% endif %}
 {% if item.is_list %}
-{{ indent }}if not isinstance({{ item.name }}, list):
-{{ indent }}    raise TypeError("`{{ item.name }}` must be list")
-{{ indent }}for __item in {{ item.name }}:
+{% if item.required %}
+        if not isinstance({{ item.name }}, list):
+            raise TypeError("`{{ item.name }}` must be list")
+        for __item in {{ item.name }}:
+{% else %}
+        if {{ item.name }} is not None and not isinstance({{ item.name }}, list):
+            raise TypeError("`{{ item.name }}` must be list")
+        if {{ item.name }} is not None:
+            for __item in {{ item.name }}:
+{% endif %}
 {% if "integer" in item.item_type_names %}
-{{ indent }}    if not isinstance(__item, int) or isinstance(__item, bool):
-{{ indent }}        raise TypeError("`{{ item.name }}` items must be int")
+{% if item.required %}
+            if not isinstance(__item, int) or isinstance(__item, bool):
+                raise TypeError("`{{ item.name }}` items must be int")
+{% else %}
+                if not isinstance(__item, int) or isinstance(__item, bool):
+                    raise TypeError("`{{ item.name }}` items must be int")
+{% endif %}
 {% elif "boolean" in item.item_type_names %}
-{{ indent }}    if not isinstance(__item, bool):
-{{ indent }}        raise TypeError("`{{ item.name }}` items must be bool")
+{% if item.required %}
+            if not isinstance(__item, bool):
+                raise TypeError("`{{ item.name }}` items must be bool")
+{% else %}
+                if not isinstance(__item, bool):
+                    raise TypeError("`{{ item.name }}` items must be bool")
+{% endif %}
 {% elif "number" in item.item_type_names %}
-{{ indent }}    if not isinstance(__item, (int, float)) or isinstance(__item, bool):
-{{ indent }}        raise TypeError("`{{ item.name }}` items must be number")
+{% if item.required %}
+            if not isinstance(__item, (int, float)) or isinstance(__item, bool):
+                raise TypeError("`{{ item.name }}` items must be number")
+{% else %}
+                if not isinstance(__item, (int, float)) or isinstance(__item, bool):
+                    raise TypeError("`{{ item.name }}` items must be number")
+{% endif %}
 {% elif "string" in item.item_type_names %}
-{{ indent }}    if not isinstance(__item, str):
-{{ indent }}        raise TypeError("`{{ item.name }}` items must be str")
+{% if item.required %}
+            if not isinstance(__item, str):
+                raise TypeError("`{{ item.name }}` items must be str")
+{% else %}
+                if not isinstance(__item, str):
+                    raise TypeError("`{{ item.name }}` items must be str")
+{% endif %}
 {% endif %}
 {% else %}
 {% if "integer" in item.type_names %}
-{{ indent }}if not isinstance({{ item.name }}, int) or isinstance({{ item.name }}, bool):
-{{ indent }}    raise TypeError("`{{ item.name }}` must be int")
+{% if item.required %}
+        if not isinstance({{ item.name }}, int) or isinstance({{ item.name }}, bool):
+            raise TypeError("`{{ item.name }}` must be int")
+{% else %}
+        if {{ item.name }} is not None and (not isinstance({{ item.name }}, int) or isinstance({{ item.name }}, bool)):
+            raise TypeError("`{{ item.name }}` must be int")
+{% endif %}
 {% elif "boolean" in item.type_names %}
-{{ indent }}if not isinstance({{ item.name }}, bool):
-{{ indent }}    raise TypeError("`{{ item.name }}` must be bool")
+{% if item.required %}
+        if not isinstance({{ item.name }}, bool):
+            raise TypeError("`{{ item.name }}` must be bool")
+{% else %}
+        if {{ item.name }} is not None and not isinstance({{ item.name }}, bool):
+            raise TypeError("`{{ item.name }}` must be bool")
+{% endif %}
 {% elif "number" in item.type_names %}
-{{ indent }}if not isinstance({{ item.name }}, (int, float)) or isinstance({{ item.name }}, bool):
-{{ indent }}    raise TypeError("`{{ item.name }}` must be number")
+{% if item.required %}
+        if not isinstance({{ item.name }}, (int, float)) or isinstance({{ item.name }}, bool):
+            raise TypeError("`{{ item.name }}` must be number")
+{% else %}
+        if {{ item.name }} is not None and (not isinstance({{ item.name }}, (int, float)) or isinstance({{ item.name }}, bool)):
+            raise TypeError("`{{ item.name }}` must be number")
+{% endif %}
 {% elif "string" in item.type_names %}
-{{ indent }}if not isinstance({{ item.name }}, str):
-{{ indent }}    raise TypeError("`{{ item.name }}` must be str")
+{% if item.required %}
+        if not isinstance({{ item.name }}, str):
+            raise TypeError("`{{ item.name }}` must be str")
+{% else %}
+        if {{ item.name }} is not None and not isinstance({{ item.name }}, str):
+            raise TypeError("`{{ item.name }}` must be str")
+{% endif %}
 {% endif %}
 {% endif %}
 {% if item.match_check_expr and not item.is_list %}
-{{ indent }}if not ({{ item.match_check_expr }}):
-{% if item.match_error %}
-{{ indent }}    raise ValueError({{ item.match_error }})
+{% if item.required %}
+        if not ({{ item.match_check_expr }}):
 {% else %}
-{{ indent }}    raise ValueError("`{{ item.name }}` does not match the expected format")
+        if {{ item.name }} is not None and not ({{ item.match_check_expr }}):
+{% endif %}
+{% if item.match_error %}
+            raise ValueError({{ item.match_error }})
+{% else %}
+            raise ValueError("`{{ item.name }}` does not match the expected format")
 {% endif %}
 {% elif item.match_range and not item.is_list %}
-{{ indent }}if float({{ item.name }}) < {{ item.match_range[0] }} or float({{ item.name }}) > {{ item.match_range[1] }}:
-{{ indent }}    raise ValueError("`{{ item.name }}` must be between {{ item.match_range[0] }} and {{ item.match_range[1] }}")
+{% if item.required %}
+        if float({{ item.name }}) < {{ item.match_range[0] }} or float({{ item.name }}) > {{ item.match_range[1] }}:
+            raise ValueError("`{{ item.name }}` must be between {{ item.match_range[0] }} and {{ item.match_range[1] }}")
+{% else %}
+        if {{ item.name }} is not None and (float({{ item.name }}) < {{ item.match_range[0] }} or float({{ item.name }}) > {{ item.match_range[1] }}):
+            raise ValueError("`{{ item.name }}` must be between {{ item.match_range[0] }} and {{ item.match_range[1] }}")
+{% endif %}
 {% endif %}
 {% if item.values_expr %}
 {% if item.is_list %}
-{{ indent }}for __item in {{ item.name }}:
-{{ indent }}    if __item not in {{ item.values_expr }}:
-{{ indent }}        raise ValueError("`{{ item.name }}` items must be one of {{ item.values_expr }}")
+{% if item.required %}
+        for __item in {{ item.name }}:
+            if __item not in {{ item.values_expr }}:
+                raise ValueError("`{{ item.name }}` items must be one of {{ item.values_expr }}")
 {% else %}
-{{ indent }}if {{ item.name }} not in {{ item.values_expr }}:
-{{ indent }}    raise ValueError("`{{ item.name }}` must be one of {{ item.values_expr }}")
+        if {{ item.name }} is not None:
+            for __item in {{ item.name }}:
+                if __item not in {{ item.values_expr }}:
+                    raise ValueError("`{{ item.name }}` items must be one of {{ item.values_expr }}")
+{% endif %}
+{% else %}
+{% if item.required %}
+        if {{ item.name }} not in {{ item.values_expr }}:
+            raise ValueError("`{{ item.name }}` must be one of {{ item.values_expr }}")
+{% else %}
+        if {{ item.name }} is not None and {{ item.name }} not in {{ item.values_expr }}:
+            raise ValueError("`{{ item.name }}` must be one of {{ item.values_expr }}")
+{% endif %}
 {% endif %}
 {% endif %}
 {% endif %}
@@ -212,7 +276,12 @@
 {% if has_goto_pipeline %}
             warmup = self._parent._make_warmup_context(page=page, sniffer=pipeline_sniffer)
             from {{ root_import_prefix }}{{ extractor.goto_pipeline_module }} import {{ extractor.goto_pipeline_function }} as goto_pipeline_runner
-            await goto_pipeline_runner(warmup)
+            try:
+                await goto_pipeline_runner(warmup)
+            except MethodPipelineError:
+                raise
+            except Exception as exc:
+                raise MethodPipelineError(str(exc)) from exc
 {% endif %}
 {% if extractor.script_path_expr %}
             evaluate_script = ({{ extractor.package_root_expr }} / {{ extractor.script_path_expr }}).read_text(encoding="utf-8")

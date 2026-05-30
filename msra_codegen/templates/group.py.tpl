@@ -20,6 +20,9 @@ import re
 {% if imports.http_method %}
 from human_requests.abstraction import HttpMethod
 {% endif %}
+{% if imports.method_pipeline_error %}
+from human_requests.abstraction import MethodPipelineError
+{% endif %}
 from urllib.parse import urlencode
 
 from {{ root_import_prefix }} import abstraction
@@ -36,7 +39,7 @@ class {{ class_name }}:
     """{{ description }}"""
 {% endif %}
 
-    def __init__(self, parent: "{{ root_client_name }}"):
+    def __init__(self, parent: {{ root_client_name }}):
         self._parent = parent
 {% for child in children %}
         self.{{ child.field_name }}: {{ child.class_name }} = {{ child.class_name }}(parent)

@@ -19,6 +19,8 @@ base = [
     "pytest",
     "pytest-anyio",
     "pytest-jsonschema-snapshot",
+    "ruff",
+    "mypy",
 ]
 
 [classifiers]
@@ -90,32 +92,17 @@ name = "python-syntax"
 argv = ["{python_executable}", "-m", "compileall", "-q"]
 targets = ["{package_name}", "tests", "example.py", "docs/source/conf.py"]
 
-[validation]
+[ruff]
 line_length = 200
 
-[[validation.checks]]
-name = "black"
-argv = ["{python_executable}", "-m", "black", "--check", "--line-length", "200"]
-targets = ["{package_name}", "tests", "example.py", "docs/source/conf.py"]
+[ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [[validation.checks]]
-name = "isort"
-argv = [
-    "{python_executable}",
-    "-m",
-    "isort",
-    "--check-only",
-    "--profile",
-    "black",
-    "--line-length",
-    "200",
-]
+name = "ruff"
+argv = ["{python_executable}", "-m", "ruff", "check"]
 targets = ["{package_name}", "tests", "example.py", "docs/source/conf.py"]
-
-[[validation.checks]]
-name = "flake8"
-argv = ["{python_executable}", "-m", "flake8", "--max-line-length", "200"]
-targets = ["{package_name}", "tests", "example.py"]
 
 [[validation.checks]]
 name = "mypy"

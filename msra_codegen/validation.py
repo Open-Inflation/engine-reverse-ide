@@ -82,6 +82,7 @@ def run_validation_check(
     command = [*argv, *targets]
     process = subprocess.run(
         command,
+        cwd=output_root,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -106,13 +107,7 @@ def resolve_validation_target(target: str, output_root: Path, context: dict[str,
     rendered_path = Path(rendered)
     if rendered_path.is_absolute():
         return str(rendered_path)
-    current_root = Path.cwd().resolve()
-    try:
-        relative_output_root = output_root.relative_to(current_root)
-    except ValueError:
-        return str(output_root / rendered_path)
-    relative_target = relative_output_root / rendered_path
-    return f".\\{relative_target}".replace("/", "\\")
+    return rendered
 
 
 def expand_placeholder(value: str, context: dict[str, str]) -> str:

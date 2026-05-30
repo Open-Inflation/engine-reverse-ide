@@ -40,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate_parser = subparsers.add_parser(
         "validate",
-        help="Validate a generated project with python syntax, black, isort, flake8, and mypy.",
+        help="Validate a generated project with python syntax, ruff, and mypy.",
     )
     validate_parser.add_argument(
         "output_dir",

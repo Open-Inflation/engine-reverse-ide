@@ -13,6 +13,9 @@ from aiohttp_retry import ExponentialRetry, RetryClient
 from camoufox import AsyncCamoufox, DefaultAddons
 from human_requests import HumanBrowser, HumanPage
 from human_requests.abstraction import HttpMethod, Proxy, Warmup
+{% if uses_warmup_error_import %}
+from human_requests.abstraction import WarmupError
+{% endif %}
 from human_requests.network_analyzer.anomaly_sniffer import HeaderAnomalySniffer
 
 from . import abstraction
@@ -102,7 +105,12 @@ class {{ client_class_name }}:
 {% if warmup.script_module and warmup.script_function and warmup.script_path_expr %}
         warmup = self._make_warmup_context(page=self.page, sniffer=sniffer)
         from .{{ warmup.script_module }} import {{ warmup.script_function }} as warmup_runner
-        await warmup_runner(warmup)
+        try:
+            await warmup_runner(warmup)
+        except WarmupError:
+            raise
+        except Exception as exc:
+            raise WarmupError(str(exc)) from exc
 {% endif %}
 
         result_sniffer: dict[str, Any] = await sniffer.complete() if sniffer else {"request": {}}
@@ -195,18 +203,20 @@ class {{ client_class_name }}:
             attempts=retry_attempts, start_timeout=3.0, max_timeout=timeout
         )
         px = self.proxy if isinstance(self.proxy, Proxy) else Proxy(self.proxy)
-        async with RetryClient(retry_options=retry_options) as retry_client:
-            async with retry_client.get(url, raise_for_status=True, proxy=px.as_str()) as resp:
-                body = await resp.read()
-                return abstraction.Output.from_raw(
-                    body,
-                    url=str(resp.url),
-                    headers=dict(resp.headers),
-                    status_code=resp.status,
-                    status_text=resp.reason,
-                    redirected=bool(resp.history),
-                    response_type="basic",
-                    duration=perf_counter() - start_t,
-                    end_time=time(),
-                    page=self.page,
-                )
+        async with (
+            RetryClient(retry_options=retry_options) as retry_client,
+            retry_client.get(url, raise_for_status=True, proxy=px.as_str()) as resp,
+        ):
+            body = await resp.read()
+            return abstraction.Output.from_raw(
+                body,
+                url=str(resp.url),
+                headers=dict(resp.headers),
+                status_code=resp.status,
+                status_text=resp.reason,
+                redirected=bool(resp.history),
+                response_type="basic",
+                duration=perf_counter() - start_t,
+                end_time=time(),
+                page=self.page,
+            )
