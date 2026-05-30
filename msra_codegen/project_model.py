@@ -61,13 +61,19 @@ def top_level_groups(tree: dict[str, Any]) -> list[dict[str, Any]]:
 
 def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
     tables = [table for table in ast.get("tables", [])]
-    table_index: dict[tuple[str, ...], dict[str, Any]] = {
-        tuple(table["path"]): table for table in tables
-    }
+    table_index: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for table in tables:
+        table_index.setdefault(tuple(table["path"]), []).append(table)
     examples_by_function: dict[str, list[dict[str, Any]]] = {}
 
     def get_table(path: list[str] | tuple[str, ...]) -> dict[str, Any] | None:
-        return table_index.get(tuple(path))
+        entries = table_index.get(tuple(path))
+        if not entries:
+            return None
+        return entries[0]
+
+    def get_tables(path: list[str] | tuple[str, ...]) -> list[dict[str, Any]]:
+        return list(table_index.get(tuple(path), []))
 
     def get_assignment_entry(table: dict[str, Any] | None, key: str) -> dict[str, Any] | None:
         if not table:
@@ -225,20 +231,64 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
             if len(table["path"]) == 5
             and table["path"][:4] == prefix + ["input"]
         ]
-        func["inputs"] = [build_input_spec(table, get_assignment) for table in input_tables]
+        function_overload_tables = [
+            table
+            for table in tables
+            if len(table["path"]) == 5
+            and table["path"][:4] == prefix + ["overload"]
+        ]
+        overload_names = [str(table["path"][-1]) for table in function_overload_tables]
 
-        url_table = get_table(prefix + ["url"])
-        if url_table:
+        input_contexts = []
+        for table in input_tables:
+            input_name = str(table["path"][-1])
+            input_overload_tables = [
+                overload_table
+                for overload_table in tables
+                if len(overload_table["path"]) == 7
+                and overload_table["path"][:5] == prefix + ["input", input_name]
+                and overload_table["path"][5] == "overload"
+            ]
+            overload_specs = {
+                str(overload_table["path"][-1]): build_input_spec(
+                    overload_table,
+                    get_assignment,
+                    get_assignment_entry,
+                    explicit_only=True,
+                )
+                for overload_table in input_overload_tables
+            }
+            overload_names.extend(name for name in overload_specs.keys() if name not in overload_names)
+            input_context = build_input_spec(table, get_assignment, get_assignment_entry)
+            input_context["overloads"] = overload_specs
+            input_contexts.append(input_context)
+        func["inputs"] = input_contexts
+        func["overload_names"] = list(dict.fromkeys(overload_names))
+
+        url_tables = get_tables(prefix + ["url"])
+        if url_tables:
             param_tables = [
                 table
                 for table in tables
                 if len(table["path"]) == 6
                 and table["path"][:5] == prefix + ["url", "params"]
             ]
+            url_entries = []
+            for url_table in url_tables:
+                url_entries.append(
+                    {
+                        "base": get_assignment(url_table, "base"),
+                        "priority": get_plain_value(get_assignment(url_table, "priority", 0)),
+                        "wants": get_assignment(url_table, "wants"),
+                    }
+                )
             func["url"] = {
-                "base": get_assignment(url_table, "base"),
+                "base": url_entries[0]["base"] if url_entries else None,
+                "entries": url_entries,
                 "params": [build_url_param_spec(table, get_assignment) for table in param_tables],
             }
+        else:
+            func["url"] = None
 
         body_table = get_table(prefix + ["body"])
         if body_table:
@@ -290,18 +340,59 @@ def extract_docs_print_value(docs_assignment: dict[str, Any] | None) -> Any:
     return None
 
 
-def build_input_spec(table: dict[str, Any], get_assignment) -> dict[str, Any]:
-    return {
+def build_input_spec(
+    table: dict[str, Any],
+    get_assignment,
+    get_assignment_entry=None,
+    *,
+    explicit_only: bool = False,
+) -> dict[str, Any]:
+    spec: dict[str, Any] = {
         "name": table["path"][-1],
-        "type": get_assignment(table, "type"),
-        "default": get_assignment(table, "default"),
-        "required": bool(get_plain_value(get_assignment(table, "required", False))),
-        "values": get_assignment(table, "values"),
-        "match": get_assignment(table, "match"),
-        "read_only": bool(get_plain_value(get_assignment(table, "read_only", False))),
-        "from": get_assignment(table, "from"),
-        "description": str(get_plain_value(get_assignment(table, "description", ""))),
     }
+
+    def assignment_value(key: str, default: Any = None) -> Any:
+        if get_assignment_entry is None:
+            if explicit_only:
+                return default
+            return get_assignment(table, key, default)
+        entry = get_assignment_entry(table, key)
+        if entry is None:
+            if explicit_only:
+                return None
+            return get_assignment(table, key, default)
+        return entry.get("value")
+
+    def include(key: str, value: Any) -> None:
+        if explicit_only and value is None:
+            return
+        spec[key] = value
+
+    include("type", assignment_value("type"))
+    include("default", assignment_value("default"))
+    if not explicit_only:
+        include("required", bool(get_plain_value(assignment_value("required", False))))
+    else:
+        required_value = assignment_value("required")
+        if required_value is not None:
+            include("required", bool(get_plain_value(required_value)))
+    include("const", assignment_value("const"))
+    include("values", assignment_value("values"))
+    include("match", assignment_value("match"))
+    if not explicit_only:
+        include("read_only", bool(get_plain_value(assignment_value("read_only", False))))
+    else:
+        read_only_value = assignment_value("read_only")
+        if read_only_value is not None:
+            include("read_only", bool(get_plain_value(read_only_value)))
+    include("from", assignment_value("from"))
+    description_value = assignment_value("description")
+    if description_value is None:
+        if not explicit_only:
+            spec["description"] = ""
+    else:
+        spec["description"] = str(get_plain_value(description_value))
+    return spec
 
 
 def build_headers_spec(table: dict[str, Any] | None, get_assignment) -> dict[str, Any] | None:

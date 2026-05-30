@@ -146,11 +146,12 @@ class InlineTableExpr extends Expr {
 }
 
 class TableDef {
-  constructor(path, headerRange, pathSegments = [], identityKey = null) {
+  constructor(path, headerRange, pathSegments = [], identityKey = null, isArray = false) {
     this.path = path;
     this.headerRange = headerRange;
     this.pathSegments = pathSegments;
     this.identityKey = identityKey;
+    this.isArray = isArray;
     this.assignments = [];
   }
 }

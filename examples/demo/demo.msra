@@ -1,0 +1,50 @@
+[msra]
+version="0.2.4.1"
+
+[app]
+name="DemoAPI"
+package_name="demo_api"
+package_owner="Miskler"
+authors=[
+    { name="Miskler", email="mail@miskler.ru" },
+]
+description="Minimal demo project for msra_codegen."
+license="MIT"
+keywords=["demo", "api", "browser"]
+min_required_python="3.10"
+version="0.1.0"
+timeout_ms=15000
+browser=camoufox
+@Humanize
+@BlockImages
+
+[app.warmup]
+warmup="./warmup.py:pipeline"
+
+[app.prefixes]
+MAIN_SITE_URL="https://example.org/"
+
+[app.groups.Demo]
+description="Demo functions."
+
+[app.func.DEMO_SEARCH]
+name="search"
+transport=fetch
+method=GET
+group=<GROUPS.Demo>
+description="Demo search request."
+
+[app.func.DEMO_SEARCH.input.query]
+type=string
+description="Search query."
+
+[app.func.DEMO_SEARCH.url]
+base=<DOCUMENT.PREFIXES.MAIN_SITE_URL>"/search"
+
+[app.func.DEMO_SEARCH.url.params.query]
+from=<INPUT.query>
+
+[app.func.DEMO_SEARCH.examples.smoke]
+@Docs
+description="Demo request for the search endpoint."
+inputs={"query"="example"}

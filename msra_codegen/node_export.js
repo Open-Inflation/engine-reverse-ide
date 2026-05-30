@@ -197,8 +197,10 @@ function serializeExpr(expr) {
 
 function serializeTable(table) {
   return {
+    identityKey: table.identityKey || null,
     path: table.path,
     headerRange: serializeRange(table.headerRange),
+    isArray: Boolean(table.isArray),
     pathSegments: (table.pathSegments || []).map((segment) => ({
       value: segment.value,
       quoted: Boolean(segment.quoted),

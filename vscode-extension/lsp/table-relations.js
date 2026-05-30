@@ -78,7 +78,17 @@ function validateTableRelationsForTable(table, tableIndex) {
 }
 
 function hasTable(tableIndex, path) {
-  return tableIndex.has(pathIdentityKey(path));
+  const key = pathIdentityKey(path);
+  if (tableIndex.has(key)) {
+    return true;
+  }
+  const prefix = `${key}#`;
+  for (const tableKey of tableIndex.keys()) {
+    if (tableKey === key || (typeof tableKey === "string" && tableKey.startsWith(prefix))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function missingParentDiagnostic(table, parentPath, segmentIndex) {

@@ -204,6 +204,105 @@ function buildGeneratedPackageProbeScript() {
   ].join("\n");
 }
 
+function buildFixpriceInfoProbeScript() {
+  return [
+    buildGeneratedPackageProbeScript(),
+    "",
+    "import asyncio",
+    "import inspect",
+    "import json",
+    "",
+    "products_mod = importlib.import_module(f\"{package_name}.endpoints.catalog.products\")",
+    "",
+    "class OutputRecorder:",
+    "    calls = []",
+    "",
+    "    @staticmethod",
+    "    async def from_playwright_response(resp, **kwargs):",
+    "        OutputRecorder.calls.append({\"resp\": resp, \"kwargs\": kwargs})",
+    "        return {\"resp\": resp, \"kwargs\": kwargs}",
+    "",
+    "class DummyResponse:",
+    "    pass",
+    "",
+    "class DummyPage:",
+    "    def __init__(self):",
+    "        self.goto_calls = []",
+    "",
+    "    async def goto(self, url, wait_until=None):",
+    "        self.goto_calls.append({\"url\": url, \"wait_until\": wait_until})",
+    "        return DummyResponse()",
+    "",
+    "    async def wait_for_load_state(self, _state):",
+    "        return None",
+    "",
+    "    async def evaluate(self, _script):",
+    "        return {\"type\": \"text/plain\", \"data\": \"payload\"}",
+    "",
+    "    async def close(self):",
+    "        return None",
+    "",
+    "class DummySniffer:",
+    "    async def complete(self):",
+    "        return None",
+    "",
+    "class DummyParent:",
+    "    def __init__(self):",
+    "        self._MAIN_SITE_ORIGIN = \"https://example.test\"",
+    "        self.page = None",
+    "        self.ctx = types.SimpleNamespace(new_page=self.new_page)",
+    "",
+    "    async def new_page(self):",
+    "        self.page = DummyPage()",
+    "        return self.page",
+    "",
+    "    async def _create_pipeline_sniffer(self):",
+    "        return DummySniffer()",
+    "",
+    "    def _make_warmup_context(self, *, page, sniffer):",
+    "        return types.SimpleNamespace(page=page, sniffer=sniffer)",
+    "",
+    "async def pipeline(_warmup):",
+    "    return None",
+    "",
+    "make_module(f\"{package_name}.pipelines\", package=True)",
+    "make_module(f\"{package_name}.pipelines.goto_pipeline\", pipeline=pipeline)",
+    "products_mod.abstraction.Output = OutputRecorder",
+    "products = products_mod.ClassProducts(DummyParent())",
+    "signature = inspect.signature(products.info)",
+    "signature_params = [",
+    "    {\"name\": name, \"kind\": param.kind.name}",
+    "    for name, param in signature.parameters.items()",
+    "]",
+    "",
+    "async def run_checks():",
+    "    results = []",
+    "    for kwargs in [",
+    "        {\"url\": \"item\", \"yes\": True},",
+    "        {\"url\": \"item\"},",
+    "        {\"category\": \"cat\", \"product_id\": 1, \"slug\": \"slug\"},",
+    "        {},",
+    "    ]:",
+    "        OutputRecorder.calls.clear()",
+    "        if products._parent.page is not None:",
+    "            products._parent.page.goto_calls.clear()",
+    "        await products.info(**kwargs)",
+    "        output_kwargs = OutputRecorder.calls[0][\"kwargs\"]",
+    "        results.append({",
+    "            \"kwargs\": kwargs,",
+    "            \"goto_url\": products._parent.page.goto_calls[-1][\"url\"],",
+    "            \"wait_until\": products._parent.page.goto_calls[-1][\"wait_until\"],",
+    "            \"output_kwargs\": {",
+    "                \"json_override\": output_kwargs.get(\"json_override\"),",
+    "                \"text_override\": output_kwargs.get(\"text_override\"),",
+    "            },",
+    "        })",
+    "    print(json.dumps({\"signature\": signature_params, \"results\": results}, ensure_ascii=False))",
+    "",
+    "asyncio.run(run_checks())",
+  ].join("\n");
+}
+
 function buildSphinxTextDocs(outputDir, repoRoot) {
   const docsSourceDir = path.join(outputDir, "docs", "source");
   const docsBuildDir = path.join(outputDir, "docs", "_build", "text");
@@ -949,6 +1048,101 @@ test("python codegen generates both bundled msra documents without failing", () 
         assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query="example"\)\)\.json\(\)/);
       }
     }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("python codegen routes fixprice info overloads to the expected urls", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-fixprice-overloads-"));
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const outputDir = path.join(workDir, "fixprice");
+  seedStaleOutput(outputDir);
+
+  try {
+    const generateResult = spawnSync(
+      "python",
+      ["-m", "msra_codegen", "generate", path.join(repoRoot, "examples", "fixprice", "fixprice.msra"), "-o", outputDir],
+      {
+        cwd: repoRoot,
+        env: buildCodegenPythonPath(pythonReleasesFixturePath),
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
+
+    const probeResult = spawnSync(
+      "python",
+      ["-c", buildFixpriceInfoProbeScript(), outputDir, "fixprice_api"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
+
+    const probeData = JSON.parse(probeResult.stdout);
+    assert.deepEqual(
+      probeData.signature.map((item) => item.kind),
+      ["KEYWORD_ONLY", "KEYWORD_ONLY", "KEYWORD_ONLY", "KEYWORD_ONLY", "KEYWORD_ONLY", "KEYWORD_ONLY"],
+    );
+    assert.deepEqual(
+      probeData.signature.map((item) => item.name).sort(),
+      ["category", "detalization", "product_id", "slug", "url", "yes"].sort(),
+    );
+    assert.deepEqual(
+      probeData.results.map((item) => item.goto_url),
+      [
+        "https://example.test/catalog/item/yes?detalization=short",
+        "https://example.test/catalog/item?detalization=short",
+        "https://example.test/catalog/cat/p-1-slug?detalization=full",
+        "https://example.test/catalog/some-category/p-12345-some-product?detalization=short",
+      ],
+    );
+    for (const resultItem of probeData.results) {
+      assert.strictEqual(resultItem.wait_until, "domcontentloaded");
+      assert.strictEqual(resultItem.output_kwargs.text_override, "payload");
+      assert.strictEqual(resultItem.output_kwargs.json_override, null);
+    }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("python codegen builds the demo project", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-demo-build-"));
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const outputDir = path.join(workDir, "generated");
+
+  try {
+    const generateResult = spawnSync(
+      "python",
+      ["-m", "msra_codegen", "generate", path.join(repoRoot, "examples", "demo", "demo.msra"), "-o", outputDir],
+      {
+        cwd: repoRoot,
+        env: buildCodegenPythonPath(pythonReleasesFixturePath),
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
+
+    const validateResult = spawnSync("python", ["-m", "msra_codegen", "validate", outputDir], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(validateResult.status, 0, validateResult.stderr || validateResult.stdout);
+
+    const probeResult = spawnSync(
+      "python",
+      ["-c", buildGeneratedPackageProbeScript(), outputDir, "demo_api"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

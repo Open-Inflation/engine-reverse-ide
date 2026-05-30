@@ -358,6 +358,7 @@ class Parser {
     this.text = state.text;
     this.diagnostics = state.diagnostics;
     this.tables = new Map();
+    this.tablePathIndex = new Map();
     this.assignments = new Map();
     this.references = [];
     this.directives = [];
@@ -421,6 +422,14 @@ class Parser {
     return this._current().type === tokenType;
   }
 
+  _checkAt(offset, tokenType) {
+    const token = this.tokens[this.index + offset];
+    if (!token) {
+      return false;
+    }
+    return token.type === tokenType;
+  }
+
   _match(...types) {
     if (types.includes(this._current().type)) {
       this._advance();
@@ -437,9 +446,17 @@ class Parser {
 
   _parseTableHeader() {
     const start = this._advance();
+    const isArrayTable = this._match("LBRACK");
     const pathSegments = this._parsePath("RBRACK");
     const end = this._expect("RBRACK", "Expected ']' to close table header");
-    const tableRange = new Range(start.range.start, end ? end.range.end : this._previous().range.end);
+    let closingEnd = end ? end.range.end : this._previous().range.end;
+    if (isArrayTable) {
+      const closing = this._expect("RBRACK", "Expected ']' to close array table header");
+      if (closing) {
+        closingEnd = closing.range.end;
+      }
+    }
+    const tableRange = new Range(start.range.start, closingEnd);
     if (!pathSegments.length) {
       this._error("Empty table header", tableRange, "empty-table-header");
       this._syncToNextStatement();
@@ -447,18 +464,24 @@ class Parser {
     }
     const tablePath = pathSegments.map((segment) => segment.value);
     const tableKey = pathIdentityKey(pathSegments);
-    if (this.tables.has(tableKey)) {
+    const tableGroup = this.tablePathIndex.get(tableKey) || { hasSingle: false, hasArray: false, count: 0 };
+    if (!isArrayTable && (tableGroup.hasSingle || tableGroup.hasArray)) {
       this._error(
         `Duplicate table declaration for ${pathLabel(pathSegments)}`,
         tableRange,
         "duplicate-table",
       );
     } else {
-      this.tables.set(tableKey, new TableDef(tablePath, tableRange, pathSegments, tableKey));
+      tableGroup.hasSingle = tableGroup.hasSingle || !isArrayTable;
+      tableGroup.hasArray = tableGroup.hasArray || isArrayTable;
+      tableGroup.count += 1;
+      this.tablePathIndex.set(tableKey, tableGroup);
+      const identityKey = isArrayTable ? `${tableKey}#${tableGroup.count}` : tableKey;
+      this.tables.set(identityKey, new TableDef(tablePath, tableRange, pathSegments, identityKey, isArrayTable));
     }
     this.currentTable = tablePath;
     this.currentTableSegments = pathSegments;
-    this.currentTableIdentityKey = tableKey;
+    this.currentTableIdentityKey = isArrayTable ? `${tableKey}#${tableGroup.count}` : tableKey;
     if (!this._match("NEWLINE", "EOF")) {
       this._error("Expected end of line after table header", this._current().range, "trailing-table-header");
       this._syncToNextStatement();

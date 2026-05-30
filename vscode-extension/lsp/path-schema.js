@@ -375,7 +375,7 @@ function validateFuncTable(segments, index) {
   }
   const segment = segments[index];
   if (segment.value === "input" && !segment.quoted) {
-    return validateDynamicLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`, "input");
+    return validateInputNamespace(segments, index + 1);
   }
   if (segment.value === "body" && !segment.quoted) {
     return validateBodyNamespace(segments, index + 1, false);
@@ -395,11 +395,69 @@ function validateFuncTable(segments, index) {
   if (segment.value === "extractor" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
+  if (segment.value === "overload" && !segment.quoted) {
+    return validateFuncOverloadNamespace(segments, index + 1, `"${renderPath(segments, index + 1)}"`);
+  }
   return invalidPath(
     segments,
     index,
-    `Invalid child table "${renderSegment(segment)}" under "${renderPath(segments, index)}". Expected "input", "body", "headers", "url", "examples", or "extractor".`,
-    ["input", "body", "headers", "url", "examples", "extractor"],
+    `Invalid child table "${renderSegment(segment)}" under "${renderPath(segments, index)}". Expected "input", "body", "headers", "url", "examples", "extractor", or "overload".`,
+    ["input", "body", "headers", "url", "examples", "extractor", "overload"],
+  );
+}
+
+function validateFuncOverloadNamespace(segments, index, parentLabel) {
+  if (index >= segments.length) {
+    return invalidPath(
+      segments,
+      index,
+      `Table path "${renderPath(segments)}" is rooted at ${parentLabel} and only allows a single overload name under "overload".`,
+    );
+  }
+  if (index === segments.length - 1) {
+    return { valid: true };
+  }
+  return invalidPath(
+    segments,
+    index + 1,
+    `Table path "${renderPath(segments)}" is rooted at ${parentLabel} and does not allow child tables.`,
+  );
+}
+
+function validateInputNamespace(segments, index) {
+  if (index >= segments.length) {
+    return { valid: true };
+  }
+  if (index === segments.length - 1) {
+    return { valid: true };
+  }
+  const segment = segments[index + 1];
+  if (segment.value === "overload" && !segment.quoted) {
+    return validateInputOverloadNamespace(segments, index + 2, `"${renderPath(segments, index + 1)}"`);
+  }
+  return invalidPath(
+    segments,
+    index + 1,
+    `Table path "${renderPath(segments)}" declares child table "${renderSegment(segment)}" under input "${renderSegment(segments[index])}", but only "overload" is allowed.`,
+    ["overload"],
+  );
+}
+
+function validateInputOverloadNamespace(segments, index, parentLabel) {
+  if (index >= segments.length) {
+    return invalidPath(
+      segments,
+      index,
+      `Table path "${renderPath(segments)}" is rooted at ${parentLabel} and only allows a single overload name under "overload".`,
+    );
+  }
+  if (index === segments.length - 1) {
+    return { valid: true };
+  }
+  return invalidPath(
+    segments,
+    index + 1,
+    `Table path "${renderPath(segments)}" is rooted at ${parentLabel} and does not allow child tables.`,
   );
 }
 

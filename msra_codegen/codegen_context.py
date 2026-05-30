@@ -340,29 +340,618 @@ def build_function_context(
     transport = str(func.get("transport", "fetch"))
     method = str(func.get("method", "GET"))
     method_name = str(func.get("name", func["id"]))
+    overload_names = list(dict.fromkeys(func.get("overload_names", [])))
+    has_overloads = bool(overload_names)
     inputs = [dict(input_spec) for input_spec in func.get("inputs", [])]
-    signature_parts = []
-    signature_specs = []
     input_allowed_values = build_input_allowed_values_map(func)
+    input_overrides: dict[str, dict[str, dict[str, Any]]] = {}
+    first_explicit_defaults: dict[str, Any] = {}
     for input_spec in inputs:
         allowed_values = input_allowed_values.get(input_spec["name"])
         if allowed_values is not None:
             input_spec["allowed_values"] = allowed_values
-    for input_spec in inputs:
-        arg_name = input_spec["name"]
-        annotation = render_input_annotation(input_spec)
-        default_expr = render_input_default(input_spec)
-        signature_specs.append(
+        overrides = {
+            str(overload_name): dict(overload_spec)
+            for overload_name, overload_spec in (input_spec.get("overloads") or {}).items()
+            if isinstance(overload_spec, dict)
+        }
+        input_spec["overloads"] = overrides
+        input_overrides[input_spec["name"]] = overrides
+        fallback_default_expr = None
+        for overload_name in overload_names:
+            override_spec = overrides.get(overload_name) or {}
+            if override_spec.get("const") is not None:
+                fallback_default_expr = override_spec["const"]
+                break
+            if override_spec.get("default") is not None:
+                fallback_default_expr = override_spec["default"]
+                break
+        first_explicit_defaults[input_spec["name"]] = fallback_default_expr
+
+    def merge_input_for_overload(input_spec: dict[str, Any], overload_name: str) -> dict[str, Any]:
+        merged = dict(input_spec)
+        merged.pop("overloads", None)
+        override_spec = input_overrides.get(input_spec["name"], {}).get(overload_name) or {}
+        if has_overloads:
+            merged["required"] = False
+        if override_spec.get("type") is not None:
+            merged["type"] = override_spec["type"]
+        if override_spec.get("description") is not None:
+            merged["description"] = override_spec["description"]
+        if "required" in override_spec:
+            merged["required"] = bool(get_plain_value(override_spec["required"]))
+        if "default" in override_spec and override_spec["default"] is not None:
+            merged["default"] = override_spec["default"]
+            merged["required"] = False
+        if "const" in override_spec and override_spec["const"] is not None:
+            merged["const"] = override_spec["const"]
+            merged["required"] = False
+        if override_spec.get("values") is not None:
+            merged["values"] = override_spec["values"]
+        if override_spec.get("from") is not None:
+            merged["from"] = override_spec["from"]
+        if override_spec.get("match") is not None:
+            merged["match"] = override_spec["match"]
+        if override_spec.get("read_only") is not None:
+            merged["read_only"] = override_spec["read_only"]
+        if overload_name == "default" and merged.get("default") is None and merged.get("const") is None:
+            fallback_default_expr = first_explicit_defaults.get(input_spec["name"])
+            if fallback_default_expr is not None:
+                merged["default"] = fallback_default_expr
+                merged["required"] = False
+        if merged.get("const") is not None or merged.get("default") is not None:
+            merged["required"] = False
+        return merged
+
+    def render_signature(inputs_to_render: list[dict[str, Any]], *, omit_const: bool = False, force_optional: bool = False) -> tuple[list[str], list[dict[str, Any]]]:
+        signature_parts: list[str] = []
+        signature_specs: list[dict[str, Any]] = []
+        for input_spec in inputs_to_render:
+            if omit_const and input_spec.get("const") is not None:
+                continue
+            rendered_spec = dict(input_spec)
+            rendered_spec.pop("overloads", None)
+            if force_optional:
+                rendered_spec["required"] = False
+                rendered_spec["default"] = None
+                rendered_spec["const"] = None
+            annotation = render_input_annotation(rendered_spec)
+            default_expr = render_input_default(rendered_spec)
+            signature_specs.append(
+                {
+                    "name": rendered_spec["name"],
+                    "annotation": annotation,
+                    "default_expr": default_expr,
+                }
+            )
+            if default_expr is None:
+                signature_parts.append(f"{rendered_spec['name']}: {annotation}")
+            else:
+                signature_parts.append(f"{rendered_spec['name']}: {annotation} = {default_expr}")
+        return signature_parts, signature_specs
+
+    def matched_overload_expr(names: list[str]) -> str:
+        quoted_names = [render_simple_value(name) for name in names]
+        if len(quoted_names) == 1:
+            return f"matched_overload == {quoted_names[0]}"
+        return f"matched_overload in [{', '.join(quoted_names)}]"
+
+    def render_selection_conditions(overload_name: str, overload_inputs: list[dict[str, Any]], all_overloads: dict[str, list[dict[str, Any]]]) -> list[str]:
+        conditions: list[str] = []
+        for input_spec in overload_inputs:
+            input_name = input_spec["name"]
+            merged_required_like = bool(input_spec.get("required", False)) or input_spec.get("const") is not None
+            other_required_like = any(
+                (other_spec.get("required", False) or other_spec.get("const") is not None)
+                for name, specs in all_overloads.items()
+                if name != overload_name
+                for other_spec in specs
+                if other_spec["name"] == input_name
+            )
+            if input_spec.get("const") is not None:
+                conditions.append(f"{input_name} is None")
+            elif merged_required_like:
+                conditions.append(f"{input_name} is not None")
+            elif other_required_like:
+                conditions.append(f"{input_name} is None")
+        return conditions
+
+    def render_specialization_lines(overload_name: str, overload_inputs: list[dict[str, Any]]) -> list[str]:
+        lines: list[str] = []
+        for input_spec in overload_inputs:
+            input_name = input_spec["name"]
+            const_expr = input_spec.get("const")
+            default_expr = input_spec.get("default")
+            if const_expr is not None:
+                lines.append(f"{input_name} = {render_expr(const_expr, self_ref='self._parent')}")
+            elif default_expr is not None:
+                lines.append(
+                    f"{input_name} = {render_expr(default_expr, self_ref='self._parent')} if {input_name} is None else {input_name}"
+                )
+        return lines
+
+    def collect_input_names(expr: Any) -> list[str]:
+        names: list[str] = []
+        seen: set[str] = set()
+
+        def walk(node: Any) -> None:
+            if isinstance(node, list):
+                for item in node:
+                    walk(item)
+                return
+            if not isinstance(node, dict):
+                return
+            kind = node.get("kind")
+            if kind == "ref":
+                input_name = ref_input_name(node)
+                if input_name and input_name not in seen:
+                    seen.add(input_name)
+                    names.append(input_name)
+                for part in node.get("parts", []):
+                    walk(part.get("value"))
+                return
+            if kind == "inline_table":
+                for item in node.get("items", []):
+                    walk(item.get("value"))
+                return
+            if kind == "array":
+                for item in node.get("items", []):
+                    walk(item)
+                return
+            if kind == "sequence":
+                for item in node.get("items", []):
+                    walk(item)
+                return
+            if kind == "merge":
+                for part in node.get("parts", []):
+                    walk(part)
+                return
+            if kind == "call":
+                walk(node.get("callee"))
+                for arg in node.get("args", []):
+                    walk(arg.get("value"))
+                return
+            if kind == "index":
+                walk(node.get("value"))
+                walk(node.get("index"))
+
+        walk(expr)
+        return names
+
+    def render_wants_condition(wants_value: Any) -> str | None:
+        plain_value = get_plain_value(wants_value)
+        if isinstance(plain_value, list):
+            return f"in {render_simple_value([get_plain_value(item) for item in plain_value])}"
+        if plain_value is None:
+            return "is None"
+        if isinstance(plain_value, bool):
+            return "is True" if plain_value else "is False"
+        return f"== {render_simple_value(plain_value)}"
+
+    def render_request_url_code(url_spec: dict[str, Any], fallback_url_expr: str) -> str:
+        url_entries = list(url_spec.get("entries") or [])
+        if not url_entries:
+            return f"request_url = {fallback_url_expr}"
+
+        explicit_entries: list[tuple[int, dict[str, Any], list[str]]] = []
+        fallback_entries: list[tuple[int, dict[str, Any]]] = []
+        for index, entry in enumerate(url_entries):
+            conditions = [f"{input_name} is not None" for input_name in collect_input_names(entry.get("base"))]
+            wants = get_plain_value(entry.get("wants"))
+            if isinstance(wants, dict):
+                for key, value in wants.items():
+                    wants_condition = render_wants_condition(value)
+                    if wants_condition is None:
+                        continue
+                    conditions.append(f"{key} {wants_condition}")
+            if conditions:
+                explicit_entries.append((index, entry, conditions))
+            else:
+                fallback_entries.append((index, entry))
+
+        if len(fallback_entries) > 1:
+            raise ValueError(f"Function {method_name} defines multiple URL fallbacks without selection conditions.")
+        if not explicit_entries:
+            if fallback_entries:
+                return f"request_url = {render_expr(fallback_entries[0][1].get('base'), self_ref='self._parent')}"
+            return f"request_url = {fallback_url_expr}"
+
+        ordered_explicit_entries = sorted(
+            explicit_entries,
+            key=lambda item: (-float(get_plain_value(item[1].get("priority", 0)) or 0), item[0]),
+        )
+        lines: list[str] = []
+        for index, (_entry_index, entry, conditions) in enumerate(ordered_explicit_entries):
+            keyword = "if" if index == 0 else "elif"
+            lines.append(f"{keyword} {' and '.join(conditions)}:")
+            lines.append(f"    request_url = {render_expr(entry.get('base'), self_ref='self._parent')}")
+
+        if fallback_entries:
+            lines.append("else:")
+            lines.append(f"    request_url = {render_expr(fallback_entries[0][1].get('base'), self_ref='self._parent')}")
+        else:
+            lines.append("else:")
+            lines.append(f"    raise TypeError({render_simple_value(method_name + '() call is ambiguous; URL cannot be collected')})")
+        return "\n".join(lines)
+
+    def render_validation_code(base_inputs: list[dict[str, Any]], overload_inputs_by_name: dict[str, list[dict[str, Any]]]) -> str | None:
+        if not overload_inputs_by_name:
+            return None
+        lines: list[str] = []
+        for base_input in base_inputs:
+            input_name = base_input["name"]
+            validation_spec = dict(base_input)
+            validation_spec.pop("overloads", None)
+            validation_spec["required"] = False
+            fallback_values = get_plain_value(validation_spec.get("values"))
+            if not isinstance(fallback_values, list):
+                fallback_values = []
+            special_value_overloads: list[str] = []
+            for overload_name, overload_inputs in overload_inputs_by_name.items():
+                overload_spec = next((item for item in overload_inputs if item["name"] == input_name), None)
+                if overload_spec is None:
+                    continue
+                values = get_plain_value(overload_spec.get("values"))
+                if isinstance(values, list) and values != fallback_values:
+                    special_value_overloads.append(overload_name)
+            required_overloads = [
+                overload_name
+                for overload_name, overload_inputs in overload_inputs_by_name.items()
+                if next((item for item in overload_inputs if item["name"] == input_name and item.get("required", False)), None)
+            ]
+            has_checks = bool(
+                validation_spec.get("type")
+                or validation_spec.get("values")
+                or validation_spec.get("match")
+            )
+            if not has_checks and not required_overloads and not special_value_overloads:
+                continue
+            if validation_spec.get("type") or validation_spec.get("values") or validation_spec.get("match"):
+                item_validation = build_input_validation_context({"inputs": [validation_spec]})[0]
+                if item_validation.get("has_checks"):
+                    # Reuse the existing non-overloaded validation builder for the fallback branch.
+                    if required_overloads:
+                        if item_validation.get("required"):
+                            item_validation["required"] = False
+                    lines.extend(render_validation_item_lines(item_validation))
+            if required_overloads:
+                match_expr = matched_overload_expr(required_overloads)
+                lines.append(f"elif {match_expr}:")
+                lines.append(f"    raise ValueError(\"`{input_name}` is required\")")
+            if special_value_overloads:
+                for overload_name in special_value_overloads:
+                    overload_spec = next(item for item in overload_inputs_by_name[overload_name] if item["name"] == input_name)
+                    override_values = get_plain_value(overload_spec.get("values")) or []
+                    if not isinstance(override_values, list):
+                        continue
+                    values_expr = render_simple_value(override_values)
+                    lines.append(f"if {matched_overload_expr([overload_name])} and {input_name} not in {values_expr}:")
+                    if overload_spec.get("values") is not None:
+                        lines.append(
+                            f"    raise ValueError(\"{input_name} for overload {overload_name} must be one of {values_expr}\")"
+                        )
+                if fallback_values:
+                    lines.append(f"elif {input_name} not in {render_simple_value(fallback_values)}:")
+                    lines.append(
+                        f"    raise ValueError(\"`{input_name}` must be any of {render_simple_value(fallback_values)}\")"
+                    )
+        return "\n".join(lines) if lines else None
+
+    def render_validation_item_lines(validation_item: dict[str, Any]) -> list[str]:
+        lines: list[str] = []
+        if not validation_item.get("has_checks"):
+            return lines
+        if validation_item.get("required"):
+            lines.append(f"if {validation_item['name']} is None:")
+            lines.append(f"    raise ValueError(\"`{validation_item['name']}` is required\")")
+        if validation_item.get("is_list"):
+            if validation_item.get("required"):
+                lines.append(f"if not isinstance({validation_item['name']}, list):")
+                lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be list\")")
+                lines.append(f"for __item in {validation_item['name']}:")
+            else:
+                lines.append(
+                    f"if {validation_item['name']} is not None and not isinstance({validation_item['name']}, list):"
+                )
+                lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be list\")")
+                lines.append(f"if {validation_item['name']} is not None:")
+                lines.append(f"    for __item in {validation_item['name']}:")
+            target_indent = "    " if validation_item.get("required") else "        "
+            if "integer" in validation_item["item_type_names"]:
+                lines.append(f"{target_indent}if not isinstance(__item, int) or isinstance(__item, bool):")
+                lines.append(f"{target_indent}    raise TypeError(\"`{validation_item['name']}` items must be int\")")
+            elif "boolean" in validation_item["item_type_names"]:
+                lines.append(f"{target_indent}if not isinstance(__item, bool):")
+                lines.append(f"{target_indent}    raise TypeError(\"`{validation_item['name']}` items must be bool\")")
+            elif "number" in validation_item["item_type_names"]:
+                lines.append(f"{target_indent}if not isinstance(__item, (int, float)) or isinstance(__item, bool):")
+                lines.append(f"{target_indent}    raise TypeError(\"`{validation_item['name']}` items must be number\")")
+            elif "string" in validation_item["item_type_names"]:
+                lines.append(f"{target_indent}if not isinstance(__item, str):")
+                lines.append(f"{target_indent}    raise TypeError(\"`{validation_item['name']}` items must be str\")")
+        else:
+            if "integer" in validation_item["type_names"]:
+                if validation_item.get("required"):
+                    lines.append(f"if not isinstance({validation_item['name']}, int) or isinstance({validation_item['name']}, bool):")
+                    lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be int\")")
+                else:
+                    lines.append(
+                        f"if {validation_item['name']} is not None and (not isinstance({validation_item['name']}, int) or isinstance({validation_item['name']}, bool)):"
+                    )
+                    lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be int\")")
+            elif "boolean" in validation_item["type_names"]:
+                if validation_item.get("required"):
+                    lines.append(f"if not isinstance({validation_item['name']}, bool):")
+                    lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be bool\")")
+                else:
+                    lines.append(f"if {validation_item['name']} is not None and not isinstance({validation_item['name']}, bool):")
+                    lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be bool\")")
+            elif "number" in validation_item["type_names"]:
+                if validation_item.get("required"):
+                    lines.append(f"if not isinstance({validation_item['name']}, (int, float)) or isinstance({validation_item['name']}, bool):")
+                    lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be number\")")
+                else:
+                    lines.append(
+                        f"if {validation_item['name']} is not None and (not isinstance({validation_item['name']}, (int, float)) or isinstance({validation_item['name']}, bool)):"
+                    )
+                    lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be number\")")
+            elif "string" in validation_item["type_names"]:
+                if validation_item.get("required"):
+                    lines.append(f"if not isinstance({validation_item['name']}, str):")
+                    lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be str\")")
+                else:
+                    lines.append(f"if {validation_item['name']} is not None and not isinstance({validation_item['name']}, str):")
+                    lines.append(f"    raise TypeError(\"`{validation_item['name']}` must be str\")")
+        if validation_item.get("match_check_expr") and not validation_item.get("is_list"):
+            if validation_item.get("required"):
+                lines.append(f"if not ({validation_item['match_check_expr']}):")
+            else:
+                lines.append(f"if {validation_item['name']} is not None and not ({validation_item['match_check_expr']}):")
+            if validation_item.get("match_error"):
+                lines.append(f"    raise ValueError({validation_item['match_error']})")
+            else:
+                lines.append(
+                    f"    raise ValueError(\"`{validation_item['name']}` does not match the expected format\")"
+                )
+        elif validation_item.get("match_range") and not validation_item.get("is_list"):
+            if validation_item.get("required"):
+                lines.append(
+                    f"if float({validation_item['name']}) < {validation_item['match_range'][0]} or float({validation_item['name']}) > {validation_item['match_range'][1]}:"
+                )
+            else:
+                lines.append(
+                    f"if {validation_item['name']} is not None and (float({validation_item['name']}) < {validation_item['match_range'][0]} or float({validation_item['name']}) > {validation_item['match_range'][1]}):"
+                )
+            lines.append(
+                f"    raise ValueError(\"`{validation_item['name']}` must be between {validation_item['match_range'][0]} and {validation_item['match_range'][1]}\")"
+            )
+        if validation_item.get("values_expr"):
+            if validation_item.get("is_list"):
+                if validation_item.get("required"):
+                    lines.append(f"for __item in {validation_item['name']}:")
+                    lines.append(f"    if __item not in {validation_item['values_expr']}:")
+                    lines.append(
+                        f"        raise ValueError(\"`{validation_item['name']}` items must be one of {validation_item['values_expr']}\")"
+                    )
+                else:
+                    lines.append(f"if {validation_item['name']} is not None:")
+                    lines.append(f"    for __item in {validation_item['name']}:")
+                    lines.append(f"        if __item not in {validation_item['values_expr']}:")
+                    lines.append(
+                        f"            raise ValueError(\"`{validation_item['name']}` items must be one of {validation_item['values_expr']}\")"
+                    )
+            else:
+                if validation_item.get("required"):
+                    lines.append(f"if {validation_item['name']} not in {validation_item['values_expr']}:")
+                    lines.append(
+                        f"    raise ValueError(\"`{validation_item['name']}` must be one of {validation_item['values_expr']}\")"
+                    )
+                else:
+                    lines.append(
+                        f"if {validation_item['name']} is not None and {validation_item['name']} not in {validation_item['values_expr']}:"
+                    )
+                    lines.append(
+                        f"    raise ValueError(\"`{validation_item['name']}` must be one of {validation_item['values_expr']}\")"
+                    )
+        return lines
+
+    def render_overload_validation_code(base_inputs: list[dict[str, Any]], overload_inputs_by_name: dict[str, list[dict[str, Any]]]) -> str | None:
+        if not overload_inputs_by_name:
+            return None
+        lines: list[str] = []
+        for base_input in base_inputs:
+            input_name = base_input["name"]
+            type_expr = base_input.get("type")
+            type_names = type_names_from_expr(type_expr)
+            is_list = is_list_type_expr(type_expr)
+            match_check_expr = match_to_check_expr(base_input.get("match"), input_name)
+            match_error = match_to_error(base_input.get("match"))
+            match_range = match_to_range(base_input.get("match"))
+            base_values = selectable_values_from_plain_values(get_plain_value(base_input.get("allowed_values")))
+            if not base_values:
+                base_values = selectable_values_from_plain_values(get_plain_value(base_input.get("values")))
+            required_overloads = [
+                overload_name
+                for overload_name, overload_inputs in overload_inputs_by_name.items()
+                if next((item for item in overload_inputs if item["name"] == input_name and item.get("required", False)), None)
+            ]
+            value_override_overloads: list[tuple[str, list[Any]]] = []
+            for overload_name, overload_inputs in overload_inputs_by_name.items():
+                overload_spec = next((item for item in overload_inputs if item["name"] == input_name), None)
+                if overload_spec is None:
+                    continue
+                override_values = selectable_values_from_plain_values(get_plain_value(overload_spec.get("values")))
+                if override_values and override_values != base_values:
+                    value_override_overloads.append((overload_name, override_values))
+            if is_list:
+                lines.append(f"if {input_name} is not None and not isinstance({input_name}, list):")
+                lines.append(f"    raise TypeError(\"`{input_name}` must be list\")")
+                lines.append(f"if {input_name} is not None:")
+                lines.append(f"    for __item in {input_name}:")
+                if "integer" in type_names:
+                    lines.append(f"        if not isinstance(__item, int) or isinstance(__item, bool):")
+                    lines.append(f"            raise TypeError(\"`{input_name}` items must be int\")")
+                elif "boolean" in type_names:
+                    lines.append(f"        if not isinstance(__item, bool):")
+                    lines.append(f"            raise TypeError(\"`{input_name}` items must be bool\")")
+                elif "number" in type_names:
+                    lines.append(f"        if not isinstance(__item, (int, float)) or isinstance(__item, bool):")
+                    lines.append(f"            raise TypeError(\"`{input_name}` items must be number\")")
+                elif "string" in type_names:
+                    lines.append(f"        if not isinstance(__item, str):")
+                    lines.append(f"            raise TypeError(\"`{input_name}` items must be str\")")
+                if required_overloads:
+                    lines.append(f"if {input_name} is None and {matched_overload_expr(required_overloads)}:")
+                    lines.append(f"    raise ValueError(\"`{input_name}` is required\")")
+            else:
+                if "integer" in type_names:
+                    lines.append(f"if {input_name} is not None and (not isinstance({input_name}, int) or isinstance({input_name}, bool)):")
+                    lines.append(f"    raise TypeError(\"`{input_name}` must be int\")")
+                elif "boolean" in type_names:
+                    lines.append(f"if {input_name} is not None and not isinstance({input_name}, bool):")
+                    lines.append(f"    raise TypeError(\"`{input_name}` must be bool\")")
+                elif "number" in type_names:
+                    lines.append(f"if {input_name} is not None and (not isinstance({input_name}, (int, float)) or isinstance({input_name}, bool)):")
+                    lines.append(f"    raise TypeError(\"`{input_name}` must be number\")")
+                elif "string" in type_names:
+                    lines.append(f"if {input_name} is not None and not isinstance({input_name}, str):")
+                    lines.append(f"    raise TypeError(\"`{input_name}` must be str\")")
+                if required_overloads:
+                    lines.append(f"if {input_name} is None and {matched_overload_expr(required_overloads)}:")
+                    lines.append(f"    raise ValueError(\"`{input_name}` is required\")")
+            if match_check_expr:
+                lines.append(f"if {input_name} is not None and not ({match_check_expr}):")
+                if match_error:
+                    lines.append(f"    raise ValueError({match_error})")
+                else:
+                    lines.append(
+                        f"    raise ValueError(\"`{input_name}` does not match the expected format\")"
+                    )
+            elif match_range:
+                lines.append(
+                    f"if {input_name} is not None and (float({input_name}) < {match_range[0]} or float({input_name}) > {match_range[1]}):"
+                )
+                lines.append(
+                    f"    raise ValueError(\"`{input_name}` must be between {match_range[0]} and {match_range[1]}\")"
+                )
+            for overload_name, override_values in value_override_overloads:
+                lines.append(
+                    f"if {matched_overload_expr([overload_name])} and {input_name} not in {render_simple_value(override_values)}:"
+                )
+                lines.append(
+                    f"    raise ValueError(\"{input_name} for overload {overload_name} must be one of {render_simple_value(override_values)}\")"
+                )
+            if base_values:
+                if value_override_overloads:
+                    lines.append(f"elif {input_name} is not None and {input_name} not in {render_simple_value(base_values)}:")
+                    lines.append(
+                        f"    raise ValueError(\"`{input_name}` must be any of {render_simple_value(base_values)}\")"
+                    )
+                else:
+                    lines.append(f"if {input_name} is not None and {input_name} not in {render_simple_value(base_values)}:")
+                    lines.append(
+                        f"    raise ValueError(\"`{input_name}` must be any of {render_simple_value(base_values)}\")"
+                    )
+        return "\n".join(lines) if lines else None
+
+    merged_inputs_by_overload: dict[str, list[dict[str, Any]]] = {
+        overload_name: [merge_input_for_overload(input_spec, overload_name) for input_spec in inputs]
+        for overload_name in overload_names
+    }
+
+    def should_include_overload_signature_input(
+        input_spec: dict[str, Any],
+        overload_name: str,
+        overload_inputs_by_name: dict[str, list[dict[str, Any]]],
+    ) -> bool:
+        if input_spec.get("const") is not None:
+            return False
+        if input_spec.get("required") or input_spec.get("default") is not None:
+            return True
+        other_required_like = any(
+            (other_spec.get("required") or other_spec.get("const") is not None)
+            for name, specs in overload_inputs_by_name.items()
+            if name != overload_name
+            for other_spec in specs
+            if other_spec["name"] == input_spec["name"]
+        )
+        return not other_required_like
+
+    overload_stub_contexts: list[dict[str, Any]] = []
+    for overload_name in overload_names:
+        merged_inputs = merged_inputs_by_overload[overload_name]
+        signature_parts: list[str] = []
+        signature_specs: list[dict[str, Any]] = []
+        for input_spec in merged_inputs:
+            if not should_include_overload_signature_input(input_spec, overload_name, merged_inputs_by_overload):
+                continue
+            rendered_spec = dict(input_spec)
+            rendered_spec.pop("overloads", None)
+            annotation = render_input_annotation(rendered_spec)
+            default_expr = render_input_default(rendered_spec)
+            signature_specs.append(
+                {
+                    "name": rendered_spec["name"],
+                    "annotation": annotation,
+                    "default_expr": default_expr,
+                }
+            )
+            if default_expr is None:
+                signature_parts.append(f"{rendered_spec['name']}: {annotation}")
+            else:
+                signature_parts.append(f"{rendered_spec['name']}: {annotation} = {default_expr}")
+        overload_stub_contexts.append(
             {
-                "name": arg_name,
-                "annotation": annotation,
-                "default_expr": default_expr,
+                "name": overload_name,
+                "signature": ", ".join(signature_parts),
+                "signature_specs": signature_specs,
             }
         )
-        if default_expr is None:
-            signature_parts.append(f"{arg_name}: {annotation}")
-        else:
-            signature_parts.append(f"{arg_name}: {annotation} = {default_expr}")
+
+    impl_inputs = []
+    for input_spec in inputs:
+        impl_spec = dict(input_spec)
+        impl_spec.pop("overloads", None)
+        if has_overloads:
+            impl_spec["required"] = False
+            impl_spec["default"] = None
+            impl_spec["const"] = None
+        impl_inputs.append(impl_spec)
+    signature_parts, signature_specs = render_signature(impl_inputs, force_optional=has_overloads)
+    validation = build_input_validation_context({"inputs": impl_inputs}) if not has_overloads else []
+    overload_validation_code = render_overload_validation_code(inputs, merged_inputs_by_overload)
+    overload_selection_code = None
+    overload_specialization_code = None
+    if has_overloads:
+        selection_lines: list[str] = ["matched = []"]
+        specialization_lines: list[str] = []
+        for overload_name in overload_names:
+            overload_inputs = merged_inputs_by_overload[overload_name]
+            conditions = render_selection_conditions(overload_name, overload_inputs, merged_inputs_by_overload)
+            if conditions:
+                selection_lines.append(f"if {' and '.join(conditions)}:")
+                selection_lines.append(f"    matched.append({render_simple_value(overload_name)})")
+            else:
+                selection_lines.append(f"matched.append({render_simple_value(overload_name)})")
+            specialization_lines.append(f"if {matched_overload_expr([overload_name])}:")
+            rendered_specialization = render_specialization_lines(overload_name, overload_inputs)
+            if rendered_specialization:
+                for line in rendered_specialization:
+                    specialization_lines.append(f"    {line}")
+            else:
+                specialization_lines.append("    pass")
+        selection_lines.append("if not matched:")
+        selection_lines.append(
+            f"    raise TypeError({render_simple_value(method_name + '() expected one of: ' + ', '.join(overload_names))})"
+        )
+        selection_lines.append("elif len(matched) > 1:")
+        selection_lines.append(
+            f"    raise TypeError(f\"{method_name}() call is ambiguous; matched overloads: {{matched}}\")"
+        )
+        selection_lines.append("else:")
+        selection_lines.append("    matched_overload = matched[0]")
+        overload_selection_code = "\n".join(selection_lines)
+        overload_specialization_code = "\n".join(specialization_lines)
 
     url_spec = func.get("url") or {}
     body = func.get("body")
@@ -370,7 +959,6 @@ def build_function_context(
     extractor = func.get("extractor") or {}
     goto_pipeline = extractor.get("goto_pipeline") or {}
     extractor_script = extractor.get("script")
-    validation = build_input_validation_context({"inputs": inputs})
     query_params = build_query_param_context(func)
     url_expr = render_expr(url_spec.get("base"), self_ref="self._parent")
     if url_expr == "None":
@@ -379,6 +967,7 @@ def build_function_context(
             url_expr = url_input
         else:
             url_expr = render_simple_value("")
+    request_url_code = render_request_url_code(url_spec, url_expr)
     return_annotation = render_return_annotation(func)
     signature_text = ", ".join(signature_parts)
     uses_json_import = any(param.get("list_style_style") == "json" for param in query_params) or bool(
@@ -388,10 +977,18 @@ def build_function_context(
     uses_re_import = any(
         (validation_item.get("match_check_expr") or "").startswith("re.fullmatch(")
         for validation_item in validation
+    ) or bool(overload_validation_code and "re.fullmatch(" in overload_validation_code)
+    uses_literal_import = "Literal[" in signature_text or "Literal[" in return_annotation or any(
+        "Literal[" in overload_context["signature"] for overload_context in overload_stub_contexts
     )
-    uses_literal_import = "Literal[" in signature_text or "Literal[" in return_annotation
     uses_http_method_import = transport != "direct"
     uses_method_pipeline_error_import = bool(goto_pipeline.get("module") and goto_pipeline.get("function"))
+    if overload_selection_code:
+        overload_selection_code = textwrap.indent(overload_selection_code, "        ")
+    if overload_specialization_code:
+        overload_specialization_code = textwrap.indent(overload_specialization_code, "        ")
+    if overload_validation_code:
+        overload_validation_code = textwrap.indent(overload_validation_code, "        ")
     return {
         "method_name": method_name,
         "description": escape_docstring(func.get("description")) if func.get("description") else "",
@@ -402,7 +999,13 @@ def build_function_context(
         "root_import_prefix": root_import_prefix,
         "transport": transport,
         "method": method,
-        "url_expr": url_expr,
+        "signature_kwonly": has_overloads,
+        "request_url_code": textwrap.indent(request_url_code, "        "),
+        "has_overloads": has_overloads,
+        "overloads": overload_stub_contexts,
+        "overload_selection_code": overload_selection_code,
+        "overload_specialization_code": overload_specialization_code,
+        "overload_validation_code": overload_validation_code,
         "request": {
             "referrer_expr": render_request_referrer(headers_spec),
             "cors_mode_expr": render_request_cors_mode(headers_spec, default_if_missing=False),
@@ -430,6 +1033,7 @@ def build_function_context(
         "uses_literal_import": uses_literal_import,
         "uses_http_method_import": uses_http_method_import,
         "uses_method_pipeline_error_import": uses_method_pipeline_error_import,
+        "uses_overload_import": has_overloads,
     }
 
 
@@ -690,6 +1294,12 @@ def build_group_context(
                 "uses_re_import": function_context["uses_re_import"],
                 "uses_literal_import": function_context["uses_literal_import"],
                 "uses_method_pipeline_error_import": function_context["uses_method_pipeline_error_import"],
+                "uses_overload_import": function_context["uses_overload_import"],
+                "has_overloads": function_context["has_overloads"],
+                "overloads": function_context["overloads"],
+                "overload_selection_code": function_context["overload_selection_code"],
+                "overload_specialization_code": function_context["overload_specialization_code"],
+                "overload_validation_code": function_context["overload_validation_code"],
             }
         )
     return {
@@ -720,6 +1330,7 @@ def build_group_context(
         ],
         "functions": function_contexts,
         "has_autotests": any(func_context["autotest_enabled"] for func_context in function_contexts),
+        "uses_overload_import": any(func_context.get("uses_overload_import", False) for func_context in function_contexts),
         "imports": {
             "http_method": any(func_context.get("uses_http_method_import", False) for func_context in function_contexts),
             "json": any(func_context.get("uses_json_import", False) for func_context in function_contexts),
@@ -729,6 +1340,7 @@ def build_group_context(
             "method_pipeline_error": any(
                 func_context.get("uses_method_pipeline_error_import", False) for func_context in function_contexts
             ),
+            "overload": any(func_context.get("uses_overload_import", False) for func_context in function_contexts),
         },
     }
 
@@ -913,6 +1525,8 @@ def render_input_annotation(input_spec: dict[str, Any]) -> str:
 
 
 def render_input_default(input_spec: dict[str, Any]) -> str | None:
+    if "const" in input_spec and input_spec["const"] is not None:
+        return render_expr(input_spec["const"], self_ref="self._parent")
     if "default" in input_spec and input_spec["default"] is not None:
         return render_expr(input_spec["default"], self_ref="self._parent")
     if not input_spec.get("required", False):

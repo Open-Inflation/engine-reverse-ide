@@ -206,6 +206,14 @@ function matchesInputPath(path) {
   return path.length === 5 && path[0] === "app" && path[1] === "func" && path[3] === "input";
 }
 
+function matchesInputOverloadPath(path) {
+  return path.length === 7 && path[0] === "app" && path[1] === "func" && path[3] === "input" && path[5] === "overload";
+}
+
+function matchesFuncOverloadPath(path) {
+  return path.length === 5 && path[0] === "app" && path[1] === "func" && path[3] === "overload";
+}
+
 function matchesExampleItemPath(path) {
   return path.length === 5 && path[0] === "app" && path[1] === "func" && path[3] === "examples";
 }
@@ -231,6 +239,9 @@ function annotationRequirementForAssignment(tablePath, key) {
     return { kind: "flag", label: "@Nullable", legacyLabel: "nullable" };
   }
   if (matchesInputPath(tablePath) && key === "required") {
+    return { kind: "flag", label: "@Required", legacyLabel: "required" };
+  }
+  if (matchesInputOverloadPath(tablePath) && key === "required") {
     return { kind: "flag", label: "@Required", legacyLabel: "required" };
   }
   if (matchesUrlParamsPath(tablePath)) {
@@ -721,6 +732,24 @@ const TABLE_SCHEMAS = [
     description: STRINGISH,
     required: BOOLEAN,
     default: ANY,
+    const: ANY,
+    values: ARRAY,
+    from: ANY,
+    match: MATCH_SPEC,
+  }, {
+    rules: [
+      forbidDynamicValue("description", {
+        code: "invalid-description-dynamic",
+        message: 'Description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
+  }),
+  makeFixedSchema(exactPath(["app", "func", "*", "input", "*", "overload", "*"]), {
+    type: INPUT_TYPE_SPEC,
+    description: STRINGISH,
+    required: BOOLEAN,
+    default: ANY,
+    const: ANY,
     values: ARRAY,
     from: ANY,
     match: MATCH_SPEC,
@@ -745,7 +774,17 @@ const TABLE_SCHEMAS = [
   }),
   makeFixedSchema(matchesUrlPath, {
     base: STRINGISH,
+    priority: NUMBER,
+    wants: OBJECT,
+  }, {
+    rules: [
+      forbidDynamicValue("wants", {
+        code: "invalid-url-wants-dynamic",
+        message: 'URL wants cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
   }),
+  makeFixedSchema(exactPath(["app", "func", "*", "overload", "*"]), {}),
   makeFixedSchema(exactPath(["app", "func", "*", "extractor"]), EXTRACTOR_TABLE_KEYS),
   makeFixedSchema(matchesUrlParamsPath, {
     sub_url: BOOLEAN,

@@ -1,10 +1,22 @@
+{% for overload in overloads %}
+    @overload
+    async def {{ method_name }}(self{% if overload.signature %}{% if signature_kwonly %}, *{% endif %}, {{ overload.signature }}{% endif %}) -> {{ return_annotation }}: ...
+
+{% endfor %}
 {% if autotest_enabled %}
     @autotest
 {% endif %}
-    async def {{ method_name }}(self{% if signature %}, {{ signature }}{% endif %}) -> {{ return_annotation }}:
+    async def {{ method_name }}(self{% if signature %}{% if signature_kwonly %}, *{% endif %}, {{ signature }}{% endif %}) -> {{ return_annotation }}:
 {% if description %}
         """{{ description }}"""
 {% endif %}
+{% if has_overloads %}
+{{ overload_selection_code }}
+{{ overload_specialization_code }}
+{% if overload_validation_code %}
+{{ overload_validation_code }}
+{% endif %}
+{% else %}
 {% for item in validation %}
 {% if item.has_checks %}
 {% if item.required %}
@@ -134,8 +146,9 @@
 {% endif %}
 {% endif %}
 {% endfor %}
+{% endif %}
 
-        request_url = {{ url_expr }}
+{{ request_url_code }}
         query_params: list[tuple[str, object]] = []
 {% for param in query_params %}
 {% if param.kind == "from" and param.has_value_map %}

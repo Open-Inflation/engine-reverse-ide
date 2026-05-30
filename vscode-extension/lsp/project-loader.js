@@ -46,6 +46,18 @@ function pathValues(pathSegments) {
   return normalizePathSegments(pathSegments).map((segment) => segment.value);
 }
 
+function rewriteIdentityKey(identityKey, pathSegments) {
+  const newBase = pathIdentityKey(pathSegments);
+  if (typeof identityKey !== "string") {
+    return newBase;
+  }
+  const match = identityKey.match(/^(.*)(#\d+)$/);
+  if (!match) {
+    return newBase;
+  }
+  return `${newBase}${match[2]}`;
+}
+
 function cloneTable(table, prefix, sourcePath) {
   const pathSegments = cloneSegments(table.pathSegments || table.path || [], prefix);
   const path = pathSegments.map((segment) => segment.value);
@@ -56,7 +68,7 @@ function cloneTable(table, prefix, sourcePath) {
     prefix: [...pathValues(prefix)],
     path,
     pathSegments,
-    identityKey: pathIdentityKey(pathSegments),
+    identityKey: rewriteIdentityKey(table.identityKey, pathSegments),
     assignments,
   };
 }
@@ -65,7 +77,7 @@ function cloneAssignment(assignment, prefix, sourcePath) {
   const tablePathSegments = cloneSegments(assignment.tablePathSegments || assignment.tablePath || [], prefix);
   const tablePath = tablePathSegments.map((segment) => segment.value);
   const fullPath = [...tablePath, assignment.key];
-  const tableIdentityKey = pathIdentityKey(tablePathSegments);
+  const tableIdentityKey = rewriteIdentityKey(assignment.tableIdentityKey, tablePathSegments);
   return {
     ...assignment,
     sourcePath,
@@ -87,7 +99,7 @@ function cloneReference(reference, prefix, sourcePath) {
     prefix: [...pathValues(prefix)],
     tablePath,
     tablePathSegments,
-    tableIdentityKey: pathIdentityKey(tablePathSegments),
+    tableIdentityKey: rewriteIdentityKey(reference.tableIdentityKey, tablePathSegments),
     resolvedPath: null,
     resolvedPathSegments: null,
     resolvedPathKey: null,

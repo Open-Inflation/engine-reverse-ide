@@ -8,6 +8,9 @@ from human_requests import autotest
 {% if imports.literal %}
 from typing import Literal
 {% endif %}
+{% if imports.overload %}
+from typing import overload
+{% endif %}
 {% if imports.json %}
 import json
 {% endif %}
