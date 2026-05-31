@@ -17,6 +17,7 @@ keywords=["fixprice", "api", "browser", "catalog"]
 min_required_python="3.10"
 timeout_ms=35000
 browser=camoufox
+abstractions=["./catalog_sort.py"]
 @Humanize
 @BlockImages
 

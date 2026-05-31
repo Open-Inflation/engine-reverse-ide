@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import ast
 import textwrap
 from pathlib import Path
 from typing import Any
 
 from .core_naming import (
+    abstraction_module_name_from_path,
     class_name_for_group,
     field_name_for_group,
     module_file_name_for_group,
@@ -12,6 +14,7 @@ from .core_naming import (
     module_output_dir_for_group,
     module_package_depth_for_group,
     root_client_class_name,
+    normalize_abstraction_path,
     snake_case,
 )
 from .file_utils import write_text
@@ -44,6 +47,7 @@ from .typespec import (
     ref_input_name,
     selectable_values_from_plain_values,
     should_render_setter,
+    is_abstraction_reference_expr,
     type_annotation_from_expr,
     type_annotation_from_types,
     type_names_from_expr,
@@ -62,16 +66,59 @@ def render_init(project: dict[str, Any], package_name: str) -> str:
     )
 
 
-def abstraction_exports(project: dict[str, Any]) -> list[str]:
-    exports = []
-    if project["regexes"]:
-        exports.extend(regex_class_name(regex["name"]) for regex in project["regexes"])
-    if any(is_catalog_sort_function(func) for func in project["functions"]):
-        exports.append("CatalogSort")
-    return exports
+def collect_abstraction_scripts(project: dict[str, Any]) -> list[str]:
+    app = project.get("app") or {}
+    abstractions = app.get("abstractions") or []
+    if not isinstance(abstractions, list):
+        raise TypeError("app.abstractions must be a list of abstraction script paths.")
+    scripts: list[str] = []
+    for path in abstractions:
+        if not isinstance(path, str):
+            raise TypeError("app.abstractions entries must be strings.")
+        text = path.strip()
+        if text:
+            scripts.append(text)
+    return scripts
+
+
+def collect_public_abstraction_class_names(source_path: Path) -> list[str]:
+    source_text = source_path.read_text(encoding="utf-8")
+    module = ast.parse(source_text, filename=str(source_path))
+    public_class_names: list[str] = []
+    for node in module.body:
+        if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+            public_class_names.append(node.name)
+    return public_class_names
+
+
+def resolve_abstraction_source_path(source_root: Path, abstraction_path: str) -> Path:
+    source = Path(normalize_abstraction_path(abstraction_path))
+    if not source.is_absolute():
+        source = source_root / source
+    return source
 
 
 def build_abstraction_package_context(project: dict[str, Any]) -> dict[str, Any]:
+    abstraction_scripts = collect_abstraction_scripts(project)
+    source_root = Path(project["source_path"]).resolve().parent
+    external_modules = []
+    external_import_lines: list[str] = []
+    for path in abstraction_scripts:
+        module_name = abstraction_module_name_from_path(path)
+        public_class_names = collect_public_abstraction_class_names(
+            resolve_abstraction_source_path(source_root, path)
+        )
+        external_modules.append(
+            {
+                "module_name": module_name,
+                "source_path": path,
+                "public_class_names": public_class_names,
+            }
+        )
+        if public_class_names:
+            external_import_lines.append(
+                f"from .{module_name} import {', '.join(public_class_names)}"
+            )
     return {
         "regexes": [
             {
@@ -83,8 +130,10 @@ def build_abstraction_package_context(project: dict[str, Any]) -> dict[str, Any]
             }
             for regex in project["regexes"]
         ],
-        "has_catalog_sort": any(is_catalog_sort_function(func) for func in project["functions"]),
+        "external_modules": external_modules,
+        "external_import_lines": external_import_lines,
         "has_regexes": bool(project["regexes"]),
+        "has_external_abstractions": bool(abstraction_scripts),
     }
 
 
@@ -644,6 +693,18 @@ def build_function_context(
         if validation_item.get("required"):
             lines.append(f"if {validation_item['name']} is None:")
             lines.append(f"    raise ValueError(\"`{validation_item['name']}` is required\")")
+        abstraction_type_expr = validation_item.get("abstraction_type_expr")
+        if abstraction_type_expr:
+            if validation_item.get("required"):
+                lines.append(
+                    f"abstraction.validate_allowed_value({validation_item['name']}, {abstraction_type_expr})"
+                )
+            else:
+                lines.append(f"if {validation_item['name']} is not None:")
+                lines.append(
+                    f"    abstraction.validate_allowed_value({validation_item['name']}, {abstraction_type_expr})"
+                )
+            return lines
         if validation_item.get("is_list"):
             if validation_item.get("required"):
                 lines.append(f"if not isinstance({validation_item['name']}, list):")
@@ -764,6 +825,7 @@ def build_function_context(
             type_expr = base_input.get("type")
             type_names = type_names_from_expr(type_expr)
             is_list = is_list_type_expr(type_expr)
+            abstraction_type_expr = render_expr(type_expr, self_ref="self._parent") if is_abstraction_reference_expr(type_expr) else None
             match_check_expr = match_to_check_expr(base_input.get("match"), input_name)
             match_error = match_to_error(base_input.get("match"))
             match_range = match_to_range(base_input.get("match"))
@@ -816,6 +878,11 @@ def build_function_context(
                 elif "string" in type_names:
                     lines.append(f"if {input_name} is not None and not isinstance({input_name}, str):")
                     lines.append(f"    raise TypeError(\"`{input_name}` must be str\")")
+                if abstraction_type_expr:
+                    lines.append(f"if {input_name} is not None:")
+                    lines.append(
+                        f"    abstraction.validate_allowed_value({input_name}, {abstraction_type_expr})"
+                    )
                 if required_overloads:
                     lines.append(f"if {input_name} is None and {matched_overload_expr(required_overloads)}:")
                     lines.append(f"    raise ValueError(\"`{input_name}` is required\")")
@@ -973,6 +1040,7 @@ def build_function_context(
     uses_json_import = any(param.get("list_style_style") == "json" for param in query_params) or bool(
         goto_pipeline.get("module") and goto_pipeline.get("function")
     )
+    uses_urlencode_import = bool(query_params)
     uses_path_import = bool(extractor_script)
     uses_re_import = any(
         (validation_item.get("match_check_expr") or "").startswith("re.fullmatch(")
@@ -1028,6 +1096,7 @@ def build_function_context(
             "goto_pipeline_function": goto_pipeline.get("function") if goto_pipeline else None,
         },
         "uses_json_import": uses_json_import,
+        "uses_urlencode_import": uses_urlencode_import,
         "uses_path_import": uses_path_import,
         "uses_re_import": uses_re_import,
         "uses_literal_import": uses_literal_import,
@@ -1043,11 +1112,14 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
         type_expr = input_spec.get("type")
         type_names = type_names_from_expr(type_expr)
         is_list = is_list_type_expr(type_expr)
+        abstraction_type_expr = render_expr(type_expr, self_ref="self._parent") if is_abstraction_reference_expr(type_expr) else None
         values = input_spec.get("allowed_values")
         if values is None:
             values = get_plain_value(input_spec.get("values"))
         values = selectable_values_from_plain_values(values)
-        has_type_checks = is_list or any(type_name in {"integer", "boolean", "number", "string"} for type_name in type_names)
+        has_type_checks = is_list or abstraction_type_expr is not None or any(
+            type_name in {"integer", "boolean", "number", "string"} for type_name in type_names
+        )
         has_value_checks = bool(input_spec.get("match") or values)
         validations.append(
             {
@@ -1056,6 +1128,7 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
                 "type_names": sorted(type_names),
                 "item_type_names": sorted(type_names) if is_list else [],
                 "is_list": is_list,
+                "abstraction_type_expr": abstraction_type_expr,
                 "match_pattern": match_to_pattern(input_spec.get("match")),
                 "match_check_expr": match_to_check_expr(input_spec.get("match"), input_spec["name"]),
                 "match_error": match_to_error(input_spec.get("match")),
@@ -1206,12 +1279,45 @@ def build_manager_context(
     project: dict[str, Any],
     package_name: str,
     group_tree: dict[str, Any],
+    *,
+    autotest_function_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     app = project["app"]
     headers_spec = project.get("headers")
     warmup = project.get("warmup") or {}
     warmup_script = warmup.get("script") or {}
     top_groups = top_level_groups(group_tree)
+    root_functions = sorted(group_tree.get("functions", []), key=lambda item: item["name"])
+    autotest_function_ids = set(autotest_function_ids or set())
+    package_root_expr = "Path(__file__).resolve().parent"
+    function_contexts = []
+    for func in root_functions:
+        function_context = build_function_context(
+            func,
+            root_client_class_name(project),
+            autotest_enabled=str(func["id"]) in autotest_function_ids,
+            root_import_prefix=".",
+            package_root_expr=package_root_expr,
+        )
+        function_contexts.append(
+            {
+                "code": render_template("function.py.tpl", function_context),
+                "autotest_enabled": function_context["autotest_enabled"],
+                "uses_http_method_import": function_context["uses_http_method_import"],
+                "uses_json_import": function_context["uses_json_import"],
+                "uses_urlencode_import": function_context["uses_urlencode_import"],
+                "uses_path_import": function_context["uses_path_import"],
+                "uses_re_import": function_context["uses_re_import"],
+                "uses_literal_import": function_context["uses_literal_import"],
+                "uses_method_pipeline_error_import": function_context["uses_method_pipeline_error_import"],
+                "uses_overload_import": function_context["uses_overload_import"],
+                "has_overloads": function_context["has_overloads"],
+                "overloads": function_context["overloads"],
+                "overload_selection_code": function_context["overload_selection_code"],
+                "overload_specialization_code": function_context["overload_specialization_code"],
+                "overload_validation_code": function_context["overload_validation_code"],
+            }
+        )
     variable_contexts = [
         {
             **build_variable_context(variable),
@@ -1225,6 +1331,22 @@ def build_manager_context(
         "app_description": escape_docstring(app["description"]) if app.get("description") else "",
         "package_name": package_name,
         "uses_classvar_import": bool(project["prefixes"]),
+        "has_root_functions": bool(function_contexts),
+        "functions": function_contexts,
+        "has_autotests": any(func_context["autotest_enabled"] for func_context in function_contexts),
+        "uses_literal_import": any(func_context.get("uses_literal_import", False) for func_context in function_contexts)
+        or any("Literal[" in variable_context["code"] for variable_context in variable_contexts),
+        "imports": {
+            "http_method": any(func_context.get("uses_http_method_import", False) for func_context in function_contexts),
+            "json": any(func_context.get("uses_json_import", False) for func_context in function_contexts),
+            "urlencode": any(func_context.get("uses_urlencode_import", False) for func_context in function_contexts),
+            "path": any(func_context.get("uses_path_import", False) for func_context in function_contexts),
+            "re": any(func_context.get("uses_re_import", False) for func_context in function_contexts),
+            "overload": any(func_context.get("uses_overload_import", False) for func_context in function_contexts),
+            "method_pipeline_error": any(
+                func_context.get("uses_method_pipeline_error_import", False) for func_context in function_contexts
+            ),
+        },
         "uses_warmup_error_import": bool(warmup_script.get("path") and warmup_script.get("module") and warmup_script.get("function")),
         "prefixes": [
             {
@@ -1244,7 +1366,6 @@ def build_manager_context(
             for group in top_groups
         ],
         "variables": variable_contexts,
-        "uses_literal_import": any("Literal[" in variable_context["code"] for variable_context in variable_contexts),
         "warmup": {
             "headers_sniffer": bool(warmup.get("headers_sniffer", False)),
             "on_error_screenshot_path": render_simple_value(
@@ -1290,6 +1411,7 @@ def build_group_context(
                 "autotest_enabled": function_context["autotest_enabled"],
                 "uses_http_method_import": function_context["uses_http_method_import"],
                 "uses_json_import": function_context["uses_json_import"],
+                "uses_urlencode_import": function_context["uses_urlencode_import"],
                 "uses_path_import": function_context["uses_path_import"],
                 "uses_re_import": function_context["uses_re_import"],
                 "uses_literal_import": function_context["uses_literal_import"],
@@ -1334,6 +1456,7 @@ def build_group_context(
         "imports": {
             "http_method": any(func_context.get("uses_http_method_import", False) for func_context in function_contexts),
             "json": any(func_context.get("uses_json_import", False) for func_context in function_contexts),
+            "urlencode": any(func_context.get("uses_urlencode_import", False) for func_context in function_contexts),
             "path": any(func_context.get("uses_path_import", False) for func_context in function_contexts),
             "re": any(func_context.get("uses_re_import", False) for func_context in function_contexts),
             "literal": any(func_context.get("uses_literal_import", False) for func_context in function_contexts),
@@ -1363,10 +1486,21 @@ def render_group_block(
     )
 
 
-def render_manager_template(project: dict[str, Any], package_name: str, group_tree: dict[str, Any]) -> str:
+def render_manager_template(
+    project: dict[str, Any],
+    package_name: str,
+    group_tree: dict[str, Any],
+    *,
+    autotest_function_ids: set[str] | None = None,
+) -> str:
     return render_template(
         "manager.py.tpl",
-        build_manager_context(project, package_name, group_tree),
+        build_manager_context(
+            project,
+            package_name,
+            group_tree,
+            autotest_function_ids=autotest_function_ids,
+        ),
     )
 
 
@@ -1454,18 +1588,6 @@ def write_group_package(
             endpoints_root,
             autotest_function_ids=autotest_function_ids,
         )
-
-
-def is_catalog_sort_function(func: dict[str, Any]) -> bool:
-    if func["name"] != "products_list":
-        return False
-    sort_input = next((item for item in func.get("inputs", []) if item["name"] == "sort"), None)
-    if sort_input is None:
-        return False
-    values = get_plain_value(sort_input.get("values"))
-    return values == ["sold", "abc", "min", "max"]
-
-
 def collect_extractor_scripts(project: dict[str, Any]) -> list[str]:
     scripts: list[str] = []
     for func in project["functions"]:

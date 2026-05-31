@@ -238,6 +238,22 @@ function resolveReference(ref, result) {
     return resolved;
   }
   const root = path[0] && path[0].value;
+  if (root === "INPUT" && path.length >= 3) {
+    return {
+      path: path.map((segment) => String(segment && segment.value !== undefined ? segment.value : segment)),
+      pathSegments: path,
+      key: pathIdentityKey(path),
+      kind: "input-property",
+    };
+  }
+  if (root === "ABSTRACTIONS" && path.length >= 2) {
+    return {
+      path: path.map((segment) => String(segment && segment.value !== undefined ? segment.value : segment)),
+      pathSegments: path,
+      key: pathIdentityKey(path),
+      kind: "abstraction",
+    };
+  }
   if (KNOWN_DYNAMIC_ROOTS.has(root)) {
     return {
       path: path.map((segment) => String(segment && segment.value !== undefined ? segment.value : segment)),

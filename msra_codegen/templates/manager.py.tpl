@@ -2,17 +2,38 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from time import perf_counter, time
 from typing import Any, cast
+{% if has_autotests %}
+from human_requests import autotest
+{% endif %}
 {% if uses_classvar_import %}
 from typing import ClassVar
 {% endif %}
 {% if uses_literal_import %}
 from typing import Literal
 {% endif %}
+{% if imports.overload %}
+from typing import overload
+{% endif %}
+{% if imports.json %}
+import json
+{% endif %}
+{% if imports.path %}
+from pathlib import Path
+{% endif %}
+{% if imports.re %}
+import re
+{% endif %}
+{% if imports.urlencode %}
+from urllib.parse import urlencode
+{% endif %}
 
 from aiohttp_retry import ExponentialRetry, RetryClient
 from camoufox import AsyncCamoufox, DefaultAddons
 from human_requests import HumanBrowser, HumanPage
 from human_requests.abstraction import HttpMethod, Proxy, Warmup
+{% if imports.method_pipeline_error %}
+from human_requests.abstraction import MethodPipelineError
+{% endif %}
 {% if uses_warmup_error_import %}
 from human_requests.abstraction import WarmupError
 {% endif %}
@@ -40,6 +61,9 @@ class {{ client_class_name }}:
     """Proxy settings for browser startup and direct requests. When omitted or set to None, the client reads the proxy from the environment."""
     browser_opts: dict[str, Any] | None = None
     """Extra keyword arguments forwarded to AsyncCamoufox during browser startup."""
+{% if has_root_functions %}
+    _parent: Any = field(init=False, repr=False)
+{% endif %}
 
 {% for prefix in prefixes %}
     {{ prefix.attr_name }}: ClassVar[str] = {{ prefix.value }}
@@ -56,6 +80,9 @@ class {{ client_class_name }}:
         self.proxy = Proxy.from_env() if self.proxy is None else self.proxy
         browser_opts: dict[str, Any] = {} if self.browser_opts is None else dict(self.browser_opts)
         self.browser_opts = browser_opts
+{% if has_root_functions %}
+        self._parent = self
+{% endif %}
         self.session = None
         self.ctx = None
         self.page = None
@@ -70,6 +97,10 @@ class {{ client_class_name }}:
         self.{{ group.field_name }} = {{ group.class_name }}(self)
 {% endfor %}
 
+{% for func in functions %}
+{{ func.code }}
+
+{% endfor %}
     async def __aenter__(self):
         await self._warmup()
         return self

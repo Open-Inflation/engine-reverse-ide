@@ -32,10 +32,11 @@ function enumOf(values) {
   return { kind: "enum", values };
 }
 
-function referenceOf(roots) {
+function referenceOf(roots, options = {}) {
   return {
     kind: "reference",
     roots: Array.isArray(roots) ? roots : [roots],
+    minSegments: Number.isInteger(options.minSegments) && options.minSegments > 0 ? options.minSegments : 1,
   };
 }
 
@@ -290,10 +291,12 @@ function makeDynamicSchema(match, valueSpec, options = {}) {
 
 const INPUT_TYPE_VALUE_SPEC = enumOf(["string", "integer", "boolean", "null", "array", "object"]);
 const INPUT_LIST_TYPE_SPEC = { kind: "input-list-type", valueSpec: INPUT_TYPE_VALUE_SPEC };
+const ABSTRACTION_REFERENCE_SPEC = referenceOf(["ABSTRACTIONS"], { minSegments: 2 });
 const INPUT_TYPE_SPEC = oneOf(
   INPUT_TYPE_VALUE_SPEC,
   INPUT_LIST_TYPE_SPEC,
   arrayOf(INPUT_TYPE_VALUE_SPEC),
+  ABSTRACTION_REFERENCE_SPEC,
 );
 
 const EXAMPLE_INPUTS_SPEC = recordOf(ANY, {
@@ -611,6 +614,7 @@ const TABLE_SCHEMAS = [
     name: APP_NAME_SPEC,
     package_name: PACKAGE_NAME_SPEC,
     package_owner: PACKAGE_OWNER_SPEC,
+    abstractions: arrayOf(STRING),
     social: SOCIAL_SPEC,
     authors: arrayOf(AUTHOR_ITEM_SPEC),
     logo: APP_LOGO_SPEC,
@@ -632,6 +636,10 @@ const TABLE_SCHEMAS = [
       forbidDynamicValue("package_owner", {
         code: "invalid-package-owner-dynamic",
         message: 'Package owner cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("abstractions", {
+        code: "invalid-abstractions-dynamic",
+        message: 'Abstractions cannot be dynamic. References and other dynamic expressions are not allowed.',
       }),
       forbidDynamicValue("social", {
         code: "invalid-social-dynamic",
@@ -877,6 +885,10 @@ function validateAssignment(tablePath, assignment, tableAssignments = []) {
   if (!spec) {
     return [];
   }
+  const abstractionConflictDiagnostics = validateInputAbstractionConflicts(tablePath, assignment, tableAssignments);
+  if (abstractionConflictDiagnostics.length > 0) {
+    return abstractionConflictDiagnostics;
+  }
   const valueDiagnostics = collectValueDiagnostics(assignment.value, spec, assignment.valueRange);
   if (valueDiagnostics.length > 0) {
     return valueDiagnostics;
@@ -1047,6 +1059,9 @@ function collectValueDiagnostics(value, spec, fallbackRange = null, skipRules = 
       return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
     }
     const path = referencePathSegments(value);
+    if (spec.minSegments != null && path.length < spec.minSegments) {
+      return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
+    }
     if (!path.length || (spec.roots && spec.roots.length && !spec.roots.includes(path[0]))) {
       return [typeDiagnostic(fallbackRange || value.range, `Expected ${describeSpec(spec)} but got ${describeValue(value)}`, "invalid-assignment-value-type")];
     }
@@ -1280,6 +1295,33 @@ function validateUrlParamConstConflicts(tableAssignments, assignment) {
   return conflicts;
 }
 
+function validateInputAbstractionConflicts(tablePath, assignment, tableAssignments) {
+  if (!(matchesInputPath(tablePath) || matchesInputOverloadPath(tablePath))) {
+    return [];
+  }
+  if (assignment.key !== "values" && assignment.key !== "match") {
+    return [];
+  }
+  const typeAssignment = tableAssignments.find((item) => item.key === "type");
+  if (!typeAssignment) {
+    return [];
+  }
+  if (collectValueDiagnostics(typeAssignment.value, ABSTRACTION_REFERENCE_SPEC, typeAssignment.value.range).length > 0) {
+    return [];
+  }
+  const message =
+    assignment.key === "values"
+      ? 'Input type <ABSTRACTIONS...> cannot define "values". Use "const" or "default" instead.'
+      : 'Input type <ABSTRACTIONS...> cannot define "match". Use "const" or "default" instead.';
+  return [
+    typeDiagnostic(
+      assignment.keyRange || assignment.valueRange || typeAssignment.keyRange,
+      message,
+      "conflicting-inline-table-keys",
+    ),
+  ];
+}
+
 function getNumericLiteral(value) {
   if (value instanceof NumberExpr && Number.isFinite(value.value)) {
     return value.value;
@@ -1410,7 +1452,8 @@ function describeSpec(spec) {
   }
   if (spec.kind === "reference") {
     if (Array.isArray(spec.roots) && spec.roots.length) {
-      return `reference <${spec.roots.map((root) => `${root}...`).join(" or ")}>`;
+      const suffix = spec.minSegments && spec.minSegments > 1 ? "..." : "...";
+      return `reference <${spec.roots.map((root) => `${root}${suffix}`).join(" or ")}>`;
     }
     return "reference <...>";
   }

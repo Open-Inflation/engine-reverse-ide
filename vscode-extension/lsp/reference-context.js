@@ -4,6 +4,7 @@ const { normalizePathSegments } = require("./path-schema");
 const DEFAULT_REFERENCE_ROOTS = [
   "DOCUMENT.PREFIXES",
   "DOCUMENT.REGEXES",
+  "ABSTRACTIONS",
   "VARIABLES",
   "GROUPS",
   "INPUT",

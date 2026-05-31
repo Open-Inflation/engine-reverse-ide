@@ -40,6 +40,23 @@ def normalize_script_path(script_path: str) -> str:
     return normalized
 
 
+def normalize_abstraction_path(abstraction_path: str) -> str:
+    normalized = abstraction_path.strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.strip("/")
+
+
+def abstraction_module_name_from_path(abstraction_path: str) -> str:
+    normalized = normalize_abstraction_path(abstraction_path)
+    if normalized.endswith(".py"):
+        normalized = normalized[:-3]
+    normalized = normalized.strip("/")
+    if not normalized:
+        return "generated"
+    return Path(normalized).name
+
+
 def module_file_name_for_group(path: list[str]) -> str:
     if not path:
         return "generated.py"

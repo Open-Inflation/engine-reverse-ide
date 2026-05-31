@@ -106,7 +106,17 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         "browser": str(get_plain_value(get_assignment(app_table, "browser", "camoufox"))),
         "humanize": get_plain_value(get_assignment(app_table, "humanize", False)),
         "block_images": bool(get_plain_value(get_assignment(app_table, "block_images", False))),
+        "abstractions": [],
     }
+    abstractions_value = get_plain_value(get_assignment(app_table, "abstractions", []))
+    if not isinstance(abstractions_value, list):
+        raise TypeError("app.abstractions must be a list of strings.")
+    for item in abstractions_value:
+        if not isinstance(item, str):
+            raise TypeError("app.abstractions entries must be strings.")
+        text = item.strip()
+        if text:
+            app["abstractions"].append(text)
 
     prefixes_table = get_table(["app", "prefixes"])
     prefixes = {

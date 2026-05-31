@@ -191,6 +191,8 @@ def collect_runtime_dependencies(project: dict[str, Any]) -> list[str]:
         dependencies.extend(
             str(item).strip() for item in runtime_config.get("direct", []) if str(item).strip()
         )
+    if project.get("app", {}).get("abstractions"):
+        dependencies.append("pydantic")
     return dependencies
 
 

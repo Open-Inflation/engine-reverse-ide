@@ -6,6 +6,7 @@ from typing import Any
 
 from .codegen_context import (
     build_abstraction_package_context,
+    collect_abstraction_scripts,
     collect_extractor_scripts,
     collect_goto_pipeline_scripts,
     collect_warmup_scripts,
@@ -15,7 +16,7 @@ from .codegen_context import (
     write_group_package,
 )
 from .github_workflows import generate_github_workflows_project
-from .core_naming import normalize_script_path
+from .core_naming import abstraction_module_name_from_path, normalize_abstraction_path, normalize_script_path
 from .file_utils import write_text
 from .python_formatting import format_python_tree
 from .package_metadata import render_pyproject, render_requirements_dev_txt, render_requirements_txt, write_root_license
@@ -52,6 +53,8 @@ def generate_project(
     legacy_postprocess_root = package_root / "postprocess"
     extractors_root = package_root / "extractors"
     package_root.mkdir(parents=True, exist_ok=True)
+    if abstraction_root.exists():
+        shutil.rmtree(abstraction_root)
     abstraction_root.mkdir(parents=True, exist_ok=True)
     if pipelines_root.exists():
         shutil.rmtree(pipelines_root)
@@ -84,6 +87,22 @@ def generate_project(
     if stale_abstraction_file.exists():
         stale_abstraction_file.unlink()
     abstraction_context = build_abstraction_package_context(project)
+    copied_abstraction_modules: set[str] = set()
+    for abstraction_script in collect_abstraction_scripts(project):
+        normalized_abstraction = normalize_abstraction_path(abstraction_script)
+        source = Path(normalized_abstraction)
+        if not source.is_absolute():
+            source = source_root / source
+        module_name = abstraction_module_name_from_path(normalized_abstraction)
+        if module_name in {"__init__", "regexes"}:
+            raise ValueError(
+                f'Abstraction file "{abstraction_script}" resolves to reserved module name "{module_name}".'
+            )
+        if module_name in copied_abstraction_modules:
+            raise ValueError(f'Duplicate abstraction module name "{module_name}" derived from "{abstraction_script}".')
+        copied_abstraction_modules.add(module_name)
+        target = abstraction_root / f"{module_name}.py"
+        shutil.copyfile(source, target)
     write_text(
         abstraction_root / "__init__.py",
         render_template("abstraction/__init__.py.tpl", abstraction_context),
@@ -92,12 +111,15 @@ def generate_project(
         abstraction_root / "regexes.py",
         render_template("abstraction/regexes.py.tpl", abstraction_context),
     )
-    if abstraction_context["has_catalog_sort"]:
-        write_text(
-            abstraction_root / "catalog_sort.py",
-            render_template("abstraction/catalog_sort.py.tpl", abstraction_context),
-        )
-    write_text(package_root / "manager.py", render_manager_template(project, package_name, group_tree))
+    write_text(
+        package_root / "manager.py",
+        render_manager_template(
+            project,
+            package_name,
+            group_tree,
+            autotest_function_ids=tests_context["autotest_function_ids"],
+        ),
+    )
     if endpoints_root.exists():
         shutil.rmtree(endpoints_root)
     endpoints_root.mkdir(parents=True, exist_ok=True)

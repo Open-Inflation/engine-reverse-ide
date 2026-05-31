@@ -86,7 +86,10 @@ def render_ref_value(expr: dict[str, Any] | None, self_ref: str = "self._parent"
         if root == "VARIABLES" and len(parts) >= 2:
             return f"{self_ref}.{parts[1]}"
         if root == "INPUT" and len(parts) >= 2:
-            return parts[1]
+            return ".".join(parts[1:])
+        if root == "ABSTRACTIONS":
+            tail = ".".join(parts[1:])
+            return "abstraction" if not tail else f"abstraction.{tail}"
         if root == "UNSTANDARD_HEADERS":
             if len(parts) == 1:
                 return f"{self_ref}.unstandard_headers"
@@ -157,7 +160,10 @@ def render_text_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent"
         if root == "VARIABLES" and len(parts) >= 2:
             return f"str({self_ref}.{parts[1]})"
         if root == "INPUT" and len(parts) >= 2:
-            return f"str({parts[1]})"
+            return f"str({'.'.join(parts[1:])})"
+        if root == "ABSTRACTIONS":
+            tail = ".".join(parts[1:])
+            return f"str(abstraction{('.' + tail) if tail else ''})"
         if root == "UNSTANDARD_HEADERS":
             if len(parts) == 1:
                 return f"str({self_ref}.unstandard_headers)"

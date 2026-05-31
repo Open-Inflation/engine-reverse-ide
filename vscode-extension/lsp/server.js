@@ -698,6 +698,8 @@ class MsraLanguageServer {
       }
     }
 
+    add("ABSTRACTIONS", "Resolves to [app.abstractions]", "ABSTRACTIONS");
+
     add("VARIABLES", "Resolves to [app.variables]", "VARIABLES");
     for (const table of [...analyzed.tableIndex.values()].sort((left, right) => comparePaths(left.path, right.path))) {
       const path = table.path || [];

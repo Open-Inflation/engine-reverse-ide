@@ -76,7 +76,8 @@ function extractRstPythonCodeBlock(text) {
   return block.join("\n");
 }
 
-function buildGeneratedPackageProbeScript() {
+function buildGeneratedPackageProbeScript(options = {}) {
+  const expectGroupFields = options.expectGroupFields !== false;
   return [
     "from __future__ import annotations",
     "",
@@ -138,6 +139,14 @@ function buildGeneratedPackageProbeScript() {
     "def autotest(func):",
     "    return func",
     "",
+    "class BaseModel:",
+    "    def __init__(self, **kwargs):",
+    "        for key, value in kwargs.items():",
+    "            setattr(self, key, value)",
+    "",
+    "    def model_dump(self):",
+    "        return dict(self.__dict__)",
+    "",
     "",
     "make_module(\"aiohttp_retry\", ExponentialRetry=DummyObject, RetryClient=DummyObject)",
     "make_module(\"camoufox\", AsyncCamoufox=DummyObject, DefaultAddons=types.SimpleNamespace(UBO=object()))",
@@ -162,6 +171,7 @@ function buildGeneratedPackageProbeScript() {
     "    MethodPipelineError=MethodPipelineError,",
     "    FetchResponse=DummyObject,",
     ")",
+    "make_module(\"pydantic\", BaseModel=BaseModel)",
     "make_module(\"human_requests.network_analyzer\", package=True)",
     "make_module(\"human_requests.network_analyzer.anomaly_sniffer\", HeaderAnomalySniffer=DummyObject, WaitHeader=DummyObject, WaitSource=types.SimpleNamespace(REQUEST=\"REQUEST\"))",
     "make_module(\"rich\", package=True)",
@@ -189,18 +199,26 @@ function buildGeneratedPackageProbeScript() {
     "base_field_names = [\"timeout_ms\", \"headless\", \"test_mode\", \"proxy\", \"browser_opts\"]",
     "assert field_names[:len(base_field_names)] == base_field_names",
     "group_field_names = field_names[len(base_field_names):]",
-    "assert group_field_names",
+    ...(expectGroupFields
+      ? [
+          "assert group_field_names",
+        ]
+      : []),
     "assert [field.name for field in dataclasses.fields(warmup_cls)] == [\"browser\", \"context\", \"page\", \"sniffer\", \"timeout_ms\", \"test_mode\", \"prefixes\"]",
     "",
     "instance = client_cls(proxy=None, browser_opts=None)",
     "assert instance.proxy is DummyProxy.env_sentinel",
     "assert instance.browser_opts == {}",
     "assert instance.timeout_ms == client_cls.__dataclass_fields__[\"timeout_ms\"].default",
-    "for field_name in group_field_names:",
-    "    assert field_name in instance.__dict__",
-    "    group = getattr(instance, field_name)",
-    "    assert instance.__dict__[field_name] is group",
-    "    assert getattr(group, \"_parent\", None) is instance",
+    ...(expectGroupFields
+      ? [
+          "for field_name in group_field_names:",
+          "    assert field_name in instance.__dict__",
+          "    group = getattr(instance, field_name)",
+          "    assert instance.__dict__[field_name] is group",
+          "    assert getattr(group, \"_parent\", None) is instance",
+        ]
+      : []),
   ].join("\n");
 }
 
@@ -222,16 +240,39 @@ function buildFixpriceInfoProbeScript() {
     "        OutputRecorder.calls.append({\"resp\": resp, \"kwargs\": kwargs})",
     "        return {\"resp\": resp, \"kwargs\": kwargs}",
     "",
+    "    @staticmethod",
+    "    def from_fetch_response(resp, **kwargs):",
+    "        OutputRecorder.calls.append({\"resp\": resp, \"kwargs\": kwargs})",
+    "        return {\"resp\": resp, \"kwargs\": kwargs}",
+    "",
+    "    @staticmethod",
+    "    def from_raw(body, **kwargs):",
+    "        OutputRecorder.calls.append({\"body\": body, \"kwargs\": kwargs})",
+    "        return {\"body\": body, \"kwargs\": kwargs}",
+    "",
     "class DummyResponse:",
-    "    pass",
+    "    def __init__(self, *, url=\"https://example.test\", headers=None, status=200, reason=\"OK\", history=None):",
+    "        self.url = url",
+    "        self.headers = {} if headers is None else headers",
+    "        self.status = status",
+    "        self.reason = reason",
+    "        self.history = [] if history is None else history",
+    "",
+    "    async def read(self):",
+    "        return b\"\"",
     "",
     "class DummyPage:",
     "    def __init__(self):",
     "        self.goto_calls = []",
+    "        self.fetch_calls = []",
     "",
     "    async def goto(self, url, wait_until=None):",
     "        self.goto_calls.append({\"url\": url, \"wait_until\": wait_until})",
     "        return DummyResponse()",
+    "",
+    "    async def fetch(self, **kwargs):",
+    "        self.fetch_calls.append(kwargs)",
+    "        return DummyResponse(url=kwargs.get(\"url\", \"https://example.test\"))",
     "",
     "    async def wait_for_load_state(self, _state):",
     "        return None",
@@ -971,7 +1012,7 @@ test("python codegen generates both bundled msra documents without failing", () 
   }
       if (testCase.packageName === "fixprice_api") {
         assert.match(pyprojectText, /keywords = \[\r?\n\s*"fixprice",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
-        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"rich",\r?\n\s*"aiohttp",\r?\n\s*"aiohttp-retry"\r?\n\]/);
+        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"rich",\r?\n\s*"aiohttp",\r?\n\s*"aiohttp-retry",\r?\n\s*"pydantic"\r?\n\]/);
         assert.strictEqual(
           normalizeNewlines(requirementsText).trimEnd(),
           [
@@ -981,6 +1022,7 @@ test("python codegen generates both bundled msra documents without failing", () 
             "rich",
             "aiohttp",
             "aiohttp-retry",
+            "pydantic",
           ].join("\n"),
         );
       } else {
@@ -1105,6 +1147,111 @@ test("python codegen routes fixprice info overloads to the expected urls", () =>
       assert.strictEqual(resultItem.output_kwargs.text_override, "payload");
       assert.strictEqual(resultItem.output_kwargs.json_override, null);
     }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("python codegen builds the TODO/2 abstractions project", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-abstractions-build-"));
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const outputDir = path.join(workDir, "generated");
+
+  try {
+    const generateResult = spawnSync(
+      "python",
+      ["-m", "msra_codegen", "generate", path.join(repoRoot, "TODO", "2", "example.msra"), "-o", outputDir],
+      {
+        cwd: repoRoot,
+        env: buildCodegenPythonPath(pythonReleasesFixturePath),
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
+
+    const validateResult = spawnSync("python", ["-m", "msra_codegen", "validate", outputDir], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(validateResult.status, 0, validateResult.stderr || validateResult.stdout);
+
+    const probeScript = [
+      buildGeneratedPackageProbeScript({ expectGroupFields: false }),
+      "",
+      "import asyncio",
+      "from urllib.parse import parse_qs, urlsplit",
+      "",
+      "class OutputRecorder:",
+      "    calls = []",
+      "",
+      "    @staticmethod",
+      "    def from_fetch_response(resp, **kwargs):",
+        "        OutputRecorder.calls.append({\"resp\": resp, \"kwargs\": kwargs})",
+        "        return {\"resp\": resp, \"kwargs\": kwargs}",
+      "",
+      "class DummyResponse:",
+      "    def __init__(self, *, url=\"https://example.test\", headers=None, status=200, reason=\"OK\", history=None):",
+      "        self.url = url",
+      "        self.headers = {} if headers is None else headers",
+      "        self.status = status",
+      "        self.reason = reason",
+      "        self.history = [] if history is None else history",
+      "",
+      "    async def read(self):",
+      "        return b\"\"",
+      "",
+      "class DummyPage:",
+      "    def __init__(self):",
+      "        self.fetch_calls = []",
+      "",
+      "    async def fetch(self, **kwargs):",
+      "        self.fetch_calls.append(kwargs)",
+      "        return DummyResponse(url=kwargs.get(\"url\", \"https://example.test\"))",
+      "",
+      "async def main():",
+      "    abstraction = pkg.abstraction",
+      "    assert pkg.__all__ == [\"FixPriceAPI\"]",
+      "    assert hasattr(pkg, \"FixPriceAPI\")",
+      "    assert hasattr(abstraction, \"CatalogFeedSort\")",
+      "    assert hasattr(abstraction, \"BannerPlace\")",
+      "    assert abstraction.validate_allowed_value(abstraction.CatalogFeedSort.Price.ASC, abstraction.CatalogFeedSort) == {\"orderBy\": \"price\", \"orderDirection\": \"asc\"}",
+      "    assert abstraction.validate_allowed_value(abstraction.BannerPlace.MAIN_BANNERS, abstraction.BannerPlace) == \"main_web_banners\"",
+      "    try:",
+      "        abstraction.validate_allowed_value(abstraction.CatalogFeedSort, abstraction.CatalogFeedSort)",
+      "    except ValueError as exc:",
+      "        assert \"value registry, not a value\" in str(exc)",
+      "    else:",
+      "        raise AssertionError(\"expected registry validation error\")",
+      "    client = instance",
+      "    assert client._parent is client",
+      "    client.page = DummyPage()",
+      "    OutputRecorder.calls.clear()",
+      "    abstraction.Output = OutputRecorder",
+      "    result = await client.info(",
+      "        feed_sort=abstraction.CatalogFeedSort.Price.ASC,",
+      "        place=abstraction.BannerPlace.MAIN_BANNERS,",
+      "    )",
+      "    parsed_url = urlsplit(result[\"resp\"].url)",
+      "    assert parsed_url.path == \"/catalog/\"",
+      "    assert len(client.page.fetch_calls) == 1",
+      "    fetch_call = client.page.fetch_calls[0]",
+      "    parsed = parse_qs(urlsplit(fetch_call[\"url\"]).query)",
+      "    assert parsed == {\"sort\": [\"price\"], \"order\": [\"asc\"], \"place\": [\"main_web_banners\"]}",
+      "    assert OutputRecorder.calls and OutputRecorder.calls[0][\"kwargs\"] == {}",
+      "",
+      "asyncio.run(main())",
+    ].join("\n");
+
+    const probeResult = spawnSync(
+      "python",
+      ["-c", probeScript, outputDir, "fixprice_api"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

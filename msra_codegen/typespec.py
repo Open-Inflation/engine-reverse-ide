@@ -80,6 +80,8 @@ def type_annotation_from_expr(expr: dict[str, Any] | None) -> str:
     if is_list_type_expr(expr):
         item_expr = list_item_type_expr(expr)
         return f"list[{type_annotation_from_expr(item_expr)}]"
+    if is_abstraction_reference_expr(expr):
+        return "Any"
     type_names = type_names_from_expr(expr)
     return type_annotation_from_types(type_names)
 
@@ -247,6 +249,13 @@ def ref_input_name(expr: dict[str, Any] | None) -> str | None:
     if len(parts) >= 2 and parts[0] == "INPUT":
         return parts[1]
     return None
+
+
+def is_abstraction_reference_expr(expr: dict[str, Any] | None) -> bool:
+    if not isinstance(expr, dict) or expr.get("kind") != "ref":
+        return False
+    parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
+    return len(parts) >= 2 and parts[0] == "ABSTRACTIONS"
 
 
 def selectable_values_from_plain_values(values: Any) -> list[Any]:

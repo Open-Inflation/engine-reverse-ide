@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from .codegen_context import abstraction_exports, build_group_context
+from .codegen_context import build_group_context
 from .core_naming import group_public_import_path, root_client_class_name
 from .file_utils import write_text
 from .generator_config import config_section
@@ -122,7 +122,6 @@ def build_docs_project_context(
     app = project["app"]
     docs_descriptions = config_section("docs", "descriptions")
     client_class_name = root_client_class_name(project)
-    exports = list(dict.fromkeys([client_class_name, *abstraction_exports(project)]))
     top_groups = [
         build_group_docs_context(group_node, project, package_name)
         for group_node in top_level_groups(group_tree)
@@ -141,7 +140,6 @@ def build_docs_project_context(
         "logo": logo_context,
         "browser": str(app.get("browser", "")),
         "client_class_name": client_class_name,
-        "has_catalog_sort": "CatalogSort" in exports,
         "current_year": str(date.today().year),
         "manager_module": build_module_page_context(
             title=f"{package_name}.manager",
@@ -164,7 +162,6 @@ def build_docs_project_context(
             "title_underline": "=" * len("Quick Start"),
             "package_name": package_name,
             "client_class_name": client_class_name,
-            "has_catalog_sort": "CatalogSort" in exports,
             "requires_camoufox": str(app.get("browser", "")) == "camoufox",
             "top_groups": top_groups,
         },

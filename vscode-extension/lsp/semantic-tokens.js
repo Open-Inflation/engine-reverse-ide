@@ -70,6 +70,7 @@ const COOKIE_FIELD_SEGMENTS = new Set([
 
 const REFERENCE_ROOT_SEGMENTS = new Set([
   "DOCUMENT",
+  "ABSTRACTIONS",
   "VARIABLES",
   "INPUT",
   "GROUPS",
