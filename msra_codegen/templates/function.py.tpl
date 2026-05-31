@@ -149,6 +149,7 @@
 {% endif %}
 
 {{ request_url_code }}
+{% if query_params %}
         query_params: list[tuple[str, object]] = []
 {% for param in query_params %}
 {% if param.kind == "from" and param.has_value_map %}
@@ -267,6 +268,7 @@
 {% endfor %}
         if query_params:
             request_url += "?" + urlencode(query_params, doseq=True)
+{% endif %}
 
 {% if transport == "direct" %}
         return await self._parent._direct_request(request_url)

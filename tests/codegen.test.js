@@ -1295,6 +1295,79 @@ test("python codegen builds the demo project", () => {
   }
 });
 
+test("python codegen omits query param assembly when a method has no query params", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-noquery-build-"));
+  const inputPath = path.join(workDir, "noquery.msra");
+  const outputDir = path.join(workDir, "generated");
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const text = [
+    "[app]",
+    'name="NoQueryAPI"',
+    'package_name="no_query_api"',
+    'version="0.1.0"',
+    "browser=camoufox",
+    "",
+    "[app.func.HEALTH]",
+    'name="health"',
+    "transport=fetch",
+    "method=GET",
+    "",
+    "[app.func.HEALTH.url]",
+    'base="https://example.test/health"',
+    "",
+  ].join("\n");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    const generateResult = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
+
+    const validateResult = spawnSync("python", ["-m", "msra_codegen", "validate", outputDir], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(validateResult.status, 0, validateResult.stderr || validateResult.stdout);
+
+    const probeScript = [
+      buildGeneratedPackageProbeScript({ expectGroupFields: false }),
+      "",
+      "import asyncio",
+      "",
+      "async def main():",
+      "    captured = {}",
+      "",
+      "    async def dummy_request(method, url, **kwargs):",
+      "        captured['method'] = method",
+      "        captured['url'] = url",
+      "        captured['kwargs'] = kwargs",
+      "        return {'method': method, 'url': url, 'kwargs': kwargs}",
+      "",
+      "    assert instance._parent is instance",
+      "    instance._request = dummy_request",
+      "    result = await instance.health()",
+      "    assert str(captured['method']).endswith('GET')",
+      "    assert captured['url'] == 'https://example.test/health'",
+      "    assert captured['kwargs'].get('json_body') is None",
+      "    assert result['url'] == 'https://example.test/health'",
+      "",
+      "asyncio.run(main())",
+    ].join("\n");
+
+    const probeResult = spawnSync("python", ["-c", probeScript, outputDir, "no_query_api"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test("python codegen emits schemashot-backed text tests for @Test text examples", () => {
   const repoRoot = path.resolve(__dirname, "..");
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-text-tests-"));

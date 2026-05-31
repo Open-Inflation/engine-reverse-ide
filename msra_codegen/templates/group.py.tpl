@@ -20,13 +20,15 @@ from pathlib import Path
 {% if imports.re %}
 import re
 {% endif %}
+{% if imports.urlencode %}
+from urllib.parse import urlencode
+{% endif %}
 {% if imports.http_method %}
 from human_requests.abstraction import HttpMethod
 {% endif %}
 {% if imports.method_pipeline_error %}
 from human_requests.abstraction import MethodPipelineError
 {% endif %}
-from urllib.parse import urlencode
 
 from {{ root_import_prefix }} import abstraction
 {% for child in child_imports %}
