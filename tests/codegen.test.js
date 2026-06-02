@@ -1152,6 +1152,67 @@ test("python codegen routes fixprice info overloads to the expected urls", () =>
   }
 });
 
+test("python codegen passes fixprice download_image input url directly", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-fixprice-download-image-"));
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const outputDir = path.join(workDir, "fixprice");
+
+  try {
+    const generateResult = spawnSync(
+      "python",
+      ["-m", "msra_codegen", "generate", path.join(repoRoot, "examples", "fixprice", "fixprice.msra"), "-o", outputDir],
+      {
+        cwd: repoRoot,
+        env: buildCodegenPythonPath(pythonReleasesFixturePath),
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
+
+    const validateResult = spawnSync("python", ["-m", "msra_codegen", "validate", outputDir], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(validateResult.status, 0, validateResult.stderr || validateResult.stdout);
+
+    const probeScript = [
+      buildGeneratedPackageProbeScript(),
+      "",
+      "import asyncio",
+      "",
+      "async def main():",
+      "    client = instance",
+      "    captured_urls = []",
+      "",
+      "    async def fake_direct_request(url, *args, **kwargs):",
+      "        captured_urls.append(url)",
+      "        return {\"captured_url\": url, \"args\": args, \"kwargs\": kwargs}",
+      "",
+      "    client._direct_request = fake_direct_request",
+      "    result = await client.General.download_image(url=\"https://example.test/assets/image.png\")",
+      "    assert captured_urls == [\"https://example.test/assets/image.png\"]",
+      "    assert result[\"captured_url\"] == \"https://example.test/assets/image.png\"",
+      "    assert result[\"args\"] == ()",
+      "    assert result[\"kwargs\"] == {}",
+      "",
+      "asyncio.run(main())",
+    ].join("\n");
+
+    const probeResult = spawnSync(
+      "python",
+      ["-c", probeScript, outputDir, "fixprice_api"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test("python codegen builds the TODO/2 abstractions project", () => {
   const repoRoot = path.resolve(__dirname, "..");
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-abstractions-build-"));

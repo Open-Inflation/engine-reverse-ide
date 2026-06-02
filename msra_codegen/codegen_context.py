@@ -611,10 +611,13 @@ def build_function_context(
             return "is True" if plain_value else "is False"
         return f"== {render_simple_value(plain_value)}"
 
-    def render_request_url_code(url_spec: dict[str, Any], fallback_url_expr: str) -> str:
+    def render_request_url_code(url_spec: dict[str, Any]) -> str:
         url_entries = list(url_spec.get("entries") or [])
+        base_url_expr = render_expr(url_spec.get("base"), self_ref="self._parent")
         if not url_entries:
-            return f"request_url = {fallback_url_expr}"
+            if base_url_expr == "None":
+                return f"raise TypeError({render_simple_value(method_name + '() requires `url.base` to be configured')})"
+            return f"request_url = {base_url_expr}"
 
         explicit_entries: list[tuple[int, dict[str, Any], list[str]]] = []
         fallback_entries: list[tuple[int, dict[str, Any]]] = []
@@ -637,7 +640,9 @@ def build_function_context(
         if not explicit_entries:
             if fallback_entries:
                 return f"request_url = {render_expr(fallback_entries[0][1].get('base'), self_ref='self._parent')}"
-            return f"request_url = {fallback_url_expr}"
+            if base_url_expr == "None":
+                return f"raise TypeError({render_simple_value(method_name + '() requires `url.base` to be configured')})"
+            return f"request_url = {base_url_expr}"
 
         ordered_explicit_entries = sorted(
             explicit_entries,
@@ -1060,14 +1065,7 @@ def build_function_context(
     goto_pipeline = extractor.get("goto_pipeline") or {}
     extractor_script = extractor.get("script")
     query_params = build_query_param_context(func)
-    url_expr = render_expr(url_spec.get("base"), self_ref="self._parent")
-    if url_expr == "None":
-        url_input = next((input_spec["name"] for input_spec in inputs if input_spec["name"] == "url"), None)
-        if url_input:
-            url_expr = url_input
-        else:
-            url_expr = render_simple_value("")
-    request_url_code = render_request_url_code(url_spec, url_expr)
+    request_url_code = render_request_url_code(url_spec)
     return_annotation = render_return_annotation(func)
     signature_text = ", ".join(signature_parts)
     uses_json_import = any(param.get("list_style_style") == "json" for param in query_params) or bool(
