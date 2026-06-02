@@ -7,6 +7,9 @@
 ![PyPI - Package Version]({{ readme.pypi_version_badge_url }})
 [![PyPI - Downloads]({{ readme.pypi_downloads_badge_url }})]({{ readme.pypi_project_url }})
 [![License]({{ readme.license_badge_url }})]({{ readme.license_url }})
+{% for badge in readme.badges %}
+[![{{ badge.label }}]({{ badge.badge_url }})]({{ badge.url }})
+{% endfor %}
 {% for social in readme.socials %}
 [![{{ social.label }}]({{ social.badge_url }})]({{ social.url }})
 {% endfor %}

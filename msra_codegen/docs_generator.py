@@ -193,6 +193,7 @@ def build_readme_context(
     workflow_runs_url = f"https://api.github.com/repos/{package_owner}/{package_name}/actions/workflows/tests.yml/runs?per_page=1&status=completed"
     display_title = str(app.get("name") or package_name).strip() or package_name
     description = str(app.get("description") or "").strip()
+    badges = build_readme_badges()
     socials = build_readme_social_links(app.get("social"))
     return {
         "title": display_title,
@@ -219,6 +220,7 @@ def build_readme_context(
         "pypi_downloads_badge_url": f"https://img.shields.io/pypi/dm/{package_name}?label=PyPi%20downloads",
         "license_badge_url": f"https://img.shields.io/github/license/{package_owner}/{package_name}",
         "license_url": f"{repo_url}/blob/main/LICENSE",
+        "badges": badges,
         "socials": socials,
         "principle_text": str(readme_config.get("principle_text", "Библиотека полностью повторяет сетевую работу обычного пользователя на сайте.")),
         "pipeline_script_code": pipeline_script_code,
@@ -270,6 +272,29 @@ def build_readme_social_links(social: Any) -> list[dict[str, Any]]:
             }
         )
     return links
+
+
+def build_readme_badges() -> list[dict[str, Any]]:
+    readme_badges = config_section("readme").get("badges", [])
+    if not isinstance(readme_badges, list):
+        return []
+    badges: list[dict[str, Any]] = []
+    for item in readme_badges:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label", "")).strip()
+        badge_url = str(item.get("badge_url", "")).strip()
+        url = str(item.get("url", "")).strip()
+        if not label or not badge_url or not url:
+            continue
+        badges.append(
+            {
+                "label": label,
+                "badge_url": badge_url,
+                "url": url,
+            }
+        )
+    return badges
 
 
 def build_group_docs_context(

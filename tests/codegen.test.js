@@ -1281,6 +1281,12 @@ test("python codegen builds the demo project", () => {
     });
     assert.strictEqual(validateResult.status, 0, validateResult.stderr || validateResult.stdout);
 
+    const readmeText = readFileSync(path.join(outputDir, "README.md"), "utf8");
+    assert.match(
+      readmeText,
+      /\[!\[Ruff\]\(https:\/\/img\.shields\.io\/badge\/linting-Ruff-blue\?logo=ruff&logoColor=white\)\]\(https:\/\/github\.com\/astral-sh\/ruff\)/,
+    );
+
     const probeResult = spawnSync(
       "python",
       ["-c", buildGeneratedPackageProbeScript(), outputDir, "demo_api"],

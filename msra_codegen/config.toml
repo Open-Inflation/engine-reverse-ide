@@ -41,6 +41,11 @@ aliases = { "GPL-3.0" = "GPL-3.0-or-later", "GPL-3.0+" = "GPL-3.0-or-later" }
 [readme]
 principle_text = "Библиотека полностью повторяет сетевую работу обычного пользователя на сайте."
 
+[[readme.badges]]
+label = "Ruff"
+badge_url = "https://img.shields.io/badge/linting-Ruff-blue?logo=ruff&logoColor=white"
+url = "https://github.com/astral-sh/ruff"
+
 [[readme.socials]]
 key = "discord"
 label = "Discord"
