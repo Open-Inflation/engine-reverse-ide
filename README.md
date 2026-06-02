@@ -59,7 +59,7 @@ node ..\bin\msra.js check ..\examples\example.msra
 This repo also includes a Python generator that turns an `.msra` document into an async Python client package and a matching Sphinx documentation tree.
 
 ```powershell
-python -m msra_codegen generate .\examples\fixprice\fixprice.msra -o .\generated
+python -m msra_codegen generate .\examples\example\example.msra -o .\generated
 python -m msra_codegen validate .\generated
 ```
 
@@ -79,6 +79,7 @@ The generator writes:
 - `requirements.txt`
 - `requirements-dev.txt`
 - `Makefile`
+- `.github/workflows/source-sync.yml`
 - `.github/workflows/tests.yml`
 - `.github/workflows/publish.yml`
 - `<package-name>/__init__.py`
@@ -106,6 +107,25 @@ python -m sphinx -b html .\generated\docs\source .\generated\docs\_build\html
 ```
 
 The reusable Jinja2 templates live under `msra_codegen/templates/`, so the output shape can be adjusted without editing the generator logic itself.
+
+## Source/Main Sync
+
+The repository also ships a reusable workflow at [`.github/workflows/source-sync.yml`](.github/workflows/source-sync.yml). Generated package repositories call it from a thin manual workflow (`workflow_dispatch`) that:
+
+- checks out the generator logic from this repo,
+- reads the `.msra` source tree from the consumer repo,
+- generates the artifact,
+- syncs the generated tree into `main`,
+- validates the generated project,
+- and pushes the result so the target repo's `publish.yml` can run on `push` to `main`.
+
+The manual trigger only starts the process. The source and target branches come from the repo-specific sync config, so the caller workflow itself stays thin.
+
+In the recommended repo layout, `main` is the default branch of the consumer repo, because that is where the manual `source-sync` workflow lives.
+
+That workflow expects a repo secret named `SOURCE_SYNC_TOKEN` with read access to the logic repository and write access to the source/target repository.
+
+For a concrete repo layout and the exact manual run flow, see [docs/msra-repo-b-sync.md](docs/msra-repo-b-sync.md).
 
 For the FixPrice project, the default package name is `fixprice_api`.
 

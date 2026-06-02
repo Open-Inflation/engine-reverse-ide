@@ -81,6 +81,7 @@ screenshot_path = "screenshot.png"
 [github.workflows.publish]
 name = "publish"
 python_version = "3.12"
+branch = "main"
 checkout_action = "actions/checkout@v4"
 setup_python_action = "actions/setup-python@v5"
 setup_python_cache = "pip"
@@ -91,6 +92,20 @@ target_options = ["docs", "package", "all"]
 pages_environment_name = "github-pages"
 pypi_environment_name = "pypi"
 github_token_secret = "GITHUB_TOKEN"
+
+[github.workflows.source_sync]
+name = "source-sync"
+source_branch = "source"
+target_branch = "main"
+logic_repository = "Miskler/engine-reverse-ide"
+logic_ref = "main"
+checkout_action = "actions/checkout@v4"
+setup_python_action = "actions/setup-python@v5"
+python_version = "3.12"
+generator_requirements_path = "msra_codegen/requirements.txt"
+repo_token_secret = "SOURCE_SYNC_TOKEN"
+commit_user_name = "msra-sync-bot"
+commit_user_email = "msra-sync-bot@users.noreply.github.com"
 
 [[validation.checks]]
 name = "python-syntax"

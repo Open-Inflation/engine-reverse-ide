@@ -5,6 +5,8 @@ theme:
   name: readthedocs
 nav:
   - Home: index.md
+  - Пайплайны:
+      - Схема repo B: msra-repo-b-sync.md
   - Язык MSRA:
       - Обзор: msra-language.md
       - "[msra]": msra-msra.md

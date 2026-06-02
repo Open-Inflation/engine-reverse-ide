@@ -224,128 +224,6 @@ function buildGeneratedPackageProbeScript(options = {}) {
   ].join("\n");
 }
 
-function buildFixpriceInfoProbeScript() {
-  return [
-    buildGeneratedPackageProbeScript(),
-    "",
-    "import asyncio",
-    "import inspect",
-    "import json",
-    "",
-    "products_mod = importlib.import_module(f\"{package_name}.endpoints.catalog.products\")",
-    "",
-    "class OutputRecorder:",
-    "    calls = []",
-    "",
-    "    @staticmethod",
-    "    async def from_playwright_response(resp, **kwargs):",
-    "        OutputRecorder.calls.append({\"resp\": resp, \"kwargs\": kwargs})",
-    "        return {\"resp\": resp, \"kwargs\": kwargs}",
-    "",
-    "    @staticmethod",
-    "    def from_fetch_response(resp, **kwargs):",
-    "        OutputRecorder.calls.append({\"resp\": resp, \"kwargs\": kwargs})",
-    "        return {\"resp\": resp, \"kwargs\": kwargs}",
-    "",
-    "    @staticmethod",
-    "    def from_raw(body, **kwargs):",
-    "        OutputRecorder.calls.append({\"body\": body, \"kwargs\": kwargs})",
-    "        return {\"body\": body, \"kwargs\": kwargs}",
-    "",
-    "class DummyResponse:",
-    "    def __init__(self, *, url=\"https://example.test\", headers=None, status=200, reason=\"OK\", history=None):",
-    "        self.url = url",
-    "        self.headers = {} if headers is None else headers",
-    "        self.status = status",
-    "        self.reason = reason",
-    "        self.history = [] if history is None else history",
-    "",
-    "    async def read(self):",
-    "        return b\"\"",
-    "",
-    "class DummyPage:",
-    "    def __init__(self):",
-    "        self.goto_calls = []",
-    "        self.fetch_calls = []",
-    "",
-    "    async def goto(self, url, wait_until=None):",
-    "        self.goto_calls.append({\"url\": url, \"wait_until\": wait_until})",
-    "        return DummyResponse()",
-    "",
-    "    async def fetch(self, **kwargs):",
-    "        self.fetch_calls.append(kwargs)",
-    "        return DummyResponse(url=kwargs.get(\"url\", \"https://example.test\"))",
-    "",
-    "    async def wait_for_load_state(self, _state):",
-    "        return None",
-    "",
-    "    async def evaluate(self, _script):",
-    "        return {\"type\": \"text/plain\", \"data\": \"payload\"}",
-    "",
-    "    async def close(self):",
-    "        return None",
-    "",
-    "class DummySniffer:",
-    "    async def complete(self):",
-    "        return None",
-    "",
-    "class DummyParent:",
-    "    def __init__(self):",
-    "        self._MAIN_SITE_ORIGIN = \"https://example.test\"",
-    "        self.page = None",
-    "        self.ctx = types.SimpleNamespace(new_page=self.new_page)",
-    "",
-    "    async def new_page(self):",
-    "        self.page = DummyPage()",
-    "        return self.page",
-    "",
-    "    async def _create_pipeline_sniffer(self):",
-    "        return DummySniffer()",
-    "",
-    "    def _make_warmup_context(self, *, page, sniffer):",
-    "        return types.SimpleNamespace(page=page, sniffer=sniffer)",
-    "",
-    "async def pipeline(_warmup):",
-    "    return None",
-    "",
-    "make_module(f\"{package_name}.pipelines\", package=True)",
-    "make_module(f\"{package_name}.pipelines.goto_pipeline\", pipeline=pipeline)",
-    "products_mod.abstraction.Output = OutputRecorder",
-    "products = products_mod.ClassProducts(DummyParent())",
-    "signature = inspect.signature(products.info)",
-    "signature_params = [",
-    "    {\"name\": name, \"kind\": param.kind.name}",
-    "    for name, param in signature.parameters.items()",
-    "]",
-    "",
-    "async def run_checks():",
-    "    results = []",
-    "    for kwargs in [",
-    "        {\"url\": \"item\", \"yes\": True},",
-    "        {\"url\": \"item\"},",
-    "        {\"category\": \"cat\", \"product_id\": 1, \"slug\": \"slug\"},",
-    "        {},",
-    "    ]:",
-    "        OutputRecorder.calls.clear()",
-    "        if products._parent.page is not None:",
-    "            products._parent.page.goto_calls.clear()",
-    "        await products.info(**kwargs)",
-    "        output_kwargs = OutputRecorder.calls[0][\"kwargs\"]",
-    "        results.append({",
-    "            \"kwargs\": kwargs,",
-    "            \"goto_url\": products._parent.page.goto_calls[-1][\"url\"],",
-    "            \"wait_until\": products._parent.page.goto_calls[-1][\"wait_until\"],",
-    "            \"output_kwargs\": {",
-    "                \"json_override\": output_kwargs.get(\"json_override\"),",
-    "                \"text_override\": output_kwargs.get(\"text_override\"),",
-    "            },",
-    "        })",
-    "    print(json.dumps({\"signature\": signature_params, \"results\": results}, ensure_ascii=False))",
-    "",
-    "asyncio.run(run_checks())",
-  ].join("\n");
-}
-
 function buildSphinxTextDocs(outputDir, repoRoot) {
   const docsSourceDir = path.join(outputDir, "docs", "source");
   const docsBuildDir = path.join(outputDir, "docs", "_build", "text");
@@ -724,13 +602,6 @@ test("python codegen generates both bundled msra documents without failing", () 
       packageName: "ozon_api",
       license: "GPL-3.0-or-later",
     },
-    {
-      inputPath: path.join(repoRoot, "examples", "fixprice", "fixprice.msra"),
-      outputDir: path.join(workDir, "fixprice"),
-      packageOwner: "Open-Inflation",
-      packageName: "fixprice_api",
-      license: "MIT",
-    },
   ];
   const delimitedInputPath = path.join(workDir, "example-delimited.msra");
   const delimitedSource = readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8")
@@ -808,20 +679,12 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(readmeText, /### Принцип работы/);
       assert.match(readmeText, /pytest-jsonschema-snapshot/);
       assert.match(readmeText, /pytest-anyio/);
-      if (testCase.packageName === "fixprice_api") {
-        assert.match(readmeText, /^Аснинхронный неофициальный API клиент для сайта fix-price\.com$/m);
-        assert.match(pyprojectText, /^description = "Аснинхронный неофициальный API клиент для сайта fix-price\.com"$/m);
-      } else {
-        assert.match(readmeText, /Ozon API integration for catalog browsing and cart flows/);
-        assert.match(pyprojectText, /^description = "Ozon API integration for catalog browsing and cart flows"$/m);
-      }
+      assert.match(readmeText, /Ozon API integration for catalog browsing and cart flows/);
+      assert.match(pyprojectText, /^description = "Ozon API integration for catalog browsing and cart flows"$/m);
       assert.match(readmeText, /```py[\s\S]*async def main\(\):/);
       assert.doesNotMatch(readmeText, /examples\/pipeline\.py/);
       assert.ok(readmePipelineCode, "expected README to contain a python code block");
       assert.ok(quickStartPipelineCode, "expected quick_start.rst to contain a python code block");
-      if (testCase.packageName === "fixprice_api") {
-        assert.match(quickStartText, /python -m camoufox fetch/);
-      }
       assert.match(quickStartText, /The public API is documented in :doc:`api`\./);
       assert.match(docsRequirementsText, /jsoncrack-for-sphinx/);
       assert.match(docsConfText, /"jsoncrack_for_sphinx"/);
@@ -835,9 +698,6 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(exampleText, /async def main\(\):/);
       assert.match(exampleText, /async with [A-Za-z0-9_]+\(\) as api:/);
       assert.doesNotMatch(exampleText, /\bpass\b/);
-      if (testCase.packageName === "fixprice_api") {
-        assert.match(exampleText, /print\(f"Первая категория: \{tree\[next\(iter\(tree\)\)\]\['alias'\]\}"\)/);
-      }
       if (testCase.packageName === "print_list_api") {
         assert.match(exampleText, /print\(['"]Первая строка['"]\)/);
         assert.match(exampleText, /print\(['"]Вторая строка['"]\)/);
@@ -884,7 +744,12 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.doesNotMatch(apiTestText, /abstraction/);
       const probeResult = spawnSync(
         "python",
-        ["-c", buildGeneratedPackageProbeScript(), testCase.outputDir, testCase.packageName],
+        [
+          "-c",
+          buildGeneratedPackageProbeScript(),
+          testCase.outputDir,
+          testCase.packageName,
+        ],
         {
           cwd: repoRoot,
           env: buildCodegenPythonPath(pythonReleasesFixturePath),
@@ -894,6 +759,10 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
       const packageNameSlug = testCase.packageName.replace(/_/g, "-");
       const makefileText = readFileSync(path.join(testCase.outputDir, "Makefile"), "utf8");
+      const sourceSyncWorkflowText = readFileSync(
+        path.join(testCase.outputDir, ".github", "workflows", "source-sync.yml"),
+        "utf8",
+      );
       const testsWorkflowText = readFileSync(
         path.join(testCase.outputDir, ".github", "workflows", "tests.yml"),
         "utf8",
@@ -902,144 +771,44 @@ test("python codegen generates both bundled msra documents without failing", () 
         path.join(testCase.outputDir, ".github", "workflows", "publish.yml"),
         "utf8",
       );
+      const normalizedSourceSyncWorkflowText = normalizeNewlines(sourceSyncWorkflowText);
+      const normalizedPublishWorkflowText = normalizeNewlines(publishWorkflowText);
       assert.match(makefileText, /pip install -r requirements-dev\.txt/);
       assert.match(makefileText, new RegExp(`pytest --cov=${testCase.packageName}`));
       assert.match(makefileText, new RegExp(`python -m ruff check ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
       assert.match(makefileText, new RegExp(`python -m ruff check --select I --fix ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
       assert.match(makefileText, new RegExp(`python -m ruff format ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
       assert.match(makefileText, new RegExp(`python -m mypy ${testCase.packageName}`));
+      assert.match(normalizedSourceSyncWorkflowText, /name: source-sync/);
+      assert.match(normalizedSourceSyncWorkflowText, /workflow_dispatch:/);
+      assert.match(normalizedSourceSyncWorkflowText, /uses: Miskler\/engine-reverse-ide\/\.github\/workflows\/source-sync\.yml@main/);
+      assert.match(normalizedSourceSyncWorkflowText, /source_repository: \$\{\{ github\.repository \}\}/);
+      assert.match(normalizedSourceSyncWorkflowText, /target_repository: \$\{\{ github\.repository \}\}/);
+      assert.match(normalizedSourceSyncWorkflowText, new RegExp(`source_msra_path: "${path.basename(testCase.inputPath)}"`));
+      assert.match(normalizedSourceSyncWorkflowText, /repo_token: \$\{\{ secrets\.SOURCE_SYNC_TOKEN \}\}/);
       assert.match(testsWorkflowText, /name: tests/);
       assert.match(testsWorkflowText, /uses: actions\/checkout@v4/);
       assert.match(testsWorkflowText, /pip install -r requirements-dev\.txt/);
       assert.match(testsWorkflowText, /uses: Miskler\/human-requests-bot@v11/);
       assert.match(testsWorkflowText, /uses: Miskler\/pytest-jsonschema-snapshot-bot@v14/);
-      assert.match(publishWorkflowText, /uses: \.\/\.github\/workflows\/tests\.yml/);
-      assert.match(publishWorkflowText, /uses: actions\/upload-pages-artifact@v3/);
-      assert.match(publishWorkflowText, /uses: actions\/deploy-pages@v4/);
-      assert.match(publishWorkflowText, /uses: pypa\/gh-action-pypi-publish@release\/v1/);
-      assert.match(publishWorkflowText, new RegExp(`https://pypi\\.org/project/${packageNameSlug}/`));
-      if (testCase.packageName === "fixprice_api") {
-        const docsBuildDir = buildSphinxTextDocs(testCase.outputDir, repoRoot);
-        const managerDocsText = readFileSync(
-          path.join(docsBuildDir, "_api", `${testCase.packageName}.manager.txt`),
-          "utf8",
-        );
-        const normalizedManagerDocsText = normalizeSphinxText(managerDocsText);
-        assert.doesNotMatch(managerDocsText, /Attributes:/);
-        assert.doesNotMatch(managerDocsText, /@SniffHeaders/);
-        assert.doesNotMatch(managerDocsText, /\[app\.prefixes\]/);
-        assert.doesNotMatch(managerDocsText, /MSRA document/);
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "browser: HumanBrowser Browser session available to warmup scripts.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "context: HumanContext Browser context created during warmup.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "page: HumanPage Page used during warmup scripts.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "timeout_ms: int = 35000 Global timeout, in milliseconds, used by warmup and browser-backed requests.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "headless: bool = True Whether the browser is started without a visible window.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "test_mode: bool = False Enable the test-only warmup branch and its extra state.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "proxy: str | dict | Proxy | None = None Proxy settings for browser startup and direct requests. When omitted or set to None, the client reads the proxy from the environment.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "browser_opts: dict[str, Any] | None = None Extra keyword arguments forwarded to AsyncCamoufox during browser startup.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "sniffer: HeaderAnomalySniffer | None Optional header sniffer used during warmup when header sniffing is enabled.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "timeout_ms: int Effective timeout, in milliseconds, shared by warmup actions.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "test_mode: bool Whether the client was started in test mode.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "prefixes: dict[str, str] Resolved shared prefix values configured for the app.",
-          ),
-        );
-        assert.ok(
-          normalizedManagerDocsText.includes(
-            "delivery_type: Literal['store', 'pickup', 'courier'] | None",
-          ),
-        );
-        const advertisingEndpointText = readFileSync(path.join(packageDir, "endpoints", "advertising.py"), "utf8");
-    const catalogEndpointText = readFileSync(path.join(packageDir, "endpoints", "catalog", "catalog.py"), "utf8");
-    const catalogProductsEndpointText = readFileSync(path.join(packageDir, "endpoints", "catalog", "products.py"), "utf8");
-    const generalEndpointText = readFileSync(path.join(packageDir, "endpoints", "general.py"), "utf8");
-    const geolocationEndpointText = readFileSync(path.join(packageDir, "endpoints", "geolocation.py"), "utf8");
-    assert.ok(existsSync(path.join(packageDir, "pipelines", "__init__.py")), "expected pipelines package to be generated");
-    assert.ok(existsSync(path.join(packageDir, "pipelines", "warmup.py")), "expected warmup pipeline to live under pipelines/");
-    assert.ok(existsSync(path.join(packageDir, "pipelines", "goto_pipeline.py")), "expected goto pipeline to live under pipelines/");
-    assert.ok(!existsSync(path.join(packageDir, "warmup.py")), "expected no legacy root-level warmup.py");
-    assert.ok(!existsSync(path.join(packageDir, "goto_pipeline.py")), "expected no legacy root-level goto_pipeline.py");
-    assert.match(advertisingEndpointText, /@autotest/);
-    assert.match(catalogEndpointText, /@autotest/);
-    assert.match(catalogProductsEndpointText, /@autotest/);
-    assert.match(catalogProductsEndpointText, /from \.\.\.pipelines\.goto_pipeline import pipeline as goto_pipeline_runner/);
-    assert.match(catalogProductsEndpointText, /Path\(__file__\)\.resolve\(\)\.parents\[2\] \/ "extractors\/catalog-product-info\.js"/);
-    assert.match(geolocationEndpointText, /@autotest/);
-    assert.doesNotMatch(generalEndpointText, /@autotest/);
-  }
-      if (testCase.packageName === "fixprice_api") {
-        assert.match(pyprojectText, /keywords = \[\r?\n\s*"fixprice",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
-        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"rich",\r?\n\s*"aiohttp",\r?\n\s*"aiohttp-retry",\r?\n\s*"pydantic"\r?\n\]/);
-        assert.strictEqual(
-          normalizeNewlines(requirementsText).trimEnd(),
-          [
-            "camoufox[geoip]",
-            "human_requests",
-            "Pillow",
-            "rich",
-            "aiohttp",
-            "aiohttp-retry",
-            "pydantic",
-          ].join("\n"),
-        );
-      } else {
-        assert.match(pyprojectText, /keywords = \[\r?\n\s*"ozon",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
-        assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"rich"\r?\n\]/);
-        assert.strictEqual(
-          normalizeNewlines(requirementsText).trimEnd(),
-          [
-            "camoufox[geoip]",
-            "human_requests",
-            "Pillow",
-            "rich",
-          ].join("\n"),
-        );
-      }
+      assert.match(normalizedPublishWorkflowText, /push:\n\s+branches:\n\s+- main/);
+      assert.match(normalizedPublishWorkflowText, /github\.event_name == 'push'/);
+      assert.match(normalizedPublishWorkflowText, /uses: \.\/\.github\/workflows\/tests\.yml/);
+      assert.match(normalizedPublishWorkflowText, /uses: actions\/upload-pages-artifact@v3/);
+      assert.match(normalizedPublishWorkflowText, /uses: actions\/deploy-pages@v4/);
+      assert.match(normalizedPublishWorkflowText, /uses: pypa\/gh-action-pypi-publish@release\/v1/);
+      assert.match(normalizedPublishWorkflowText, new RegExp(`https://pypi\\.org/project/${packageNameSlug}/`));
+      assert.match(pyprojectText, /keywords = \[\r?\n\s*"ozon",\r?\n\s*"api",\r?\n\s*"browser",\r?\n\s*"catalog"\r?\n\]/);
+      assert.match(pyprojectText, /dependencies = \[\r?\n\s*"camoufox\[geoip\]",\r?\n\s*"human_requests",\r?\n\s*"Pillow",\r?\n\s*"rich"\r?\n\]/);
+      assert.strictEqual(
+        normalizeNewlines(requirementsText).trimEnd(),
+        [
+          "camoufox[geoip]",
+          "human_requests",
+          "Pillow",
+          "rich",
+        ].join("\n"),
+      );
       if (testCase.license === "MIT") {
         assert.match(licenseText, /MIT License/);
         assert.match(licenseText, new RegExp(`^Copyright \\(c\\) ${currentYear} `, "m"));
@@ -1058,158 +827,9 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.strictEqual(compileResult.status, 0, compileResult.stderr || compileResult.stdout);
       assert.match(readmeText, /### Report/);
       assert.match(readmeText, new RegExp(`https://github\\.com/${testCase.packageOwner}/${testCase.packageName}/issues`));
-      if (testCase.packageName === "fixprice_api") {
-        assert.match(readmeText, /Загрузка изображения по прямой ссылке/);
-        assert.match(readmeText, /download_image = \(await api\.General\.download_image\(url=products_list\[0\]\["images"\]\[0\]\["src"\]\)\)\.image\(\)/);
-        assert.doesNotMatch(readmeText, /Image\.open\(download_image\)/);
-        assert.match(readmeText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
-        assert.match(exampleText, /tree\[next\(iter\(tree\)\)\]\['alias'\]/);
-        assert.match(exampleText, /print\(f"Первый товар: \{products_list\[0\]\}"\)/);
-        assert.match(exampleText, /print\(f"Информация о товаре: \{info\}"\)/);
-        assert.match(exampleText, /print\(f"Первая страна en: \{en\[0\]\}"\)/);
-        assert.match(exampleText, /print\(f"Первый магазин: \{search\[0\]\}"\)/);
-        assert.match(readmeText, /https:\/\/t\.me\/miskler_dev/);
-        assert.match(readmeText, /https:\/\/discord\.gg\/UnJnGHNbBp/);
-
-        const jsonDebugScript = [
-          "import sys",
-          "sys.path.insert(0, sys.argv[1])",
-          "from human_requests.abstraction import Output",
-          "try:",
-          "    Output.from_raw(b'{bad json').json()",
-          "except Exception:",
-          "    pass",
-        ].join("\n");
-        const jsonDebugResult = spawnSync("python", ["-c", jsonDebugScript, testCase.outputDir], {
-          cwd: repoRoot,
-          encoding: "utf8",
-        });
-        assert.strictEqual(jsonDebugResult.status, 0, jsonDebugResult.stderr || jsonDebugResult.stdout);
-        assert.match(jsonDebugResult.stdout, /JSON parse failed/);
-        assert.match(jsonDebugResult.stdout, /Fragment:/);
-      } else {
-        assert.match(readmeText, /Пример поиска по одному запросу/);
-        assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query="example"\)\)\.json\(\)/);
-      }
+      assert.match(readmeText, /Пример поиска по одному запросу/);
+      assert.match(readmeText, /smoke = \(await api\.Catalog\.Product\.feed\(query="example"\)\)\.json\(\)/);
     }
-  } finally {
-    rmSync(workDir, { recursive: true, force: true });
-  }
-});
-
-test("python codegen routes fixprice info overloads to the expected urls", () => {
-  const repoRoot = path.resolve(__dirname, "..");
-  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-fixprice-overloads-"));
-  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
-  const outputDir = path.join(workDir, "fixprice");
-  seedStaleOutput(outputDir);
-
-  try {
-    const generateResult = spawnSync(
-      "python",
-      ["-m", "msra_codegen", "generate", path.join(repoRoot, "examples", "fixprice", "fixprice.msra"), "-o", outputDir],
-      {
-        cwd: repoRoot,
-        env: buildCodegenPythonPath(pythonReleasesFixturePath),
-        encoding: "utf8",
-      },
-    );
-    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
-
-    const probeResult = spawnSync(
-      "python",
-      ["-c", buildFixpriceInfoProbeScript(), outputDir, "fixprice_api"],
-      {
-        cwd: repoRoot,
-        encoding: "utf8",
-      },
-    );
-    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
-
-    const probeData = JSON.parse(probeResult.stdout);
-    assert.deepEqual(
-      probeData.signature.map((item) => item.kind),
-      ["KEYWORD_ONLY", "KEYWORD_ONLY", "KEYWORD_ONLY", "KEYWORD_ONLY", "KEYWORD_ONLY", "KEYWORD_ONLY"],
-    );
-    assert.deepEqual(
-      probeData.signature.map((item) => item.name).sort(),
-      ["category", "detalization", "product_id", "slug", "url", "yes"].sort(),
-    );
-    assert.deepEqual(
-      probeData.results.map((item) => item.goto_url),
-      [
-        "https://example.test/catalog/item/yes?detalization=short",
-        "https://example.test/catalog/item?detalization=short",
-        "https://example.test/catalog/cat/p-1-slug?detalization=full",
-        "https://example.test/catalog/some-category/p-12345-some-product?detalization=short",
-      ],
-    );
-    for (const resultItem of probeData.results) {
-      assert.strictEqual(resultItem.wait_until, "domcontentloaded");
-      assert.strictEqual(resultItem.output_kwargs.text_override, "payload");
-      assert.strictEqual(resultItem.output_kwargs.json_override, null);
-    }
-  } finally {
-    rmSync(workDir, { recursive: true, force: true });
-  }
-});
-
-test("python codegen passes fixprice download_image input url directly", () => {
-  const repoRoot = path.resolve(__dirname, "..");
-  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-fixprice-download-image-"));
-  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
-  const outputDir = path.join(workDir, "fixprice");
-
-  try {
-    const generateResult = spawnSync(
-      "python",
-      ["-m", "msra_codegen", "generate", path.join(repoRoot, "examples", "fixprice", "fixprice.msra"), "-o", outputDir],
-      {
-        cwd: repoRoot,
-        env: buildCodegenPythonPath(pythonReleasesFixturePath),
-        encoding: "utf8",
-      },
-    );
-    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
-
-    const validateResult = spawnSync("python", ["-m", "msra_codegen", "validate", outputDir], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    });
-    assert.strictEqual(validateResult.status, 0, validateResult.stderr || validateResult.stdout);
-
-    const probeScript = [
-      buildGeneratedPackageProbeScript(),
-      "",
-      "import asyncio",
-      "",
-      "async def main():",
-      "    client = instance",
-      "    captured_urls = []",
-      "",
-      "    async def fake_direct_request(url, *args, **kwargs):",
-      "        captured_urls.append(url)",
-      "        return {\"captured_url\": url, \"args\": args, \"kwargs\": kwargs}",
-      "",
-      "    client._direct_request = fake_direct_request",
-      "    result = await client.General.download_image(url=\"https://example.test/assets/image.png\")",
-      "    assert captured_urls == [\"https://example.test/assets/image.png\"]",
-      "    assert result[\"captured_url\"] == \"https://example.test/assets/image.png\"",
-      "    assert result[\"args\"] == ()",
-      "    assert result[\"kwargs\"] == {}",
-      "",
-      "asyncio.run(main())",
-    ].join("\n");
-
-    const probeResult = spawnSync(
-      "python",
-      ["-c", probeScript, outputDir, "fixprice_api"],
-      {
-        cwd: repoRoot,
-        encoding: "utf8",
-      },
-    );
-    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

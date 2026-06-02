@@ -1,6 +1,9 @@
 name: {{ publish.name }}
 
 on:
+  push:
+    branches:
+      - {{ publish.branch }}
   workflow_dispatch:
     inputs:
       target:

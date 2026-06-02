@@ -75,7 +75,7 @@ raise="Текст запроса должен состоять только из
 
 ## 4. `app.func.*.examples` теперь генерируют contract tests, но snapshot-артефакты всё ещё требуют runtime capture
 
-В `examples/example/example.msra` и `examples/fixprice/*.msraf` `@Test`-примеры теперь попадают в generated Python-пакет:
+В `examples/example/example.msra` и в FixPrice source tree, который теперь живёт в `../fixprice_api`, `@Test`-примеры теперь попадают в generated Python-пакет:
 
 - `tests/conftest.py` получает session fixtures для `api` и для канонических JSON-ответов;
 - `tests/api_test.py` получает `@autotest_hook`, `@autotest_params`, `@autotest_depends_on` и manual checks для `text`/`image` примеров;

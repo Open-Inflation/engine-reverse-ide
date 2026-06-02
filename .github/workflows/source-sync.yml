@@ -1,0 +1,155 @@
+name: source-sync
+
+on:
+  workflow_call:
+    inputs:
+      logic_repository:
+        description: Repository that contains the generator logic.
+        required: true
+        type: string
+      logic_ref:
+        description: Ref to check out from the generator repository.
+        required: true
+        type: string
+      source_repository:
+        description: Repository that contains the source .msra tree.
+        required: true
+        type: string
+      source_ref:
+        description: Branch or ref to read from the source repository.
+        required: true
+        type: string
+      source_msra_path:
+        description: Path to the root .msra file within the source repository.
+        required: true
+        type: string
+      target_repository:
+        description: Repository that should receive the generated artifact.
+        required: true
+        type: string
+      target_ref:
+        description: Branch to update in the target repository.
+        required: true
+        type: string
+      generator_python_version:
+        description: Python version for the generator runtime.
+        required: false
+        type: string
+        default: "3.12"
+      generator_requirements_path:
+        description: Relative path to the generator requirements file.
+        required: false
+        type: string
+        default: "msra_codegen/requirements.txt"
+      commit_user_name:
+        description: Git user.name used for generated commits.
+        required: false
+        type: string
+        default: "msra-sync-bot"
+      commit_user_email:
+        description: Git user.email used for generated commits.
+        required: false
+        type: string
+        default: "msra-sync-bot@users.noreply.github.com"
+    secrets:
+      repo_token:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-sync-${{ inputs.target_repository }}-${{ inputs.target_ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out generator repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.logic_repository }}
+          ref: ${{ inputs.logic_ref }}
+          path: logic
+          token: ${{ secrets.repo_token }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.generator_python_version }}
+
+      - name: Install generator dependencies
+        working-directory: logic
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r "${{ inputs.generator_requirements_path }}"
+
+      - name: Check out source branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.source_ref }}
+          path: source
+          token: ${{ secrets.repo_token }}
+          fetch-depth: 0
+
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target_repository }}
+          ref: ${{ inputs.target_ref }}
+          path: target
+          token: ${{ secrets.repo_token }}
+          fetch-depth: 0
+
+      - name: Generate artifact into a staging tree
+        working-directory: logic
+        run: |
+          source_msra_path="${{ inputs.source_msra_path }}"
+          python -m msra_codegen generate "../source/$source_msra_path" -o ../generated
+
+      - name: Replace target tree contents
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          target = Path("target")
+          generated = Path("generated")
+
+          for child in list(target.iterdir()):
+              if child.name == ".git":
+                  continue
+              if child.is_dir():
+                  shutil.rmtree(child)
+              else:
+                  child.unlink()
+
+          for item in generated.iterdir():
+              destination = target / item.name
+              if item.is_dir():
+                  shutil.copytree(item, destination, dirs_exist_ok=True)
+              else:
+                  shutil.copy2(item, destination)
+          PY
+
+      - name: Validate generated project
+        working-directory: logic
+        run: |
+          python -m msra_codegen validate ../target
+
+      - name: Commit and push
+        working-directory: target
+        run: |
+          git config user.name "${{ inputs.commit_user_name }}"
+          git config user.email "${{ inputs.commit_user_email }}"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git commit -m "Regenerate artifact from source"
+          git push origin HEAD:${{ inputs.target_ref }}

@@ -112,15 +112,6 @@ test("example document stays valid and keeps the documented path", () => {
   );
 });
 
-test("fixprice document stays valid", () => {
-  const fixpricePath = path.resolve(__dirname, "..", "..", "examples", "fixprice", "fixprice.msra");
-  const text = readFileSync(fixpricePath, "utf8");
-  const document = parseDocument(text, fixpricePath);
-  const analysis = analyzeDocument(document);
-
-  assert.deepStrictEqual(analysis.diagnostics, []);
-});
-
 test("quoted reserved body names remain valid", () => {
   const text = [
     "[app]",

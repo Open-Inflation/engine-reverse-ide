@@ -9,3 +9,5 @@
 Если нужна именно семантика путей и quoted/unquoted-имен, см. страницу [Пути и identity](msra-paths.md).
 
 Если нужен список ограничений codegen на примере `examples/example/example.msra`, см. страницу [Ограничения генератора](msra-generator-gaps.md).
+
+Если нужно собрать схему `repo B/source -> repo A -> repo B/main`, см. страницу [Схема repo B](msra-repo-b-sync.md).
