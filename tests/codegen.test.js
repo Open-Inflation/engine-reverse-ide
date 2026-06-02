@@ -1295,6 +1295,160 @@ test("python codegen builds the demo project", () => {
   }
 });
 
+test("python codegen supports one-sided numeric match bounds on variables", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-match-bounds-"));
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const outputDir = path.join(workDir, "generated");
+  const source = normalizeNewlines(readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8"))
+    .replace(
+      /from=<UNSTANDARD_HEADERS\.REQUEST\.x-city>.*\n/,
+      [
+        'from=<UNSTANDARD_HEADERS.REQUEST.x-city> # доступно так же "value" или <LOCAL_STORAGE.x-city> или COOKIES так же можно указать COOKIES.key если по факту хранилище это список/словарь (опасно - если нет, runtime ошибка распарса json)',
+        "",
+        "[app.variables.lower_bound]",
+        'types=[{"type"=integer, "match"={from=1}}]',
+        'description="Lower bound value"',
+        "from=1",
+        "",
+        "[app.variables.upper_bound]",
+        'types=[{"type"=integer, "match"={to=1}}]',
+        'description="Upper bound value"',
+        "from=1",
+        "",
+      ].join("\n"),
+    );
+
+  try {
+    const inputPath = path.join(workDir, "match-bounds.msra");
+    writeFileSync(inputPath, source, "utf8");
+    writeFileSync(
+      path.join(workDir, "warmup.py"),
+      readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
+      "utf8",
+    );
+    const generateResult = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
+
+    const probeScript = [
+      buildGeneratedPackageProbeScript(),
+      "",
+      "instance.lower_bound = 1",
+      "instance.upper_bound = 1",
+      "instance.lower_bound = 2",
+      "try:",
+      "    instance.lower_bound = 0",
+      "except ValueError as exc:",
+      '    assert "greater than or equal to" in str(exc)',
+      "else:",
+      '    raise AssertionError("expected lower_bound to reject values below the lower bound")',
+      "instance.upper_bound = 0",
+      "try:",
+      "    instance.upper_bound = 2",
+      "except ValueError as exc:",
+      '    assert "less than or equal to" in str(exc)',
+      "else:",
+      '    raise AssertionError("expected upper_bound to reject values above the upper bound")',
+    ].join("\n");
+
+    const probeResult = spawnSync("python", ["-c", probeScript, outputDir, "ozon_api"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test("python codegen supports one-sided numeric match bounds on function inputs", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-match-inputs-"));
+  const inputPath = path.join(workDir, "match-inputs.msra");
+  const outputDir = path.join(workDir, "generated");
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const text = [
+    "[app]",
+    'name="MatchInputAPI"',
+    'package_name="match_input_api"',
+    'version="0.1.0"',
+    "browser=camoufox",
+    "",
+    "[app.func.HEALTH]",
+    'name="health"',
+    "transport=fetch",
+    "method=GET",
+    "",
+    "[app.func.HEALTH.url]",
+    'base="https://example.test/health"',
+    "",
+    "[app.func.HEALTH.input.lower_limit]",
+    "type=integer",
+    "match={from=1}",
+    "",
+    "[app.func.HEALTH.input.upper_limit]",
+    "type=integer",
+    "match={to=1}",
+    "",
+  ].join("\n");
+
+  try {
+    writeFileSync(inputPath, text, "utf8");
+    const generateResult = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(generateResult.status, 0, generateResult.stderr || generateResult.stdout);
+
+    const probeScript = [
+      buildGeneratedPackageProbeScript({ expectGroupFields: false }),
+      "",
+      "import asyncio",
+      "",
+      "async def main():",
+      "    captured = {}",
+      "",
+      "    async def dummy_request(method, url, **kwargs):",
+      "        captured['method'] = method",
+      "        captured['url'] = url",
+      "        captured['kwargs'] = kwargs",
+      "        return {'method': method, 'url': url, 'kwargs': kwargs}",
+      "",
+      "    instance._request = dummy_request",
+      "    result = await instance.health(lower_limit=2, upper_limit=0)",
+      "    assert result['url'] == 'https://example.test/health'",
+      "    assert captured['url'] == 'https://example.test/health'",
+      "    try:",
+      "        await instance.health(lower_limit=0, upper_limit=0)",
+      "    except ValueError as exc:",
+      '        assert "greater than or equal to" in str(exc)',
+      "    else:",
+      '        raise AssertionError("expected lower_limit to reject values below the lower bound")',
+      "    try:",
+      "        await instance.health(lower_limit=2, upper_limit=2)",
+      "    except ValueError as exc:",
+      '        assert "less than or equal to" in str(exc)',
+      "    else:",
+      '        raise AssertionError("expected upper_limit to reject values above the upper bound")',
+      "",
+      "asyncio.run(main())",
+    ].join("\n");
+
+    const probeResult = spawnSync("python", ["-c", probeScript, outputDir, "match_input_api"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(probeResult.status, 0, probeResult.stderr || probeResult.stdout);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test("python codegen omits query param assembly when a method has no query params", () => {
   const repoRoot = path.resolve(__dirname, "..");
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-noquery-build-"));

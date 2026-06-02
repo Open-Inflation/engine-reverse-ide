@@ -34,9 +34,17 @@
 {% else %}
             raise ValueError("`{{ name }}` does not match the expected format")
 {% endif %}
-{% elif match_range %}
-        if float(value) < {{ match_range[0] }} or float(value) > {{ match_range[1] }}:
-            raise ValueError("`{{ name }}` must be between {{ match_range[0] }} and {{ match_range[1] }}")
+{% elif match_range_lower is not none or match_range_upper is not none %}
+{% if match_range_lower is not none and match_range_upper is not none %}
+        if float(value) < {{ match_range_lower }} or float(value) > {{ match_range_upper }}:
+            raise ValueError("`{{ name }}` must be between {{ match_range_lower }} and {{ match_range_upper }}")
+{% elif match_range_lower is not none %}
+        if float(value) < {{ match_range_lower }}:
+            raise ValueError("`{{ name }}` must be greater than or equal to {{ match_range_lower }}")
+{% else %}
+        if float(value) > {{ match_range_upper }}:
+            raise ValueError("`{{ name }}` must be less than or equal to {{ match_range_upper }}")
+{% endif %}
 {% elif match_values_expr %}
         allowed_values = {{ match_values_expr }}
         if value not in allowed_values:

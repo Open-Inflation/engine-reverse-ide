@@ -166,16 +166,21 @@ def match_to_check_expr(expr: dict[str, Any] | None, value_expr: str) -> str | N
     return None
 
 
-def match_to_range(expr: dict[str, Any] | None) -> tuple[int, int] | None:
+def match_to_range(expr: dict[str, Any] | None) -> tuple[int | float | None, int | float | None] | None:
     if not expr or expr.get("kind") != "inline_table":
         return None
     values = inline_table_to_dict(expr)
-    if "from" in values and "to" in values:
-        try:
-            return int(values["from"]), int(values["to"])
-        except (TypeError, ValueError):
-            return None
-    return None
+    has_lower = "from" in values
+    has_upper = "to" in values
+    if not has_lower and not has_upper:
+        return None
+    lower = values.get("from")
+    upper = values.get("to")
+    if has_lower and (isinstance(lower, bool) or not isinstance(lower, (int, float))):
+        return None
+    if has_upper and (isinstance(upper, bool) or not isinstance(upper, (int, float))):
+        return None
+    return (lower if has_lower else None, upper if has_upper else None)
 
 
 def scalar_value_from_expr(expr: dict[str, Any] | None) -> tuple[Any, bool]:

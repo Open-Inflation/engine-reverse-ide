@@ -113,13 +113,31 @@
 {% else %}
             raise ValueError("`{{ item.name }}` does not match the expected format")
 {% endif %}
-{% elif item.match_range and not item.is_list %}
+{% elif (item.match_range_lower is not none or item.match_range_upper is not none) and not item.is_list %}
+{% if item.match_range_lower is not none and item.match_range_upper is not none %}
 {% if item.required %}
-        if float({{ item.name }}) < {{ item.match_range[0] }} or float({{ item.name }}) > {{ item.match_range[1] }}:
-            raise ValueError("`{{ item.name }}` must be between {{ item.match_range[0] }} and {{ item.match_range[1] }}")
+        if float({{ item.name }}) < {{ item.match_range_lower }} or float({{ item.name }}) > {{ item.match_range_upper }}:
+            raise ValueError("`{{ item.name }}` must be between {{ item.match_range_lower }} and {{ item.match_range_upper }}")
 {% else %}
-        if {{ item.name }} is not None and (float({{ item.name }}) < {{ item.match_range[0] }} or float({{ item.name }}) > {{ item.match_range[1] }}):
-            raise ValueError("`{{ item.name }}` must be between {{ item.match_range[0] }} and {{ item.match_range[1] }}")
+        if {{ item.name }} is not None and (float({{ item.name }}) < {{ item.match_range_lower }} or float({{ item.name }}) > {{ item.match_range_upper }}):
+            raise ValueError("`{{ item.name }}` must be between {{ item.match_range_lower }} and {{ item.match_range_upper }}")
+{% endif %}
+{% elif item.match_range_lower is not none %}
+{% if item.required %}
+        if float({{ item.name }}) < {{ item.match_range_lower }}:
+            raise ValueError("`{{ item.name }}` must be greater than or equal to {{ item.match_range_lower }}")
+{% else %}
+        if {{ item.name }} is not None and float({{ item.name }}) < {{ item.match_range_lower }}:
+            raise ValueError("`{{ item.name }}` must be greater than or equal to {{ item.match_range_lower }}")
+{% endif %}
+{% else %}
+{% if item.required %}
+        if float({{ item.name }}) > {{ item.match_range_upper }}:
+            raise ValueError("`{{ item.name }}` must be less than or equal to {{ item.match_range_upper }}")
+{% else %}
+        if {{ item.name }} is not None and float({{ item.name }}) > {{ item.match_range_upper }}:
+            raise ValueError("`{{ item.name }}` must be less than or equal to {{ item.match_range_upper }}")
+{% endif %}
 {% endif %}
 {% endif %}
 {% if item.values_expr %}

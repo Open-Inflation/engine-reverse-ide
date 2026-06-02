@@ -1081,13 +1081,19 @@ test("quoted list types are rejected for inputs", () => {
   assert.match(diagnostic.message, /list\[type\]/i);
 });
 
-test("numeric match ranges accept integer and float bounds", () => {
+test("numeric match ranges accept integer, float, and one-sided bounds", () => {
   const text = [
     "[app]",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.limit]",
     'type=integer',
     'match={from=1, to=27}',
+    "[app.func.A3A417.input.lower_limit]",
+    'type=integer',
+    'match={from=1}',
+    "[app.func.A3A417.input.upper_limit]",
+    'type=integer',
+    'match={to=27}',
     "[app.func.A3A417.url]",
     "[app.func.A3A417.url.params.ratio]",
     'match={from=0.5, to=2.5}',

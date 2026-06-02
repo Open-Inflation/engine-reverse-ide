@@ -142,6 +142,7 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
     non_null_type_names = {name for name in type_names if name != "null"}
     nullable = bool(variable.get("nullable", False))
     match_values = match_to_values(variable.get("match"))
+    match_range = match_to_range(variable.get("match"))
     has_null = nullable or "null" in type_names or (match_values is not None and any(value is None for value in match_values))
     context = {
         "name": variable["name"],
@@ -161,7 +162,9 @@ def build_variable_context(variable: dict[str, Any]) -> dict[str, Any]:
         "match_pattern": match_to_pattern(variable.get("match")),
         "match_check_expr": match_to_check_expr(variable.get("match"), "value"),
         "match_error": match_to_error(variable.get("match")),
-        "match_range": match_to_range(variable.get("match")),
+        "match_range": match_range,
+        "match_range_lower": match_range[0] if match_range is not None else None,
+        "match_range_upper": match_range[1] if match_range is not None else None,
     }
     context["warmup_code"] = build_variable_warmup_code(context)
     return context
@@ -180,6 +183,43 @@ def build_variable_type_annotation(
             return f"{annotation} | None"
         return annotation
     return type_annotation_from_types(type_names, nullable=nullable)
+
+
+def numeric_range_error_message(label: str, lower: int | float | None, upper: int | float | None) -> str:
+    if lower is not None and upper is not None:
+        return f"`{label}` must be between {lower} and {upper}"
+    if lower is not None:
+        return f"`{label}` must be greater than or equal to {lower}"
+    if upper is not None:
+        return f"`{label}` must be less than or equal to {upper}"
+    return f"`{label}` must be within the configured numeric range"
+
+
+def build_numeric_range_validation_lines(
+    value_name: str,
+    match_range: tuple[int | float | None, int | float | None] | None,
+    *,
+    required: bool,
+    label: str,
+) -> list[str]:
+    if match_range is None:
+        return []
+    lower, upper = match_range
+    comparisons: list[str] = []
+    if lower is not None:
+        comparisons.append(f"float({value_name}) < {lower}")
+    if upper is not None:
+        comparisons.append(f"float({value_name}) > {upper}")
+    if not comparisons:
+        return []
+    condition = " or ".join(comparisons)
+    if len(comparisons) > 1:
+        condition = f"({condition})"
+    prefix = "" if required else f"{value_name} is not None and "
+    return [
+        f"if {prefix}{condition}:",
+        f"    raise ValueError({numeric_range_error_message(label, lower, upper)!r})",
+    ]
 
 
 def build_variable_warmup_code(variable: dict[str, Any]) -> str:
@@ -290,14 +330,8 @@ def build_variable_validation_lines(variable: dict[str, Any], value_name: str) -
             lines.append(f"    raise ValueError({variable['match_error']})")
         else:
             lines.append(f'    raise ValueError("`{label}` does not match the expected format")')
-    elif variable.get("match_range"):
-        low, high = variable["match_range"]
-        lines.append(
-            f"if float({value_name}) < {low} or float({value_name}) > {high}:"
-        )
-        lines.append(
-            f'    raise ValueError("`{label}` must be between {low} and {high}")'
-        )
+    elif variable.get("match_range") is not None:
+        lines.extend(build_numeric_range_validation_lines(value_name, variable.get("match_range"), required=True, label=label))
     elif variable.get("match_values_expr") is not None:
         lines.append(f"allowed_values = {variable['match_values_expr']}")
         lines.append(f"if {value_name} not in allowed_values:")
@@ -775,16 +809,13 @@ def build_function_context(
                     f"    raise ValueError(\"`{validation_item['name']}` does not match the expected format\")"
                 )
         elif validation_item.get("match_range") and not validation_item.get("is_list"):
-            if validation_item.get("required"):
-                lines.append(
-                    f"if float({validation_item['name']}) < {validation_item['match_range'][0]} or float({validation_item['name']}) > {validation_item['match_range'][1]}:"
+            lines.extend(
+                build_numeric_range_validation_lines(
+                    validation_item["name"],
+                    validation_item["match_range"],
+                    required=bool(validation_item.get("required")),
+                    label=validation_item["name"],
                 )
-            else:
-                lines.append(
-                    f"if {validation_item['name']} is not None and (float({validation_item['name']}) < {validation_item['match_range'][0]} or float({validation_item['name']}) > {validation_item['match_range'][1]}):"
-                )
-            lines.append(
-                f"    raise ValueError(\"`{validation_item['name']}` must be between {validation_item['match_range'][0]} and {validation_item['match_range'][1]}\")"
             )
         if validation_item.get("values_expr"):
             if validation_item.get("is_list"):
@@ -895,11 +926,13 @@ def build_function_context(
                         f"    raise ValueError(\"`{input_name}` does not match the expected format\")"
                     )
             elif match_range:
-                lines.append(
-                    f"if {input_name} is not None and (float({input_name}) < {match_range[0]} or float({input_name}) > {match_range[1]}):"
-                )
-                lines.append(
-                    f"    raise ValueError(\"`{input_name}` must be between {match_range[0]} and {match_range[1]}\")"
+                lines.extend(
+                    build_numeric_range_validation_lines(
+                        input_name,
+                        match_range,
+                        required=False,
+                        label=input_name,
+                    )
                 )
             for overload_name, override_values in value_override_overloads:
                 lines.append(
@@ -1113,6 +1146,7 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
         type_names = type_names_from_expr(type_expr)
         is_list = is_list_type_expr(type_expr)
         abstraction_type_expr = render_expr(type_expr, self_ref="self._parent") if is_abstraction_reference_expr(type_expr) else None
+        match_range = match_to_range(input_spec.get("match"))
         values = input_spec.get("allowed_values")
         if values is None:
             values = get_plain_value(input_spec.get("values"))
@@ -1132,7 +1166,9 @@ def build_input_validation_context(func: dict[str, Any]) -> list[dict[str, Any]]
                 "match_pattern": match_to_pattern(input_spec.get("match")),
                 "match_check_expr": match_to_check_expr(input_spec.get("match"), input_spec["name"]),
                 "match_error": match_to_error(input_spec.get("match")),
-                "match_range": match_to_range(input_spec.get("match")),
+                "match_range": match_range,
+                "match_range_lower": match_range[0] if match_range is not None else None,
+                "match_range_upper": match_range[1] if match_range is not None else None,
                 "values_expr": render_simple_value(values) if isinstance(values, list) and values and all(not isinstance(item, dict) for item in values) else None,
                 "has_checks": bool(input_spec.get("required", False)) or has_type_checks or has_value_checks,
             }

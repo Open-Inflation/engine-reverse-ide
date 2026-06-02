@@ -138,6 +138,15 @@ function requireKeyOrder(lowerKey, upperKey, options = {}) {
   };
 }
 
+function requireAnyKey(requiredKeys, options = {}) {
+  return {
+    kind: "requireAnyKey",
+    keys: Array.isArray(requiredKeys) ? requiredKeys : [requiredKeys],
+    code: options.code || "missing-inline-table-key",
+    message: options.message || `Expected at least one of keys ${Array.isArray(requiredKeys) ? requiredKeys.map((key) => JSON.stringify(key)).join(", ") : JSON.stringify(requiredKeys)}.`,
+  };
+}
+
 function exactPath(expected) {
   return (path) => path.length === expected.length && expected.every((segment, index) => segment === "*" || segment === path[index]);
 }
@@ -304,13 +313,16 @@ const EXAMPLE_INPUTS_SPEC = recordOf(ANY, {
 });
 
 const NUMERIC_RANGE_SPEC = objectShape(
+  {},
   {
     from: NUMBER,
     to: NUMBER,
   },
-  {},
   {
     rules: [
+      requireAnyKey(["from", "to"], {
+        message: 'Expected at least one of keys "from" or "to" in numeric range.',
+      }),
       requireKeyOrder("from", "to", {
         message: 'Expected key "to" to be greater than or equal to key "from" in numeric range.',
       }),
@@ -1196,6 +1208,20 @@ function evaluateObjectRule(rule, value, entriesByKey, fallbackRange) {
       ];
     }
     return [];
+  }
+  if (rule.kind === "requireAnyKey") {
+    for (const key of rule.keys || []) {
+      if (entriesByKey.has(key)) {
+        return [];
+      }
+    }
+    return [
+      typeDiagnostic(
+        fallbackRange,
+        rule.message,
+        rule.code,
+      ),
+    ];
   }
   if (rule.kind === "forbidKeyWhenValue") {
     const triggerEntry = entriesByKey.get(rule.triggerKey);
