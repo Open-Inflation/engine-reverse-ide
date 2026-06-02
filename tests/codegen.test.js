@@ -78,6 +78,7 @@ function extractRstPythonCodeBlock(text) {
 
 function buildGeneratedPackageProbeScript(options = {}) {
   const expectGroupFields = options.expectGroupFields !== false;
+  const expectedHeadlessDefault = options.expectedHeadlessDefault !== false;
   return [
     "from __future__ import annotations",
     "",
@@ -210,6 +211,7 @@ function buildGeneratedPackageProbeScript(options = {}) {
     "assert instance.proxy is DummyProxy.env_sentinel",
     "assert instance.browser_opts == {}",
     "assert instance.timeout_ms == client_cls.__dataclass_fields__[\"timeout_ms\"].default",
+    `assert instance.headless is ${expectedHeadlessDefault ? "True" : "False"}`,
     ...(expectGroupFields
       ? [
           "for field_name in group_field_names:",
@@ -1348,9 +1350,27 @@ test("python codegen builds the demo project", () => {
       /\[!\[Ruff\]\(https:\/\/img\.shields\.io\/badge\/linting-Ruff-blue\?logo=ruff&logoColor=white\)\]\(https:\/\/github\.com\/astral-sh\/ruff\)/,
     );
 
+    const probeScript = [
+      buildGeneratedPackageProbeScript({ expectedHeadlessDefault: false }),
+      "",
+      "import asyncio",
+      "",
+      "async def main():",
+      "    client = instance",
+      "    client.headless = True",
+      "    try:",
+      "        await client._warmup()",
+      "    except ValueError as exc:",
+      '        assert "headless=True" in str(exc)',
+      "    else:",
+      '        raise AssertionError("expected headless mode to be rejected")',
+      "",
+      "asyncio.run(main())",
+    ].join("\n");
+
     const probeResult = spawnSync(
       "python",
-      ["-c", buildGeneratedPackageProbeScript(), outputDir, "demo_api"],
+      ["-c", probeScript, outputDir, "demo_api"],
       {
         cwd: repoRoot,
         encoding: "utf8",

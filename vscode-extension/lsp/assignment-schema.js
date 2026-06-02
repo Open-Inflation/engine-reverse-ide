@@ -236,6 +236,9 @@ function annotationRequirementForAssignment(tablePath, key) {
     if (key === "block_images") {
       return { kind: "flag", label: "@BlockImages", legacyLabel: "block_images" };
     }
+    if (key === "disallow_headless") {
+      return { kind: "flag", label: "@DisallowHeadless", legacyLabel: "disallow_headless" };
+    }
   }
   if (matchesWarmupPath(tablePath)) {
     if (key === "headers_sniffer") {
@@ -639,6 +642,7 @@ const TABLE_SCHEMAS = [
     browser: BROWSER_SPEC,
     humanize: HUMANIZE_SPEC,
     block_images: BOOLEAN,
+    disallow_headless: BOOLEAN,
   }, {
     rules: [
       forbidDynamicValue("package_name", {

@@ -53,7 +53,7 @@ class {{ client_class_name }}:
 {% endif %}
     timeout_ms: int = {{ app.timeout_ms }}
     """Global timeout, in milliseconds, used by warmup and browser-backed requests."""
-    headless: bool = True
+    headless: bool = {{ "False" if app.disallow_headless else "True" }}
     """Whether the browser is started without a visible window."""
     test_mode: bool = False
     """Enable the test-only warmup branch and its extra state."""
@@ -106,6 +106,10 @@ class {{ client_class_name }}:
         return self
 
     async def _warmup(self) -> None:
+{% if app.disallow_headless %}
+        if self.headless:
+            raise ValueError("headless=True is not allowed when @DisallowHeadless is set")
+{% endif %}
         px = self.proxy if isinstance(self.proxy, Proxy) else Proxy(self.proxy)
         browser_opts: dict[str, Any] = {} if self.browser_opts is None else dict(self.browser_opts)
         br = await AsyncCamoufox(

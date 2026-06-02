@@ -17,6 +17,7 @@
 | `version` | Версия клиента или API-контракта | Копируется в generated package и используется как версия артефакта. Значение должно быть статическим. |
 | `timeout_ms` | Глобальный таймаут по умолчанию | Становится базовым лимитом для runtime-операций и используется, если локальный блок не переопределяет timeout. |
 | `browser` | Браузер по умолчанию | Определяет, какой движок запустит runtime для warmup и browser-backed функций. Если не указан, runtime использует `camoufox` по умолчанию. |
+| `@DisallowHeadless` | Запрещает headless-запуск | Меняет дефолт `headless` на `False` и заставляет runtime выбрасывать ошибку, если caller всё же просит `headless=True`. |
 | `@Humanize` | Включает humanized-режим браузера | Передаёт `humanize=` в `AsyncCamoufox`, снижает “ботоподобность” поведения и требует `browser="camoufox"`. Разрешена либо как пустая аннотация, либо с положительным числом интенсивности, например `@Humanize(0.5)`. |
 | `@BlockImages` | Блокирует загрузку изображений | Передаёт `block_images=` в `AsyncCamoufox`, ускоряет старт и экономит трафик. Аннотация работает только с `browser="camoufox"`. |
 
@@ -41,6 +42,7 @@
 ### Что меняется
 
 - `browser` определяет движок, на котором запускаются warmup и browser-backed функции.
+- `@DisallowHeadless` меняет значение по умолчанию для `headless` на `False` и запрещает запуск с `headless=True`.
 - `@Humanize` и `@BlockImages` валидны только при `browser="camoufox"`.
 - Если значение не задано, runtime и generated client используют `camoufox` как дефолтный режим.
 - `package_name` задаёт имя generated Python-пакета; generator больше не пытается выводить его из `name`.
@@ -58,5 +60,6 @@
 
 `@Humanize` включает humanized-режим браузера и принимает пустую форму или положительное число интенсивности, например `@Humanize(0.5)`.
 `@BlockImages` блокирует загрузку изображений при старте браузера.
+`@DisallowHeadless` делает `headless=False` значением по умолчанию и выбрасывает runtime error, если клиент всё же стартует с `headless=True`.
 
-Обе аннотации работают только с `browser="camoufox"`.
+`@Humanize` и `@BlockImages` работают только с `browser="camoufox"`. `@DisallowHeadless` не зависит от выбранного браузера.

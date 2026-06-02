@@ -106,6 +106,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         "browser": str(get_plain_value(get_assignment(app_table, "browser", "camoufox"))),
         "humanize": get_plain_value(get_assignment(app_table, "humanize", False)),
         "block_images": bool(get_plain_value(get_assignment(app_table, "block_images", False))),
+        "disallow_headless": bool(get_plain_value(get_assignment(app_table, "disallow_headless", False))),
         "abstractions": [],
     }
     abstractions_value = get_plain_value(get_assignment(app_table, "abstractions", []))

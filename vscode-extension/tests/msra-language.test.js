@@ -1493,6 +1493,7 @@ test("annotation-only flags reject explicit arguments", () => {
     "browser=camoufox",
     "@Humanize(true)",
     "@BlockImages(false)",
+    "@DisallowHeadless(true)",
     "[app.func.A3A417]",
     "[app.func.A3A417.input.query]",
     "type=string",
@@ -1512,8 +1513,8 @@ test("annotation-only flags reject explicit arguments", () => {
   const analysis = analyzeDocument(document);
   const diagnostics = analysis.diagnostics.filter((item) => item.code === "invalid-annotation-argument");
 
-  assert.strictEqual(diagnostics.length, 7);
-  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@Required|@ReadOnly|@Nullable|@Test|@Docs/.test(diagnostic.message)));
+  assert.strictEqual(diagnostics.length, 8);
+  assert.ok(diagnostics.every((diagnostic) => /@Humanize|@BlockImages|@DisallowHeadless|@Required|@ReadOnly|@Nullable|@Test|@Docs/.test(diagnostic.message)));
 });
 
 test("legacy boolean toggles are rejected in favor of annotations", () => {
@@ -1522,6 +1523,7 @@ test("legacy boolean toggles are rejected in favor of annotations", () => {
     "browser=camoufox",
     "humanize=true",
     "block_images=true",
+    "disallow_headless=true",
     "[app.warmup]",
     "headers_sniffer=true",
     "[app.variables.city_id]",
@@ -1543,8 +1545,8 @@ test("legacy boolean toggles are rejected in favor of annotations", () => {
   const annotationRequiredDiagnostics = analysis.diagnostics.filter((item) => item.code === "annotation-required");
   const unknownAssignmentDiagnostics = analysis.diagnostics.filter((item) => item.code === "unknown-assignment-key");
 
-  assert.strictEqual(annotationRequiredDiagnostics.length, 8);
-  assert.ok(annotationRequiredDiagnostics.every((diagnostic) => /@Humanize|@BlockImages|@SniffHeaders|@ReadOnly|@Nullable|@Required|@SubUrl|@List/.test(diagnostic.message)));
+  assert.strictEqual(annotationRequiredDiagnostics.length, 9);
+  assert.ok(annotationRequiredDiagnostics.every((diagnostic) => /@Humanize|@BlockImages|@DisallowHeadless|@SniffHeaders|@ReadOnly|@Nullable|@Required|@SubUrl|@List/.test(diagnostic.message)));
   assert.strictEqual(unknownAssignmentDiagnostics.length, 1);
   assert.match(unknownAssignmentDiagnostics[0].message, /required/);
 });

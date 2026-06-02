@@ -700,6 +700,7 @@ class Parser {
       renderhtml: "render_html",
       humanize: "humanize",
       blockimages: "block_images",
+      disallowheadless: "disallow_headless",
       sniffheaders: "headers_sniffer",
       headerssniffer: "headers_sniffer",
     };

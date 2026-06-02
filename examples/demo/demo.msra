@@ -17,6 +17,7 @@ timeout_ms=15000
 browser=camoufox
 @Humanize
 @BlockImages
+@DisallowHeadless
 
 [app.warmup]
 warmup="./warmup.py:pipeline"
