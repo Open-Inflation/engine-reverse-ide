@@ -89,18 +89,6 @@ jobs:
                       destination_path.parent.mkdir(parents=True, exist_ok=True)
                       shutil.copy2(item, destination_path)
 
-          def remove_ignored(root: Path) -> None:
-              ignored_paths = sorted(
-                  [path for path in root.rglob("*") if is_ignored(path.relative_to(root))],
-                  key=lambda path: len(path.parts),
-                  reverse=True,
-              )
-              for path in ignored_paths:
-                  if path.is_dir():
-                      shutil.rmtree(path)
-                  else:
-                      path.unlink()
-
           for relative_path in preserve_paths:
               source_path = target / relative_path
               if not source_path.exists():
@@ -121,6 +109,46 @@ jobs:
                   child.unlink()
 
           copy_tree(generated, target)
+          PY
+
+      - name: Install target project dependencies
+        working-directory: target
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Validate generated project
+        working-directory: logic
+        run: |
+          python -m msra_codegen validate ../target
+
+      - name: Restore preserved artifacts and remove generated noise
+        run: |
+          python - <<'PY'
+          from fnmatch import fnmatch
+          from pathlib import Path
+          import shutil
+
+          target = Path("target")
+          preserved_root = Path("preserved")
+          preserve_paths = {{ source_sync.preserved_target_paths | tojson }}
+          ignored_patterns = {{ source_sync.ignored_generated_patterns | tojson }}
+
+          def is_ignored(relative_path: Path) -> bool:
+              relative_text = relative_path.as_posix()
+              return any(fnmatch(relative_text, pattern) for pattern in ignored_patterns)
+
+          def remove_ignored(root: Path) -> None:
+              ignored_paths = sorted(
+                  [path for path in root.rglob("*") if is_ignored(path.relative_to(root))],
+                  key=lambda path: len(path.parts),
+                  reverse=True,
+              )
+              for path in ignored_paths:
+                  if path.is_dir():
+                      shutil.rmtree(path)
+                  else:
+                      path.unlink()
 
           for relative_path in preserve_paths:
               source_path = preserved_root / relative_path
@@ -134,17 +162,6 @@ jobs:
           remove_ignored(target)
           shutil.rmtree(preserved_root, ignore_errors=True)
           PY
-
-      - name: Install target project dependencies
-        working-directory: target
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
-
-      - name: Validate generated project
-        working-directory: logic
-        run: |
-          python -m msra_codegen validate ../target
 
       - name: Commit and push
         working-directory: target

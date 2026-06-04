@@ -877,6 +877,11 @@ test("source sync workflow preserves target artifacts from app.sync", () => {
     );
     assert.match(sourceSyncWorkflowText, /preserve_paths = \["tests\/__snapshots__"\]/);
     assert.match(sourceSyncWorkflowText, /ignored_patterns = \["\*\*\/__pycache__", "\*\*\/\*\.pyc"\]/);
+    assert.match(sourceSyncWorkflowText, /Restore preserved artifacts and remove generated noise/);
+    assert.ok(
+      sourceSyncWorkflowText.indexOf("Validate generated project") < sourceSyncWorkflowText.indexOf("Restore preserved artifacts and remove generated noise"),
+      "expected preserved artifacts to be restored after validate",
+    );
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
