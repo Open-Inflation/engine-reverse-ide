@@ -41,10 +41,17 @@ jobs:
 {% endfor %}
 
       - name: Run tests (venv)
-        run: |
+        env:
+          MSRA_RUN_COMMANDS: |
 {% for line in tests.run_commands %}
-          {{ line }}
+            {{ line }}
 {% endfor %}
+        run: |
+{% if tests.requires_xvfb %}
+          {{ tests.headed_run_command_shell }} "$MSRA_RUN_COMMANDS"
+{% else %}
+          {{ tests.run_command_shell }} "$MSRA_RUN_COMMANDS"
+{% endif %}
 
       - name: report playwright failure
         if: failure()

@@ -10,6 +10,7 @@ from .template_engine import render_template
 
 
 def build_github_workflows_context(project: dict[str, Any], package_name: str) -> dict[str, Any]:
+    app = project.get("app", {})
     github_config = config_section("github", "workflows")
     tests_config = github_config["tests"]
     publish_config = github_config["publish"]
@@ -21,6 +22,8 @@ def build_github_workflows_context(project: dict[str, Any], package_name: str) -
     tests_python_version = str(tests_config["python_version"])
     publish_python_version = str(publish_config["python_version"])
     source_sync_python_version = str(source_sync_config["python_version"])
+    tests_run_command_shell = str(tests_config["run_command_shell"])
+    tests_headed_run_command_shell = str(tests_config["headed_run_command_shell"])
     preserved_target_paths = app_sync_config.get("preserved_target_paths", [])
     if not isinstance(preserved_target_paths, list):
         raise RuntimeError("app.sync.preserved_target_paths must be a list.")
@@ -41,6 +44,9 @@ def build_github_workflows_context(project: dict[str, Any], package_name: str) -
             "setup_python_action": str(tests_config["setup_python_action"]),
             "install_commands": list(tests_config["install_commands"]),
             "run_commands": list(tests_config["run_commands"]),
+            "run_command_shell": tests_run_command_shell,
+            "headed_run_command_shell": tests_headed_run_command_shell,
+            "requires_xvfb": bool(app["disallow_headless"]),
             "report_playwright_failure_action": str(tests_config["report_playwright_failure_action"]),
             "report_schema_action": str(tests_config["report_schema_action"]),
             "github_token_expr": "${{ secrets." + str(tests_config["github_token_secret"]) + " }}",

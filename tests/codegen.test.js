@@ -1017,10 +1017,14 @@ test("python codegen builds the demo project", () => {
     assert.strictEqual(validateResult.status, 0, validateResult.stderr || validateResult.stdout);
 
     const readmeText = readFileSync(path.join(outputDir, "README.md"), "utf8");
+    const testsWorkflowText = normalizeNewlines(
+      readFileSync(path.join(outputDir, ".github", "workflows", "tests.yml"), "utf8"),
+    );
     assert.match(
       readmeText,
       /\[!\[Ruff\]\(https:\/\/img\.shields\.io\/badge\/linting-Ruff-blue\?logo=ruff&logoColor=white\)\]\(https:\/\/github\.com\/astral-sh\/ruff\)/,
     );
+    assert.match(testsWorkflowText, /xvfb-run -a bash -e -lc "\$MSRA_RUN_COMMANDS"/);
 
     const probeScript = [
       buildGeneratedPackageProbeScript({ expectedHeadlessDefault: false }),
