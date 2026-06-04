@@ -788,7 +788,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(normalizedSourceSyncWorkflowText, /workflow_dispatch:/);
       assert.match(normalizedSourceSyncWorkflowText, /uses: actions\/checkout@v4/);
       assert.match(normalizedSourceSyncWorkflowText, /uses: actions\/setup-python@v5/);
-      assert.match(normalizedSourceSyncWorkflowText, /repository: "Miskler\/engine-reverse-ide"/);
+      assert.match(normalizedSourceSyncWorkflowText, /repository: "Open-Inflation\/engine-reverse-ide"/);
       assert.match(normalizedSourceSyncWorkflowText, /repository: \$\{\{ github\.repository \}\}/);
       assert.match(normalizedSourceSyncWorkflowText, /path: logic/);
       assert.match(normalizedSourceSyncWorkflowText, /path: source/);

@@ -1,0 +1,107 @@
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Package to publish
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - extension
+          - lsp
+          - codegen
+
+concurrency:
+  group: publish-${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard-default-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the repository default branch
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "${{ github.event.repository.default_branch }}" ]; then
+            echo "This workflow only publishes from the repository default branch."
+            echo "Ref: ${GITHUB_REF_NAME}"
+            echo "Default branch: ${{ github.event.repository.default_branch }}"
+            exit 1
+          fi
+
+  publish-node-lsp:
+    needs: guard-default-branch
+    if: ${{ inputs.target == 'all' || inputs.target == 'lsp' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+          registry-url: https://registry.npmjs.org
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate the CLI
+        run: npm run check
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+  publish-vscode-extension:
+    needs: guard-default-branch
+    if: ${{ inputs.target == 'all' || inputs.target == 'extension' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+      - name: Install extension dependencies
+        working-directory: vscode-extension
+        run: npm ci
+      - name: Test the extension package
+        working-directory: vscode-extension
+        run: npm test
+      - name: Stage the extension outside the git repository
+        run: |
+          rm -rf "$RUNNER_TEMP/vscode-extension-release"
+          mkdir -p "$RUNNER_TEMP/vscode-extension-release"
+          cp -a vscode-extension/. "$RUNNER_TEMP/vscode-extension-release/"
+      - name: Publish to the VS Code Marketplace
+        working-directory: ${{ runner.temp }}/vscode-extension-release
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx --yes @vscode/vsce publish --pat "$VSCE_PAT"
+
+  publish-codegen:
+    needs: guard-default-branch
+    if: ${{ inputs.target == 'all' || inputs.target == 'codegen' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip build
+      - name: Validate the generator package
+        run: python -m compileall -q msra_codegen
+      - name: Build distribution artifacts
+        run: python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

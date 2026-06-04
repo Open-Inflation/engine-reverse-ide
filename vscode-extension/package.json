@@ -6,7 +6,7 @@
   "publisher": "miskler",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Miskler/engine-reverse-ide.git"
+    "url": "https://github.com/Open-Inflation/engine-reverse-ide.git"
   },
   "license": "GPL-3.0-or-later",
   "engines": {

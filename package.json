@@ -1,16 +1,35 @@
 {
-  "name": "msra-workspace",
-  "private": true,
-  "workspaces": [
-    "vscode-extension"
+  "name": "msra-lsp",
+  "version": "0.1.0",
+  "description": "MSRA language server and CLI for .msra files.",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Open-Inflation/engine-reverse-ide.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "./vscode-extension/lsp/server.js",
+  "files": [
+    "bin/",
+    "vscode-extension/lsp/",
+    "README.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "msra-lsp": "./bin/msra.js"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0"
   },
   "scripts": {
     "check": "node ./bin/msra.js check examples/example/example.msra",
     "serve": "node ./bin/msra.js serve",
-    "test:vscode": "npm test --workspace vscode-extension",
+    "test:vscode": "npm test --prefix vscode-extension",
     "test:codegen": "node --test tests/codegen.test.js",
     "test": "npm run test:vscode && npm run test:codegen"
   }

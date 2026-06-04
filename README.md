@@ -135,6 +135,27 @@ For a concrete repo layout and the exact manual run flow, see [docs/msra-repo-b-
 
 For the FixPrice project, the default package name is `fixprice_api`.
 
+## Publishing
+
+This repository also ships a manual `publish` workflow in [`.github/workflows/publish.yml`](.github/workflows/publish.yml).
+
+Run it from the repository default branch and choose one of these targets:
+
+- `extension` for the VS Code Marketplace package
+- `lsp` for the npm CLI and Node language server package
+- `codegen` for the PyPI generator package
+- `all` to publish all three packages in one run
+
+The workflow reads the package versions from the package metadata already in the repository, so there is no separate release version input.
+
+It expects these credentials/configs:
+
+- `NPM_TOKEN` for the npm publish step
+- `VSCE_PAT` for the VS Code Marketplace publish step
+- A PyPI Trusted Publisher configured for this repository workflow and the `pypi` environment
+
+The PyPI job uses GitHub OIDC through the official `pypa/gh-action-pypi-publish` action, so it does not need an API token secret.
+
 ## Language overview
 
 MSRA is TOML-like and supports object references such as `<OBJECT>` or `<OBJECT.value>`.
