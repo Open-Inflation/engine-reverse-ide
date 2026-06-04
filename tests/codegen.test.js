@@ -675,10 +675,7 @@ test("python codegen generates both bundled msra documents without failing", () 
       const readmePipelineCode = extractMarkdownCodeFence(readmeText);
       const quickStartPipelineCode = extractRstPythonCodeBlock(quickStartText);
       assert.match(readmeText, /# Usage/);
-      assert.match(readmeText, /## Автотесты API \(pytest \+ snapshots\)/);
       assert.match(readmeText, /### Принцип работы/);
-      assert.match(readmeText, /pytest-jsonschema-snapshot/);
-      assert.match(readmeText, /pytest-anyio/);
       assert.match(readmeText, /Ozon API integration for catalog browsing and cart flows/);
       assert.match(pyprojectText, /^description = "Ozon API integration for catalog browsing and cart flows"$/m);
       assert.match(readmeText, /```py[\s\S]*async def main\(\):/);

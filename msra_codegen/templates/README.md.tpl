@@ -43,39 +43,6 @@ python -m camoufox fetch
 {{ pipeline_script_code }}
 ```
 
-{% if tests.has_autotests %}
-## Автотесты API (pytest + snapshots)
-
-В проекте используется автотест-фреймворк из `human_requests`:
-
-- endpoint-методы в бизнес-коде помечаются `@autotest`;
-- pytest-плагин сам находит эти методы и запускает их;
-- JSON-ответы проверяются через `pytest-jsonschema-snapshot` (`schemashot`);
-- параметры вызова и пост-обработка результата регистрируются в `tests/api_test.py` через:
-  - `@autotest_params`
-  - `@autotest_hook`
-  - `@autotest_depends_on`
-
-Минимальная конфигурация уже включена в `pyproject.toml`:
-
-```ini
-[tool.pytest.ini_options]
-anyio_mode = "auto"
-autotest_start_class = "{{ tests.autotest_start_class }}"
-```
-
-Запуск тестов:
-
-```bash
-pytest
-```
-
-Важно:
-
-- используется `pytest-anyio` (не `pytest-asyncio`);
-- ручные тесты остаются только для кейсов, которые не относятся к JSON-схемам endpoint-методов (например, `download_image`).
-{% endif %}
-
 Для более подробной информации смотрите референсы [документации]({{ readme.docs_url }}).
 
 <div align="center">
