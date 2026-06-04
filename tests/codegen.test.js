@@ -855,7 +855,7 @@ test("source sync workflow preserves target artifacts from app.sync", () => {
     .replace('package_name="ozon_api"', 'package_name="sync_api"')
     .replace(
       /\n\[app\.warmup\]\n/,
-      '\n[app.sync]\npreserved_target_paths=["tests/__snapshots__"]\n\n[app.warmup]\n',
+      '\n[app.sync]\npreserved_target_paths=["tests/__snapshots__"]\nignored_generated_patterns=["**/__pycache__", "**/*.pyc"]\n\n[app.warmup]\n',
     );
 
   try {
@@ -876,6 +876,7 @@ test("source sync workflow preserves target artifacts from app.sync", () => {
       readFileSync(path.join(outputDir, ".github", "workflows", "source-sync.yml"), "utf8"),
     );
     assert.match(sourceSyncWorkflowText, /preserve_paths = \["tests\/__snapshots__"\]/);
+    assert.match(sourceSyncWorkflowText, /ignored_patterns = \["\*\*\/__pycache__", "\*\*\/\*\.pyc"\]/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

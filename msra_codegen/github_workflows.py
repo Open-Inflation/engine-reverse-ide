@@ -24,6 +24,9 @@ def build_github_workflows_context(project: dict[str, Any], package_name: str) -
     preserved_target_paths = app_sync_config.get("preserved_target_paths", [])
     if not isinstance(preserved_target_paths, list):
         raise RuntimeError("app.sync.preserved_target_paths must be a list.")
+    ignored_generated_patterns = app_sync_config.get("ignored_generated_patterns", [])
+    if not isinstance(ignored_generated_patterns, list):
+        raise RuntimeError("app.sync.ignored_generated_patterns must be a list.")
 
     return {
         "package_name": package_name,
@@ -87,6 +90,7 @@ def build_github_workflows_context(project: dict[str, Any], package_name: str) -
             "commit_user_email": str(source_sync_config["commit_user_email"]),
             "source_msra_path": source_msra_path,
             "preserved_target_paths": [str(item) for item in preserved_target_paths],
+            "ignored_generated_patterns": [str(item) for item in ignored_generated_patterns],
         },
         "makefile": {
             "package_name": package_name,

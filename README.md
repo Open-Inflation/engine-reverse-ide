@@ -114,7 +114,7 @@ The repository ships the sync workflow template used by generated package reposi
 
 The generated `source-sync` workflow stays thin: it checks out this repository as the generator logic, reads the consumer repo's `.msra` source tree, generates the artifact into a staging tree, syncs the generated tree into `main`, validates the result, and pushes the commit so the target repo's `publish.yml` can run on `push` to `main`.
 
-If a project defines `[app.sync].preserved_target_paths` in its MSRA source, the generated sync step preserves those repo-specific runtime artifacts. For the FixPrice layout that means `tests/__snapshots__` stays in `main` and is not rewritten by the generator.
+If a project defines `[app.sync]` in its MSRA source, the generated sync step can preserve repo-specific runtime artifacts and ignore generated noise. For the FixPrice layout that means `tests/__snapshots__` stays in `main`, while `**/__pycache__` and `**/*.pyc` are removed before commit.
 
 Before validation, the generated workflow installs the target project's `requirements-dev.txt` so the validation step runs with the generated dependencies available.
 

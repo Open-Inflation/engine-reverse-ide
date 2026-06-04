@@ -62,6 +62,7 @@ jobs:
       - name: Replace target tree contents
         run: |
           python - <<'PY'
+          from fnmatch import fnmatch
           from pathlib import Path
           import shutil
 
@@ -69,6 +70,36 @@ jobs:
           generated = Path("generated")
           preserved_root = Path("preserved")
           preserve_paths = {{ source_sync.preserved_target_paths | tojson }}
+          ignored_patterns = {{ source_sync.ignored_generated_patterns | tojson }}
+
+          def is_ignored(relative_path: Path) -> bool:
+              relative_text = relative_path.as_posix()
+              return any(fnmatch(relative_text, pattern) for pattern in ignored_patterns)
+
+          def copy_tree(source_root: Path, destination_root: Path) -> None:
+              for item in source_root.iterdir():
+                  relative_path = item.relative_to(source_root)
+                  if is_ignored(relative_path):
+                      continue
+                  destination_path = destination_root / relative_path
+                  if item.is_dir():
+                      destination_path.mkdir(parents=True, exist_ok=True)
+                      copy_tree(item, destination_path)
+                  else:
+                      destination_path.parent.mkdir(parents=True, exist_ok=True)
+                      shutil.copy2(item, destination_path)
+
+          def remove_ignored(root: Path) -> None:
+              ignored_paths = sorted(
+                  [path for path in root.rglob("*") if is_ignored(path.relative_to(root))],
+                  key=lambda path: len(path.parts),
+                  reverse=True,
+              )
+              for path in ignored_paths:
+                  if path.is_dir():
+                      shutil.rmtree(path)
+                  else:
+                      path.unlink()
 
           for relative_path in preserve_paths:
               source_path = target / relative_path
@@ -89,12 +120,7 @@ jobs:
               else:
                   child.unlink()
 
-          for item in generated.iterdir():
-              destination = target / item.name
-              if item.is_dir():
-                  shutil.copytree(item, destination, dirs_exist_ok=True)
-              else:
-                  shutil.copy2(item, destination)
+          copy_tree(generated, target)
 
           for relative_path in preserve_paths:
               source_path = preserved_root / relative_path
@@ -105,6 +131,7 @@ jobs:
                   destination_path.parent.mkdir(parents=True, exist_ok=True)
                   shutil.copy2(source_path, destination_path)
 
+          remove_ignored(target)
           shutil.rmtree(preserved_root, ignore_errors=True)
           PY
 

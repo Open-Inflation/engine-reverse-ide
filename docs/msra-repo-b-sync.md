@@ -8,7 +8,7 @@
 - этот workflow запускается вручную через `workflow_dispatch`
 - внутри job он сам checkout-ит repo с логикой генератора
 - затем читает `repo B/source`, генерирует артефакт и пушит его в `repo B/main`
-- при синке сохраняет repo-specific runtime artifacts, перечисленные в `[app.sync].preserved_target_paths` source-MSTRA, например `tests/__snapshots__`
+- при синке сохраняет repo-specific runtime artifacts, перечисленные в `[app.sync].preserved_target_paths`, и удаляет generated noise из `[app.sync].ignored_generated_patterns`
 - после `push` в `main` автоматически стартует `publish.yml`
 
 ## Почему workflow должен лежать в `main`
@@ -109,6 +109,7 @@ jobs:
       - name: Replace target tree contents
         run: |
           python - <<'PY'
+          from fnmatch import fnmatch
           from pathlib import Path
           import shutil
 
@@ -116,6 +117,23 @@ jobs:
           generated = Path("generated")
           preserved_root = Path("preserved")
           preserve_paths = ["tests/__snapshots__"]
+          ignored_patterns = ["**/__pycache__", "**/*.pyc"]
+
+          def is_ignored(relative_path: Path) -> bool:
+              relative_text = relative_path.as_posix()
+              return any(fnmatch(relative_text, pattern) for pattern in ignored_patterns)
+
+          def remove_ignored(root: Path) -> None:
+              ignored_paths = sorted(
+                  [path for path in root.rglob("*") if is_ignored(path.relative_to(root))],
+                  key=lambda path: len(path.parts),
+                  reverse=True,
+              )
+              for path in ignored_paths:
+                  if path.is_dir():
+                      shutil.rmtree(path)
+                  else:
+                      path.unlink()
 
           for relative_path in preserve_paths:
               source_path = target / relative_path
@@ -151,6 +169,9 @@ jobs:
               else:
                   destination_path.parent.mkdir(parents=True, exist_ok=True)
                   shutil.copy2(source_path, destination_path)
+
+          remove_ignored(target)
+          shutil.rmtree(preserved_root, ignore_errors=True)
           PY
 
       - name: Validate generated project

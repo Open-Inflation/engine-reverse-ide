@@ -184,7 +184,22 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
             text = item.strip()
             if text:
                 preserved_target_paths.append(text)
-        app["sync"] = {"preserved_target_paths": preserved_target_paths}
+        ignored_generated_patterns_value = get_plain_value(
+            get_assignment(sync_table, "ignored_generated_patterns", [])
+        )
+        if not isinstance(ignored_generated_patterns_value, list):
+            raise TypeError("app.sync.ignored_generated_patterns must be a list of strings.")
+        ignored_generated_patterns: list[str] = []
+        for item in ignored_generated_patterns_value:
+            if not isinstance(item, str):
+                raise TypeError("app.sync.ignored_generated_patterns entries must be strings.")
+            text = item.strip()
+            if text:
+                ignored_generated_patterns.append(text)
+        app["sync"] = {
+            "preserved_target_paths": preserved_target_paths,
+            "ignored_generated_patterns": ignored_generated_patterns,
+        }
 
     variable_tables = [
         table

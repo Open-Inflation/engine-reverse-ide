@@ -679,6 +679,7 @@ const TABLE_SCHEMAS = [
   }),
   makeFixedSchema(exactPath(["app", "sync"]), {
     preserved_target_paths: arrayOf(STRING),
+    ignored_generated_patterns: arrayOf(STRING),
   }),
   makeFixedSchema(exactPath(["app", "variables", "*"]), {
     types: arrayOf(VARIABLE_TYPE_ITEM_SPEC),
