@@ -79,6 +79,7 @@ The generator writes:
 - `requirements.txt`
 - `requirements-dev.txt`
 - `Makefile`
+- `.gitignore`
 - `.github/workflows/source-sync.yml`
 - `.github/workflows/tests.yml`
 - `.github/workflows/publish.yml`

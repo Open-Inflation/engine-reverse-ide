@@ -772,12 +772,18 @@ test("python codegen generates both bundled msra documents without failing", () 
       );
       const normalizedSourceSyncWorkflowText = normalizeNewlines(sourceSyncWorkflowText);
       const normalizedPublishWorkflowText = normalizeNewlines(publishWorkflowText);
+      const gitignoreText = readFileSync(path.join(testCase.outputDir, ".gitignore"), "utf8");
       assert.match(makefileText, /pip install -r requirements-dev\.txt/);
       assert.match(makefileText, new RegExp(`pytest --cov=${testCase.packageName}`));
       assert.match(makefileText, new RegExp(`python -m ruff check ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
       assert.match(makefileText, new RegExp(`python -m ruff check --select I --fix ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
       assert.match(makefileText, new RegExp(`python -m ruff format ${testCase.packageName} tests example\\.py docs/source/conf\\.py`));
       assert.match(makefileText, new RegExp(`python -m mypy ${testCase.packageName}`));
+      assert.match(gitignoreText, /^# Python bytecode$/m);
+      assert.match(gitignoreText, /^__pycache__\/$/m);
+      assert.match(gitignoreText, /^\.pytest_cache\/$/m);
+      assert.match(gitignoreText, /^merged\.msra$/m);
+      assert.match(gitignoreText, /^docs\/_build\/$/m);
       assert.match(normalizedSourceSyncWorkflowText, /name: source-sync/);
       assert.match(normalizedSourceSyncWorkflowText, /workflow_dispatch:/);
       assert.match(normalizedSourceSyncWorkflowText, /uses: actions\/checkout@v4/);

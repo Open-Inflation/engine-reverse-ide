@@ -15,6 +15,7 @@ from .codegen_context import (
     render_manager_template,
     write_group_package,
 )
+from .gitignore import generate_gitignore_project
 from .github_workflows import generate_github_workflows_project
 from .issue_templates import generate_github_issue_templates_project
 from .core_naming import abstraction_module_name_from_path, normalize_abstraction_path, normalize_script_path
@@ -151,6 +152,7 @@ def generate_project(
     if legacy_license_dir.exists():
         shutil.rmtree(legacy_license_dir)
     write_root_license(output_dir, project)
+    generate_gitignore_project(output_dir)
     generate_github_workflows_project(project, output_dir, package_name)
     generate_github_issue_templates_project(project, output_dir)
 
