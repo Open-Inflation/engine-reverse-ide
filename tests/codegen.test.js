@@ -845,6 +845,42 @@ test("python codegen generates both bundled msra documents without failing", () 
   }
 });
 
+test("source sync workflow preserves target artifacts from app.sync", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-source-sync-preserve-"));
+  const inputPath = path.join(workDir, "sync.msra");
+  const outputDir = path.join(workDir, "generated");
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const source = normalizeNewlines(readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8"))
+    .replace('package_name="ozon_api"', 'package_name="sync_api"')
+    .replace(
+      /\n\[app\.warmup\]\n/,
+      '\n[app.sync]\npreserved_target_paths=["tests/__snapshots__"]\n\n[app.warmup]\n',
+    );
+
+  try {
+    writeFileSync(inputPath, source, "utf8");
+    writeFileSync(
+      path.join(workDir, "warmup.py"),
+      readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
+      "utf8",
+    );
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const sourceSyncWorkflowText = normalizeNewlines(
+      readFileSync(path.join(outputDir, ".github", "workflows", "source-sync.yml"), "utf8"),
+    );
+    assert.match(sourceSyncWorkflowText, /preserve_paths = \["tests\/__snapshots__"\]/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test("python codegen builds the TODO/2 abstractions project", () => {
   const repoRoot = path.resolve(__dirname, "..");
   const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-abstractions-build-"));

@@ -8,6 +8,7 @@
 - этот workflow запускается вручную через `workflow_dispatch`
 - внутри job он сам checkout-ит repo с логикой генератора
 - затем читает `repo B/source`, генерирует артефакт и пушит его в `repo B/main`
+- при синке сохраняет repo-specific runtime artifacts, перечисленные в `[app.sync].preserved_target_paths` source-MSTRA, например `tests/__snapshots__`
 - после `push` в `main` автоматически стартует `publish.yml`
 
 ## Почему workflow должен лежать в `main`
@@ -113,6 +114,19 @@ jobs:
 
           target = Path("target")
           generated = Path("generated")
+          preserved_root = Path("preserved")
+          preserve_paths = ["tests/__snapshots__"]
+
+          for relative_path in preserve_paths:
+              source_path = target / relative_path
+              if not source_path.exists():
+                  raise RuntimeError(f'Preserved target path "{relative_path}" does not exist.')
+              destination_path = preserved_root / relative_path
+              destination_path.parent.mkdir(parents=True, exist_ok=True)
+              if source_path.is_dir():
+                  shutil.copytree(source_path, destination_path)
+              else:
+                  shutil.copy2(source_path, destination_path)
 
           for child in list(target.iterdir()):
               if child.name == ".git":
@@ -128,6 +142,15 @@ jobs:
                   shutil.copytree(item, destination, dirs_exist_ok=True)
               else:
                   shutil.copy2(item, destination)
+
+          for relative_path in preserve_paths:
+              source_path = preserved_root / relative_path
+              destination_path = target / relative_path
+              if source_path.is_dir():
+                  shutil.copytree(source_path, destination_path, dirs_exist_ok=True)
+              else:
+                  destination_path.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(source_path, destination_path)
           PY
 
       - name: Validate generated project

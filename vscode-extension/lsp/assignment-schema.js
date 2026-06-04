@@ -677,6 +677,9 @@ const TABLE_SCHEMAS = [
     on_error_screenshot_path: SCREENSHOT_PATH_SPEC,
     timeout_ms: integerAtLeast(0),
   }),
+  makeFixedSchema(exactPath(["app", "sync"]), {
+    preserved_target_paths: arrayOf(STRING),
+  }),
   makeFixedSchema(exactPath(["app", "variables", "*"]), {
     types: arrayOf(VARIABLE_TYPE_ITEM_SPEC),
     description: STRINGISH,

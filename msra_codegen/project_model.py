@@ -107,6 +107,7 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
         "humanize": get_plain_value(get_assignment(app_table, "humanize", False)),
         "block_images": bool(get_plain_value(get_assignment(app_table, "block_images", False))),
         "disallow_headless": bool(get_plain_value(get_assignment(app_table, "disallow_headless", False))),
+        "sync": {},
         "abstractions": [],
     }
     abstractions_value = get_plain_value(get_assignment(app_table, "abstractions", []))
@@ -168,6 +169,22 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
             "on_error_screenshot_path": get_plain_value(get_assignment(warmup_table, "on_error_screenshot_path", "")),
             "script": warmup_script,
         }
+
+    sync_table = get_table(["app", "sync"])
+    if sync_table:
+        preserved_target_paths_value = get_plain_value(
+            get_assignment(sync_table, "preserved_target_paths", [])
+        )
+        if not isinstance(preserved_target_paths_value, list):
+            raise TypeError("app.sync.preserved_target_paths must be a list of strings.")
+        preserved_target_paths: list[str] = []
+        for item in preserved_target_paths_value:
+            if not isinstance(item, str):
+                raise TypeError("app.sync.preserved_target_paths entries must be strings.")
+            text = item.strip()
+            if text:
+                preserved_target_paths.append(text)
+        app["sync"] = {"preserved_target_paths": preserved_target_paths}
 
     variable_tables = [
         table

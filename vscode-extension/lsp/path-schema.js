@@ -7,6 +7,7 @@ const TABLE_ROOT_SEGMENTS = new Set([
 
 const APP_CHILD_SEGMENTS = new Set([
   "warmup",
+  "sync",
   "defaults",
   "variables",
   "prefixes",
@@ -275,6 +276,9 @@ function validateAppPath(segments, index) {
   if (segment.value === "warmup" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
+  if (segment.value === "sync" && !segment.quoted) {
+    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
+  }
   if (segment.value === "defaults" && !segment.quoted) {
     return validateDefaultsNamespace(segments, index + 1);
   }
@@ -296,8 +300,8 @@ function validateAppPath(segments, index) {
   return invalidPath(
     segments,
     index,
-    `Invalid child table "${renderSegment(segment)}" under "app" in "${renderPath(segments)}". Expected "warmup", "defaults", "variables", "prefixes", "regexes", "groups", or "func".`,
-    ["warmup", "defaults", "variables", "prefixes", "regexes", "groups", "func"],
+    `Invalid child table "${renderSegment(segment)}" under "app" in "${renderPath(segments)}". Expected "warmup", "sync", "defaults", "variables", "prefixes", "regexes", "groups", or "func".`,
+    ["warmup", "sync", "defaults", "variables", "prefixes", "regexes", "groups", "func"],
   );
 }
 

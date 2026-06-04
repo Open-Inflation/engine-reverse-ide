@@ -14,12 +14,16 @@ def build_github_workflows_context(project: dict[str, Any], package_name: str) -
     tests_config = github_config["tests"]
     publish_config = github_config["publish"]
     source_sync_config = github_config["source_sync"]
+    app_sync_config = project.get("app", {}).get("sync", {})
     package_name_slug = package_name.replace("_", "-")
     source_msra_path = str(Path(project["source_path"]).name)
 
     tests_python_version = str(tests_config["python_version"])
     publish_python_version = str(publish_config["python_version"])
     source_sync_python_version = str(source_sync_config["python_version"])
+    preserved_target_paths = app_sync_config.get("preserved_target_paths", [])
+    if not isinstance(preserved_target_paths, list):
+        raise RuntimeError("app.sync.preserved_target_paths must be a list.")
 
     return {
         "package_name": package_name,
@@ -82,6 +86,7 @@ def build_github_workflows_context(project: dict[str, Any], package_name: str) -
             "commit_user_name": str(source_sync_config["commit_user_name"]),
             "commit_user_email": str(source_sync_config["commit_user_email"]),
             "source_msra_path": source_msra_path,
+            "preserved_target_paths": [str(item) for item in preserved_target_paths],
         },
         "makefile": {
             "package_name": package_name,
