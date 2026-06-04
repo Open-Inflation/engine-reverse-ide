@@ -121,7 +121,7 @@ The generated `source-sync` workflow stays thin: it checks out this repository a
 
 If a project defines `[app.sync]` in its MSRA source, the generated sync step can preserve repo-specific runtime artifacts and ignore generated noise. For the FixPrice layout that means `tests/__snapshots__` stays in `main`, while `**/__pycache__` and `**/*.pyc` are removed before commit.
 
-If a project defines `[app.issue_templates]` in its MSRA source, the generator also writes GitHub issue forms into `.github/ISSUE_TEMPLATE/` using the same source-driven contract.
+If a project defines `[app.issue_templates]` in its MSRA source, the generator also writes GitHub issue forms into `.github/ISSUE_TEMPLATE/`. The source contract only supplies `assignee`; the three forms are hardcoded in the generator, and `contact_links` are built from `package_owner`/`package_name` plus `app.social.discord` and `app.social.telegram` when present.
 
 Before validation, the generated workflow installs the target project's `requirements-dev.txt` so the validation step runs with the generated dependencies available.
 

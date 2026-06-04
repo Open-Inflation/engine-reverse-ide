@@ -318,21 +318,11 @@ function validateIssueTemplatesNamespace(segments, index) {
   if (index >= segments.length) {
     return { valid: true };
   }
-  const segment = segments[index];
-  if (segment.value === "bug_report" && !segment.quoted) {
-    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
-  }
-  if (segment.value === "documentation_issue" && !segment.quoted) {
-    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
-  }
-  if (segment.value === "feature_request" && !segment.quoted) {
-    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
-  }
   return invalidPath(
     segments,
     index,
-    `Invalid child table "${renderSegment(segment)}" under "app.issue_templates" in "${renderPath(segments)}". Expected "bug_report", "documentation_issue", or "feature_request".`,
-    ["bug_report", "documentation_issue", "feature_request"],
+    `Invalid child table "${renderSegment(segments[index])}" under "app.issue_templates" in "${renderPath(segments)}". No child tables are allowed.`,
+    [],
   );
 }
 

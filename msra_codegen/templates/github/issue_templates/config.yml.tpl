@@ -1,4 +1,4 @@
-blank_issues_enabled: {{ "true" if blank_issues_enabled else "false" }}
+blank_issues_enabled: false
 
 contact_links:
 {% for link in contact_links %}

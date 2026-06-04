@@ -1,7 +1,7 @@
-name: {{ yaml_value(documentation_issue.name) }}
-description: {{ yaml_value(documentation_issue.description) }}
-title: {{ yaml_value(documentation_issue.title) }}
-labels: {{ yaml_value(documentation_issue.labels) }}
+name: "📚 Docs issue"
+description: Flag inaccurate or missing documentation
+title: "[Docs] <short title>"
+labels: ["documentation"]
 assignees: [{{ yaml_value(assignee) }}]
 
 body:

@@ -1,7 +1,7 @@
-name: {{ yaml_value(bug_report.name) }}
-description: {{ yaml_value(bug_report.description) }}
-title: {{ yaml_value(bug_report.title) }}
-labels: {{ yaml_value(bug_report.labels) }}
+name: "🐛 Bug report"
+description: Report something that isn’t working as intended
+title: "[Bug] <short title>"
+labels: ["bug"]
 assignees: [{{ yaml_value(assignee) }}]
 
 body:

@@ -1,7 +1,7 @@
-name: {{ yaml_value(feature_request.name) }}
-description: {{ yaml_value(feature_request.description) }}
-title: {{ yaml_value(feature_request.title) }}
-labels: {{ yaml_value(feature_request.labels) }}
+name: "✨ Feature request"
+description: Suggest an idea to improve the project
+title: "[Feature] <short title>"
+labels: ["feature", "enhancement"]
 assignees: [{{ yaml_value(assignee) }}]
 
 body:
