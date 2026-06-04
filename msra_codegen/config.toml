@@ -119,6 +119,9 @@ line_length = 200
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["RUF001", "RUF002", "RUF003"]
 
+[mypy]
+ignore_missing_imports = true
+
 [[validation.checks]]
 name = "ruff"
 argv = ["{python_executable}", "-m", "ruff", "check"]

@@ -716,6 +716,8 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(pyprojectText, /\[tool\.ruff\.lint\]/);
       assert.match(pyprojectText, /select = \[/);
       assert.match(pyprojectText, /ignore = \[/);
+      assert.match(pyprojectText, /\[tool\.mypy\]/);
+      assert.match(pyprojectText, /ignore_missing_imports = true/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3\.10/);
       assert.match(pyprojectText, /Programming Language :: Python :: 3\.13/);

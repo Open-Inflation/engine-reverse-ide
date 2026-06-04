@@ -13,6 +13,7 @@ license = "{{ license }}"
 {{ keywords_block }}
 {{ classifiers_block }}
 {{ dependencies_block }}
+{{ mypy_block }}
 {{ ruff_block }}
 
 [tool.setuptools]

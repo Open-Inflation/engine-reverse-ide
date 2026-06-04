@@ -36,6 +36,7 @@ def render_pyproject(project: dict[str, Any], package_name: str) -> str:
             "dependencies_block": render_toml_string_list("dependencies", runtime_dependencies),
             "package_name": package_name,
             "autotest_start_class": f"{package_name}.{client_class_name}",
+            "mypy_block": render_mypy_block(),
             "ruff_block": render_ruff_block(),
         },
     )
@@ -89,6 +90,44 @@ def render_ruff_block() -> str:
             render_toml_string_list("ignore", ignore),
         ]
     )
+
+
+def render_mypy_block() -> str:
+    mypy_config = config_section("mypy")
+    if not isinstance(mypy_config, dict):
+        raise RuntimeError("mypy must be a table.")
+
+    items: list[str] = []
+    for key, value in mypy_config.items():
+        if isinstance(value, bool):
+            rendered_value = "true" if value else "false"
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            rendered_value = str(value)
+        elif isinstance(value, str):
+            rendered_value = json.dumps(value)
+        elif isinstance(value, list):
+            rendered_items: list[str] = []
+            for item in value:
+                if isinstance(item, bool):
+                    rendered_items.append("true" if item else "false")
+                elif isinstance(item, (int, float)) and not isinstance(item, bool):
+                    rendered_items.append(str(item))
+                elif isinstance(item, str):
+                    rendered_items.append(json.dumps(item))
+                else:
+                    raise RuntimeError(f"mypy.{key} contains an unsupported value type.")
+            rendered_value = "["
+            if rendered_items:
+                rendered_value += ", ".join(rendered_items)
+            rendered_value += "]"
+        else:
+            raise RuntimeError(f"mypy.{key} contains an unsupported value type.")
+        items.append(f"{key} = {rendered_value}")
+
+    if not items:
+        raise RuntimeError("mypy must not be empty.")
+
+    return "\n".join(["[tool.mypy]", *items])
 
 
 @lru_cache(maxsize=1)
