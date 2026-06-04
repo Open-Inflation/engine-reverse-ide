@@ -1,25 +1,33 @@
 # Схема repo B
 
-На этой странице описана схема для второго репозитория, `repo B`, когда этот репозиторий является источником правды для логики генерации.
+На этой странице описана схема для второго репозитория, `repo B`, когда source-ветка содержит MSRA-исходники, а `main` содержит уже сгенерированный Python-артефакт и workflow-файлы.
 
-Разделение ролей такое:
+Ключевая идея:
 
-- `repo A` = логика генератора и reusable workflow
-- `repo B/source` = исходники MSRA
-- `repo B/main` = сгенерированный Python-артефакт, документация и workflow-файлы
+- `repo B/main` должен содержать generated `source-sync.yml`
+- этот workflow запускается вручную через `workflow_dispatch`
+- внутри job он сам checkout-ит repo с логикой генератора
+- затем читает `repo B/source`, генерирует артефакт и пушит его в `repo B/main`
+- после `push` в `main` автоматически стартует `publish.yml`
 
-## Что ручное, а что автоматическое
+## Почему workflow должен лежать в `main`
 
-Запуск sync в `repo B` ручной.
+GitHub Actions показывает кнопку `Run workflow` только для workflow, который:
 
-- Ты открываешь `Actions` в `repo B` и нажимаешь `Run workflow` у workflow `source-sync`.
-- Этот workflow использует `workflow_dispatch`, поэтому он не реагирует на `push`.
-- После того как sync закоммитит изменения в `repo B/main`, workflow `publish` в `repo B` стартует автоматически на `push` в `main`.
+- использует `workflow_dispatch`
+- присутствует на default branch репозитория
 
-Ключевой момент:
+Поэтому ручной trigger для sync должен быть сгенерирован кодогенератором и попасть в `repo B/main`. Нельзя рассчитывать на workflow, который существует только в `source`-ветке.
 
-- `workflow_dispatch` отвечает только за старт процесса.
-- `source` и `main` задаются как рабочие ветки в конфиге, а не вводятся руками при каждом запуске.
+## Что генерирует кодогенератор
+
+Кодогенератор пишет в target-проект:
+
+- `.github/workflows/source-sync.yml`
+- `.github/workflows/tests.yml`
+- `.github/workflows/publish.yml`
+
+Именно `source-sync.yml` является первичным ручным trigger’ом для синхронизации.
 
 ## Минимальная структура repo B
 
@@ -27,13 +35,13 @@
 
 - ветка `source` с корнем MSRA-исходников
 - ветка `main` с результатом генерации
-- workflow `.github/workflows/source-sync.yml`, который только вызывает reusable workflow из этого репозитория
+- workflow `.github/workflows/source-sync.yml`, который запускается вручную и сам выполняет sync
 - workflow `.github/workflows/publish.yml`, который публикует результат после `push` в `main`
 - secret `SOURCE_SYNC_TOKEN`
 
-Тебе не нужно писать в `repo B` собственную логику генерации. Там должен быть только thin-wrapper.
+Тебе не нужно писать собственную логику генерации в `repo B`. Там должен быть только thin orchestration workflow.
 
-### Пример thin-wrapper
+### Пример workflow в repo B
 
 ```yaml
 name: source-sync
@@ -41,26 +49,112 @@ name: source-sync
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: source-sync-${{ github.repository }}-main
+  cancel-in-progress: true
+
 jobs:
   source-sync:
-    uses: Miskler/engine-reverse-ide/.github/workflows/source-sync.yml@main
-    with:
-      logic_repository: Miskler/engine-reverse-ide
-      logic_ref: main
-      source_repository: ${{ github.repository }}
-      source_ref: source
-      source_msra_path: path/to/root.msra
-      target_repository: ${{ github.repository }}
-      target_ref: main
-      generator_python_version: "3.12"
-      generator_requirements_path: "msra_codegen/requirements.txt"
-      commit_user_name: "msra-sync-bot"
-      commit_user_email: "msra-sync-bot@users.noreply.github.com"
-    secrets:
-      repo_token: ${{ secrets.SOURCE_SYNC_TOKEN }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out generator repository
+        uses: actions/checkout@v4
+        with:
+          repository: Miskler/engine-reverse-ide
+          ref: main
+          path: logic
+          token: ${{ secrets.SOURCE_SYNC_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install generator dependencies
+        working-directory: logic
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r "msra_codegen/requirements.txt"
+
+      - name: Check out source branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: source
+          path: source
+          token: ${{ secrets.SOURCE_SYNC_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          path: target
+          token: ${{ secrets.SOURCE_SYNC_TOKEN }}
+          fetch-depth: 0
+
+      - name: Generate artifact into a staging tree
+        working-directory: logic
+        run: |
+          source_msra_path="path/to/root.msra"
+          python -m msra_codegen generate "../source/$source_msra_path" -o ../generated
+
+      - name: Replace target tree contents
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          target = Path("target")
+          generated = Path("generated")
+
+          for child in list(target.iterdir()):
+              if child.name == ".git":
+                  continue
+              if child.is_dir():
+                  shutil.rmtree(child)
+              else:
+                  child.unlink()
+
+          for item in generated.iterdir():
+              destination = target / item.name
+              if item.is_dir():
+                  shutil.copytree(item, destination, dirs_exist_ok=True)
+              else:
+                  shutil.copy2(item, destination)
+          PY
+
+      - name: Validate generated project
+        working-directory: logic
+        run: |
+          python -m msra_codegen validate ../target
+
+      - name: Commit and push
+        working-directory: target
+        run: |
+          git config user.name "msra-sync-bot"
+          git config user.email "msra-sync-bot@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git commit -m "Regenerate artifact from source"
+          git push origin HEAD:main
 ```
 
-В реальном репозитории этот файл обычно генерируется автоматически. Тебе важно сохранить саму форму: `workflow_dispatch` сверху и reusable workflow из `repo A` в `jobs.source-sync.uses`.
+В реальном репозитории этот файл обычно генерируется автоматически. Важна именно форма:
+
+- `workflow_dispatch` сверху
+- direct checkout генератора из `repo A`
+- чтение `source`-ветки `repo B`
+- запись результата в `main`
 
 ## Как проходит один ручной запуск
 
@@ -69,29 +163,15 @@ jobs:
 3. Выбери workflow `source-sync`.
 4. Нажми `Run workflow`.
 5. GitHub запустит workflow вручную, потому что в нём есть `workflow_dispatch`.
-6. Сам caller-workflow только вызывает reusable workflow из `repo A`.
-7. Reusable workflow делает checkout:
+6. Workflow checkout-ит:
    - `repo A` как источник логики
    - `repo B/source` как входной MSRA-tree
    - `repo B/main` как target-tree
-8. Генератор читает корневой `.msra` файл из `repo B/source`.
-9. Сгенерированный Python-проект копируется в `repo B/main`.
-10. Reusable workflow валидирует результат.
-11. Reusable workflow коммитит и пушит изменения в `repo B/main`.
-12. После push workflow `publish` в `repo B` стартует автоматически.
-
-## Где должен лежать workflow-файл
-
-GitHub показывает кнопку `Run workflow` только для workflow, который:
-
-- использует `workflow_dispatch`
-- присутствует на default branch репозитория
-
-Практически для этой схемы это означает следующее:
-
-- default branch `repo B` должен быть `main`
-- workflow `.github/workflows/source-sync.yml` должен быть закоммичен в `main`
-- сам sync при этом всё равно читает `source` и пишет в `main`
+7. Генератор читает корневой `.msra` файл из `repo B/source`.
+8. Сгенерированный Python-проект копируется в `repo B/main`.
+9. Workflow валидирует результат.
+10. Workflow коммитит и пушит изменения в `repo B/main`.
+11. После `push` workflow `publish` в `repo B` стартует автоматически.
 
 ## Что должно быть настроено в secret
 
@@ -112,4 +192,4 @@ GitHub показывает кнопку `Run workflow` только для work
 - имя target-ветки
 - имя secret с токеном
 
-Вся остальная логика берётся из reusable workflow в `repo A`.
+Вся остальная логика берётся из `repo A`, но сам trigger workflow должен жить в `repo B/main`, иначе кнопку `Run workflow` GitHub не покажет.

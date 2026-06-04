@@ -110,16 +110,11 @@ The reusable Jinja2 templates live under `msra_codegen/templates/`, so the outpu
 
 ## Source/Main Sync
 
-The repository also ships a reusable workflow at [`.github/workflows/source-sync.yml`](.github/workflows/source-sync.yml). Generated package repositories call it from a thin manual workflow (`workflow_dispatch`) that:
+The repository ships the sync workflow template used by generated package repositories. The generator writes `.github/workflows/source-sync.yml` into the target project, so the manual trigger lives in the target repo's `main` branch and can be started from GitHub Actions there.
 
-- checks out the generator logic from this repo,
-- reads the `.msra` source tree from the consumer repo,
-- generates the artifact,
-- syncs the generated tree into `main`,
-- validates the generated project,
-- and pushes the result so the target repo's `publish.yml` can run on `push` to `main`.
+The generated `source-sync` workflow stays thin: it checks out this repository as the generator logic, reads the consumer repo's `.msra` source tree, generates the artifact into a staging tree, syncs the generated tree into `main`, validates the result, and pushes the commit so the target repo's `publish.yml` can run on `push` to `main`.
 
-The manual trigger only starts the process. The source and target branches come from the repo-specific sync config, so the caller workflow itself stays thin.
+The source and target branches come from the repo-specific sync config, so the generated workflow itself stays thin.
 
 In the recommended repo layout, `main` is the default branch of the consumer repo, because that is where the manual `source-sync` workflow lives.
 
