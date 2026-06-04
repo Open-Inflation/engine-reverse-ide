@@ -1,4 +1,5 @@
 <div align="center">
+
 # {{ readme.title }}
 
 ![Tests last run (ISO)]({{ readme.workflow_last_run_badge_url }})
@@ -28,7 +29,7 @@
 
 <div align="center">
 
-# Usage
+## Usage
 
 </div>
 
