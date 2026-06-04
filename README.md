@@ -114,6 +114,8 @@ The repository ships the sync workflow template used by generated package reposi
 
 The generated `source-sync` workflow stays thin: it checks out this repository as the generator logic, reads the consumer repo's `.msra` source tree, generates the artifact into a staging tree, syncs the generated tree into `main`, validates the result, and pushes the commit so the target repo's `publish.yml` can run on `push` to `main`.
 
+Before validation, the generated workflow installs the target project's `requirements-dev.txt` so the validation step runs with the generated dependencies available.
+
 The source and target branches come from the repo-specific sync config, so the generated workflow itself stays thin.
 
 In the recommended repo layout, `main` is the default branch of the consumer repo, because that is where the manual `source-sync` workflow lives.

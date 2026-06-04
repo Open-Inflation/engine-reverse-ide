@@ -84,6 +84,12 @@ jobs:
                   shutil.copy2(item, destination)
           PY
 
+      - name: Install target project dependencies
+        working-directory: target
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
       - name: Validate generated project
         working-directory: logic
         run: |

@@ -790,6 +790,8 @@ test("python codegen generates both bundled msra documents without failing", () 
       assert.match(normalizedSourceSyncWorkflowText, /path: target/);
       assert.match(normalizedSourceSyncWorkflowText, new RegExp(`source_msra_path="${path.basename(testCase.inputPath)}"`));
       assert.match(normalizedSourceSyncWorkflowText, /python -m msra_codegen generate "\.\.\/source\/\$source_msra_path" -o \.\.\/generated/);
+      assert.match(normalizedSourceSyncWorkflowText, /working-directory: target/);
+      assert.match(normalizedSourceSyncWorkflowText, /python -m pip install -r requirements-dev\.txt/);
       assert.match(normalizedSourceSyncWorkflowText, /token: \$\{\{ secrets\.SOURCE_SYNC_TOKEN \}\}/);
       assert.match(normalizedSourceSyncWorkflowText, /git push origin HEAD:main/);
       assert.match(testsWorkflowText, /name: tests/);

@@ -155,6 +155,7 @@ jobs:
 - direct checkout генератора из `repo A`
 - чтение `source`-ветки `repo B`
 - запись результата в `main`
+- установка `target/requirements-dev.txt` перед `validate`, чтобы mypy и ruff видели generated зависимости
 
 ## Как проходит один ручной запуск
 
