@@ -17,7 +17,7 @@
 | `version` | Версия клиента или API-контракта | Копируется в generated package и используется как версия артефакта. Значение должно быть статическим. |
 | `timeout_ms` | Глобальный таймаут по умолчанию | Становится базовым лимитом для runtime-операций и используется, если локальный блок не переопределяет timeout. |
 | `browser` | Браузер по умолчанию | Определяет, какой движок запустит runtime для warmup и browser-backed функций. Если не указан, runtime использует `camoufox` по умолчанию. |
-| `@DisallowHeadless` | Запрещает headless-запуск | Меняет дефолт `headless` на `False`, заставляет runtime выбрасывать ошибку, если caller всё же просит `headless=True`, и переключает generated test pipeline на headed запуск под `xvfb-run` (runner должен предоставлять `xvfb-run`). |
+| `@DisallowHeadless` | Запрещает headless-запуск | Меняет дефолт `headless` на `False`, заставляет runtime выбрасывать ошибку, если caller всё же просит `headless=True`, и переключает generated test pipeline на headed запуск под `xvfb-run` с установкой Xvfb из `github.workflows.tests.xvfb_install_commands` (runner должен уметь выполнить эти команды). |
 | `@Humanize` | Включает humanized-режим браузера | Передаёт `humanize=` в `AsyncCamoufox`, снижает “ботоподобность” поведения и требует `browser="camoufox"`. Разрешена либо как пустая аннотация, либо с положительным числом интенсивности, например `@Humanize(0.5)`. |
 | `@BlockImages` | Блокирует загрузку изображений | Передаёт `block_images=` в `AsyncCamoufox`, ускоряет старт и экономит трафик. Аннотация работает только с `browser="camoufox"`. |
 
@@ -62,4 +62,4 @@
 `@BlockImages` блокирует загрузку изображений при старте браузера.
 `@DisallowHeadless` делает `headless=False` значением по умолчанию и выбрасывает runtime error, если клиент всё же стартует с `headless=True`.
 
-`@Humanize` и `@BlockImages` работают только с `browser="camoufox"`. `@DisallowHeadless` не зависит от выбранного браузера, но влияет на generated CI pipeline, который начинает запускать браузерные тесты через `xvfb-run`.
+`@Humanize` и `@BlockImages` работают только с `browser="camoufox"`. `@DisallowHeadless` не зависит от выбранного браузера, но влияет на generated CI pipeline, который начинает запускать браузерные тесты через `xvfb-run` и установку Xvfb.

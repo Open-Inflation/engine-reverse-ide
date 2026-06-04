@@ -24,6 +24,7 @@ def build_github_workflows_context(project: dict[str, Any], package_name: str) -
     source_sync_python_version = str(source_sync_config["python_version"])
     tests_run_command_shell = str(tests_config["run_command_shell"])
     tests_headed_run_command_shell = str(tests_config["headed_run_command_shell"])
+    tests_xvfb_install_commands = list(tests_config["xvfb_install_commands"])
     preserved_target_paths = app_sync_config.get("preserved_target_paths", [])
     if not isinstance(preserved_target_paths, list):
         raise RuntimeError("app.sync.preserved_target_paths must be a list.")
@@ -43,6 +44,7 @@ def build_github_workflows_context(project: dict[str, Any], package_name: str) -
             "checkout_action": str(tests_config["checkout_action"]),
             "setup_python_action": str(tests_config["setup_python_action"]),
             "install_commands": list(tests_config["install_commands"]),
+            "xvfb_install_commands": tests_xvfb_install_commands,
             "run_commands": list(tests_config["run_commands"]),
             "run_command_shell": tests_run_command_shell,
             "headed_run_command_shell": tests_headed_run_command_shell,

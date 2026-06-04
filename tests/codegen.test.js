@@ -1024,6 +1024,8 @@ test("python codegen builds the demo project", () => {
       readmeText,
       /\[!\[Ruff\]\(https:\/\/img\.shields\.io\/badge\/linting-Ruff-blue\?logo=ruff&logoColor=white\)\]\(https:\/\/github\.com\/astral-sh\/ruff\)/,
     );
+    assert.match(testsWorkflowText, /name: Install Xvfb/);
+    assert.match(testsWorkflowText, /sudo apt-get install -y xvfb xauth/);
     assert.match(testsWorkflowText, /xvfb-run -a bash -e -lc "\$MSRA_RUN_COMMANDS"/);
 
     const probeScript = [

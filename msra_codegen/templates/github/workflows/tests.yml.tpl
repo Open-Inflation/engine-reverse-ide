@@ -40,6 +40,15 @@ jobs:
           {{ line }}
 {% endfor %}
 
+{% if tests.requires_xvfb %}
+      - name: Install Xvfb
+        run: |
+{% for line in tests.xvfb_install_commands %}
+          {{ line }}
+{% endfor %}
+
+{% endif %}
+
       - name: Run tests (venv)
         env:
           MSRA_RUN_COMMANDS: |
