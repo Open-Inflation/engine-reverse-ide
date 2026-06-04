@@ -215,6 +215,42 @@ test("app metadata accepts authors description and license", () => {
   assert.deepStrictEqual(analysis.diagnostics, []);
 });
 
+test("app issue templates accept config-driven issue form metadata", () => {
+  const text = [
+    "[app]",
+    'name="IssueTemplateAPI"',
+    'package_name="issue_template_api"',
+    "",
+    "[app.issue_templates]",
+    "blank_issues_enabled=false",
+    'assignee="miskler"',
+    'contact_links=[{name="📖  Read the docs", url="https://open-inflation.github.io/chizhik_api/quick_start.html", about="Start here for “how-to” questions."}]',
+    "",
+    "[app.issue_templates.bug_report]",
+    'name="🐛 Bug report"',
+    'description="Report something that isn’t working as intended"',
+    'title="[Bug] <short title>"',
+    'labels=["bug"]',
+    "",
+    "[app.issue_templates.documentation_issue]",
+    'name="📚 Docs issue"',
+    'description="Flag inaccurate or missing documentation"',
+    'title="[Docs] <short title>"',
+    'labels=["documentation"]',
+    "",
+    "[app.issue_templates.feature_request]",
+    'name="✨ Feature request"',
+    'description="Suggest an idea to improve the project"',
+    'title="[Feature] <short title>"',
+    'labels=["feature", "enhancement"]',
+    "",
+  ].join("\n");
+  const document = parseDocument(text, "file:///issue-templates.msra");
+  const analysis = analyzeDocument(document);
+
+  assert.deepStrictEqual(analysis.diagnostics, []);
+});
+
 test("app metadata rejects malformed authors and license values", () => {
   const text = [
     "[app]",

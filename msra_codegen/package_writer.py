@@ -16,6 +16,7 @@ from .codegen_context import (
     write_group_package,
 )
 from .github_workflows import generate_github_workflows_project
+from .issue_templates import generate_github_issue_templates_project
 from .core_naming import abstraction_module_name_from_path, normalize_abstraction_path, normalize_script_path
 from .file_utils import write_text
 from .python_formatting import format_python_tree
@@ -151,6 +152,7 @@ def generate_project(
         shutil.rmtree(legacy_license_dir)
     write_root_license(output_dir, project)
     generate_github_workflows_project(project, output_dir, package_name)
+    generate_github_issue_templates_project(project, output_dir)
 
     from .docs_generator import generate_docs_project
 

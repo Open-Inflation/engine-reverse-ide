@@ -201,6 +201,17 @@ def build_project(ast: dict[str, Any], msra_path: Path) -> dict[str, Any]:
             "ignored_generated_patterns": ignored_generated_patterns,
         }
 
+    issue_templates_table = get_table(["app", "issue_templates"])
+    issue_templates_child_tables = [
+        table
+        for table in tables
+        if len(table["path"]) >= 3 and table["path"][0] == "app" and table["path"][1] == "issue_templates"
+    ]
+    if issue_templates_child_tables and issue_templates_table is None:
+        raise RuntimeError("app.issue_templates child tables require the root app.issue_templates table.")
+    if issue_templates_table:
+        app["issue_templates"] = build_issue_templates_spec(tables, get_assignment)
+
     variable_tables = [
         table
         for table in tables
@@ -446,6 +457,95 @@ def build_headers_spec(table: dict[str, Any] | None, get_assignment) -> dict[str
         "cors_mode": get_assignment(table, "cors_mode"),
         "credentials": get_assignment(table, "credentials"),
         "headers": get_assignment(table, "headers"),
+    }
+
+
+def build_issue_templates_spec(tables: list[dict[str, Any]], get_assignment) -> dict[str, Any]:
+    root_table = None
+    for table in tables:
+        if table["path"] == ["app", "issue_templates"]:
+            root_table = table
+            break
+    if root_table is None:
+        raise RuntimeError("app.issue_templates is missing.")
+
+    blank_issues_enabled_value = get_assignment(root_table, "blank_issues_enabled")
+    if blank_issues_enabled_value is None:
+        raise RuntimeError('app.issue_templates.blank_issues_enabled is required.')
+    blank_issues_enabled = bool(get_plain_value(blank_issues_enabled_value))
+
+    assignee = str(get_plain_value(get_assignment(root_table, "assignee", ""))).strip()
+    if not assignee:
+        raise RuntimeError('app.issue_templates.assignee is required and must be a non-empty string.')
+
+    contact_links_value = get_plain_value(get_assignment(root_table, "contact_links", []))
+    if not isinstance(contact_links_value, list):
+        raise TypeError('app.issue_templates.contact_links must be a list of objects.')
+    contact_links: list[dict[str, Any]] = []
+    for index, item in enumerate(contact_links_value):
+        if not isinstance(item, dict):
+            raise TypeError(f'app.issue_templates.contact_links[{index}] must be an inline table.')
+        name = str(get_plain_value(item.get("name", ""))).strip()
+        url = str(get_plain_value(item.get("url", ""))).strip()
+        about = str(get_plain_value(item.get("about", ""))).strip()
+        if not name:
+            raise RuntimeError(f'app.issue_templates.contact_links[{index}].name is required and must be non-empty.')
+        if not url:
+            raise RuntimeError(f'app.issue_templates.contact_links[{index}].url is required and must be non-empty.')
+        if not about:
+            raise RuntimeError(f'app.issue_templates.contact_links[{index}].about is required and must be non-empty.')
+        contact_links.append(
+            {
+                "name": name,
+                "url": url,
+                "about": about,
+            }
+        )
+
+    if not contact_links:
+        raise RuntimeError("app.issue_templates.contact_links must contain at least one entry.")
+
+    forms = {}
+    for form_name in ("bug_report", "documentation_issue", "feature_request"):
+        form_table = None
+        for table in tables:
+            if table["path"] == ["app", "issue_templates", form_name]:
+                form_table = table
+                break
+        if form_table is None:
+            raise RuntimeError(f'app.issue_templates.{form_name} is required.')
+        name = str(get_plain_value(get_assignment(form_table, "name", ""))).strip()
+        description = str(get_plain_value(get_assignment(form_table, "description", ""))).strip()
+        title = str(get_plain_value(get_assignment(form_table, "title", ""))).strip()
+        labels_value = get_plain_value(get_assignment(form_table, "labels", []))
+        if not isinstance(labels_value, list):
+            raise TypeError(f'app.issue_templates.{form_name}.labels must be a list of strings.')
+        labels: list[str] = []
+        for index, label in enumerate(labels_value):
+            text = str(get_plain_value(label)).strip()
+            if not text:
+                raise RuntimeError(f'app.issue_templates.{form_name}.labels[{index}] must be a non-empty string.')
+            labels.append(text)
+        if not name:
+            raise RuntimeError(f'app.issue_templates.{form_name}.name is required and must be non-empty.')
+        if not description:
+            raise RuntimeError(f'app.issue_templates.{form_name}.description is required and must be non-empty.')
+        if not title:
+            raise RuntimeError(f'app.issue_templates.{form_name}.title is required and must be non-empty.')
+        if not labels:
+            raise RuntimeError(f'app.issue_templates.{form_name}.labels must contain at least one entry.')
+        forms[form_name] = {
+            "name": name,
+            "description": description,
+            "title": title,
+            "labels": labels,
+        }
+
+    return {
+        "blank_issues_enabled": blank_issues_enabled,
+        "assignee": assignee,
+        "contact_links": contact_links,
+        **forms,
     }
 
 

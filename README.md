@@ -82,6 +82,10 @@ The generator writes:
 - `.github/workflows/source-sync.yml`
 - `.github/workflows/tests.yml`
 - `.github/workflows/publish.yml`
+- `.github/ISSUE_TEMPLATE/config.yml`
+- `.github/ISSUE_TEMPLATE/bug_report.yml`
+- `.github/ISSUE_TEMPLATE/documentation_issue.yml`
+- `.github/ISSUE_TEMPLATE/feature_request.yml`
 - `<package-name>/__init__.py`
 - `<package-name>/manager.py`
 - `<package-name>/abstraction/__init__.py`
@@ -115,6 +119,8 @@ The repository ships the sync workflow template used by generated package reposi
 The generated `source-sync` workflow stays thin: it checks out this repository as the generator logic, reads the consumer repo's `.msra` source tree, generates the artifact into a staging tree, syncs the generated tree into `main`, validates the result, and pushes the commit so the target repo's `publish.yml` can run on `push` to `main`.
 
 If a project defines `[app.sync]` in its MSRA source, the generated sync step can preserve repo-specific runtime artifacts and ignore generated noise. For the FixPrice layout that means `tests/__snapshots__` stays in `main`, while `**/__pycache__` and `**/*.pyc` are removed before commit.
+
+If a project defines `[app.issue_templates]` in its MSRA source, the generator also writes GitHub issue forms into `.github/ISSUE_TEMPLATE/` using the same source-driven contract.
 
 Before validation, the generated workflow installs the target project's `requirements-dev.txt` so the validation step runs with the generated dependencies available.
 

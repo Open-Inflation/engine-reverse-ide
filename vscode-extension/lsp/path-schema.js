@@ -8,6 +8,7 @@ const TABLE_ROOT_SEGMENTS = new Set([
 const APP_CHILD_SEGMENTS = new Set([
   "warmup",
   "sync",
+  "issue_templates",
   "defaults",
   "variables",
   "prefixes",
@@ -96,6 +97,11 @@ function pathIdentityKey(pathSegments) {
 
 function appendAppBranchIdentity(tokens, segments, index, branchName) {
   if (branchName === "groups") {
+    appendRemainingCustomIdentity(tokens, segments, index);
+    return;
+  }
+
+  if (branchName === "issue_templates") {
     appendRemainingCustomIdentity(tokens, segments, index);
     return;
   }
@@ -279,6 +285,9 @@ function validateAppPath(segments, index) {
   if (segment.value === "sync" && !segment.quoted) {
     return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
   }
+  if (segment.value === "issue_templates" && !segment.quoted) {
+    return validateIssueTemplatesNamespace(segments, index + 1);
+  }
   if (segment.value === "defaults" && !segment.quoted) {
     return validateDefaultsNamespace(segments, index + 1);
   }
@@ -300,8 +309,30 @@ function validateAppPath(segments, index) {
   return invalidPath(
     segments,
     index,
-    `Invalid child table "${renderSegment(segment)}" under "app" in "${renderPath(segments)}". Expected "warmup", "sync", "defaults", "variables", "prefixes", "regexes", "groups", or "func".`,
-    ["warmup", "sync", "defaults", "variables", "prefixes", "regexes", "groups", "func"],
+    `Invalid child table "${renderSegment(segment)}" under "app" in "${renderPath(segments)}". Expected "warmup", "sync", "issue_templates", "defaults", "variables", "prefixes", "regexes", "groups", or "func".`,
+    ["warmup", "sync", "issue_templates", "defaults", "variables", "prefixes", "regexes", "groups", "func"],
+  );
+}
+
+function validateIssueTemplatesNamespace(segments, index) {
+  if (index >= segments.length) {
+    return { valid: true };
+  }
+  const segment = segments[index];
+  if (segment.value === "bug_report" && !segment.quoted) {
+    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
+  }
+  if (segment.value === "documentation_issue" && !segment.quoted) {
+    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
+  }
+  if (segment.value === "feature_request" && !segment.quoted) {
+    return validateLeafNamespace(segments, index, `"${renderPath(segments, index + 1)}"`);
+  }
+  return invalidPath(
+    segments,
+    index,
+    `Invalid child table "${renderSegment(segment)}" under "app.issue_templates" in "${renderPath(segments)}". Expected "bug_report", "documentation_issue", or "feature_request".`,
+    ["bug_report", "documentation_issue", "feature_request"],
   );
 }
 

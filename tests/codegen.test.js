@@ -1387,6 +1387,82 @@ test("readme pipeline uses example type=image instead of function name", () => {
   }
 });
 
+test("github issue templates are generated from app.issue_templates", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const workDir = mkdtempSync(path.join(os.tmpdir(), "msra-issue-templates-"));
+  const inputPath = path.join(workDir, "issue-templates.msra");
+  const outputDir = path.join(workDir, "generated");
+  const pythonReleasesFixturePath = createPythonReleasesApiFixture(workDir);
+  const source = normalizeNewlines(readFileSync(path.join(repoRoot, "examples", "example", "example.msra"), "utf8"))
+    .replace(
+      '@BlockImages # по умолч false',
+      [
+        '@BlockImages # по умолч false',
+        "",
+        "[app.issue_templates]",
+        "blank_issues_enabled=false",
+        'assignee="miskler"',
+        'contact_links=[',
+        '  { name="📖  Read the docs", url="https://open-inflation.github.io/chizhik_api/quick_start.html", about="Start here for “how-to” questions." },',
+        '  { name="💬  Discord server (Discussions)", url="https://discord.gg/UnJnGHNbBp", about="General Q&A and community support." }',
+        "]",
+        "",
+        "[app.issue_templates.bug_report]",
+        'name="🐛 Bug report"',
+        'description="Report something that isn’t working as intended"',
+        'title="[Bug] <short title>"',
+        'labels=["bug"]',
+        "",
+        "[app.issue_templates.documentation_issue]",
+        'name="📚 Docs issue"',
+        'description="Flag inaccurate or missing documentation"',
+        'title="[Docs] <short title>"',
+        'labels=["documentation"]',
+        "",
+        "[app.issue_templates.feature_request]",
+        'name="✨ Feature request"',
+        'description="Suggest an idea to improve the project"',
+        'title="[Feature] <short title>"',
+        'labels=["feature", "enhancement"]',
+        "",
+      ].join("\n"),
+    );
+
+  try {
+    writeFileSync(inputPath, source, "utf8");
+    writeFileSync(
+      path.join(workDir, "warmup.py"),
+      readFileSync(path.join(repoRoot, "examples", "example", "warmup.py"), "utf8"),
+      "utf8",
+    );
+    const result = spawnSync("python", ["-m", "msra_codegen", "generate", inputPath, "-o", outputDir], {
+      cwd: repoRoot,
+      env: buildCodegenPythonPath(pythonReleasesFixturePath),
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const issueTemplatesDir = path.join(outputDir, ".github", "ISSUE_TEMPLATE");
+    assert.ok(existsSync(issueTemplatesDir), "expected GitHub issue templates directory to be generated");
+
+    const configText = readFileSync(path.join(issueTemplatesDir, "config.yml"), "utf8");
+    const bugReportText = readFileSync(path.join(issueTemplatesDir, "bug_report.yml"), "utf8");
+    const docsIssueText = readFileSync(path.join(issueTemplatesDir, "documentation_issue.yml"), "utf8");
+    const featureRequestText = readFileSync(path.join(issueTemplatesDir, "feature_request.yml"), "utf8");
+
+    assert.match(configText, /blank_issues_enabled: false/);
+    assert.match(configText, /name: "📖  Read the docs"/);
+    assert.match(configText, /url: "https:\/\/open-inflation\.github\.io\/chizhik_api\/quick_start\.html"/);
+    assert.match(configText, /name: "💬  Discord server \(Discussions\)"/);
+    assert.match(bugReportText, /assignees: \["miskler"\]/);
+    assert.match(bugReportText, /labels: \["bug"\]/);
+    assert.match(docsIssueText, /labels: \["documentation"\]/);
+    assert.match(featureRequestText, /labels: \["feature", "enhancement"\]/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test("readme pipeline fails generation for non-doc FUNCRESULT dependencies", () => {
   const script = [
     "import json, sys",

@@ -406,6 +406,55 @@ const SOCIAL_URL_SPEC = patternOf(
   /^https?:\/\/\S+$/i,
   "URL like https://t.me/your-channel",
 );
+const ISSUE_TEMPLATE_LINK_SPEC = objectShape(
+  {
+    name: STRING,
+    url: SOCIAL_URL_SPEC,
+    about: STRING,
+  },
+  {},
+  {
+    rules: [
+      forbidDynamicValue("name", {
+        code: "invalid-contact-link-name-dynamic",
+        message: 'Issue template contact link name cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("url", {
+        code: "invalid-contact-link-url-dynamic",
+        message: 'Issue template contact link URL cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("about", {
+        code: "invalid-contact-link-about-dynamic",
+        message: 'Issue template contact link description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
+  },
+);
+const ISSUE_TEMPLATE_FORM_SPEC = objectShape(
+  {
+    name: STRING,
+    description: STRING,
+    title: STRING,
+    labels: arrayOf(STRING),
+  },
+  {},
+  {
+    rules: [
+      forbidDynamicValue("name", {
+        code: "invalid-issue-template-name-dynamic",
+        message: 'Issue template name cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("description", {
+        code: "invalid-issue-template-description-dynamic",
+        message: 'Issue template description cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+      forbidDynamicValue("title", {
+        code: "invalid-issue-template-title-dynamic",
+        message: 'Issue template title cannot be dynamic. References and other dynamic expressions are not allowed.',
+      }),
+    ],
+  },
+);
 const SOCIAL_SPEC = objectShape(
   {},
   {
@@ -680,6 +729,20 @@ const TABLE_SCHEMAS = [
   makeFixedSchema(exactPath(["app", "sync"]), {
     preserved_target_paths: arrayOf(STRING),
     ignored_generated_patterns: arrayOf(STRING),
+  }),
+  makeFixedSchema(exactPath(["app", "issue_templates"]), {
+    blank_issues_enabled: BOOLEAN,
+    assignee: STRING,
+    contact_links: arrayOf(ISSUE_TEMPLATE_LINK_SPEC),
+  }),
+  makeFixedSchema(exactPath(["app", "issue_templates", "bug_report"]), ISSUE_TEMPLATE_FORM_SPEC.required, {
+    rules: ISSUE_TEMPLATE_FORM_SPEC.rules,
+  }),
+  makeFixedSchema(exactPath(["app", "issue_templates", "documentation_issue"]), ISSUE_TEMPLATE_FORM_SPEC.required, {
+    rules: ISSUE_TEMPLATE_FORM_SPEC.rules,
+  }),
+  makeFixedSchema(exactPath(["app", "issue_templates", "feature_request"]), ISSUE_TEMPLATE_FORM_SPEC.required, {
+    rules: ISSUE_TEMPLATE_FORM_SPEC.rules,
   }),
   makeFixedSchema(exactPath(["app", "variables", "*"]), {
     types: arrayOf(VARIABLE_TYPE_ITEM_SPEC),

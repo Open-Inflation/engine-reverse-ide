@@ -18,6 +18,7 @@
 | `timeout_ms` | Глобальный таймаут по умолчанию | Становится базовым лимитом для runtime-операций и используется, если локальный блок не переопределяет timeout. |
 | `browser` | Браузер по умолчанию | Определяет, какой движок запустит runtime для warmup и browser-backed функций. Если не указан, runtime использует `camoufox` по умолчанию. |
 | `@DisallowHeadless` | Запрещает headless-запуск | Меняет дефолт `headless` на `False`, заставляет runtime выбрасывать ошибку, если caller всё же просит `headless=True`, и переключает generated test pipeline на headed запуск под `xvfb-run`. |
+| `issue_templates` | GitHub issue forms | Если в source MSRA присутствует `[app.issue_templates]`, generator пишет `.github/ISSUE_TEMPLATE/` с `config.yml`, `bug_report.yml`, `documentation_issue.yml` и `feature_request.yml`. |
 | `@Humanize` | Включает humanized-режим браузера | Передаёт `humanize=` в `AsyncCamoufox`, снижает “ботоподобность” поведения и требует `browser="camoufox"`. Разрешена либо как пустая аннотация, либо с положительным числом интенсивности, например `@Humanize(0.5)`. |
 | `@BlockImages` | Блокирует загрузку изображений | Передаёт `block_images=` в `AsyncCamoufox`, ускоряет старт и экономит трафик. Аннотация работает только с `browser="camoufox"`. |
 
@@ -55,6 +56,21 @@
 - `keywords` попадает в `project.keywords` без дополнительной трансформации.
 - `min_required_python` задаёт нижнюю границу `requires-python`; generator также расширяет его в Python version classifiers, поднимая верхнюю границу по официальному `python.org/api/v2/downloads/release/` и беря предпоследний стабильный `3.x` family как включительный предел.
 - Для шаблонов, где это нужно, generator подставляет значения вроде текущего года и списка copyright holders из `authors`.
+
+## `issue_templates`
+
+Если `[app.issue_templates]` присутствует в source MSRA, generator пишет GitHub issue forms в `.github/ISSUE_TEMPLATE/`.
+
+Ожидаются:
+
+- `blank_issues_enabled`
+- `assignee`
+- `contact_links`
+- `bug_report`
+- `documentation_issue`
+- `feature_request`
+
+Контракт целиком source-driven: если блок есть, генератор требует все перечисленные части и падает runtime error, если чего-то не хватает.
 
 ## Аннотации
 
