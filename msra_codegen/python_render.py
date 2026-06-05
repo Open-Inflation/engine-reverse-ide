@@ -30,10 +30,10 @@ def escape_regex_literal(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def render_request_referrer(headers_spec: dict[str, Any] | None) -> str | None:
+def render_request_referrer(headers_spec: dict[str, Any] | None, *, self_ref: str = "self") -> str | None:
     if not headers_spec or headers_spec.get("referrer") is None:
         return None
-    return render_ref_value(headers_spec.get("referrer"), self_ref="self")
+    return render_ref_value(headers_spec.get("referrer"), self_ref=self_ref)
 
 
 def render_request_cors_mode(headers_spec: dict[str, Any] | None, *, default_if_missing: bool) -> str | None:
@@ -48,11 +48,16 @@ def render_request_credentials(headers_spec: dict[str, Any] | None, *, default_i
     return render_simple_value(get_plain_value(headers_spec.get("credentials")))
 
 
-def render_request_headers(headers_spec: dict[str, Any] | None, *, default_if_missing: bool) -> str | None:
+def render_request_headers(
+    headers_spec: dict[str, Any] | None,
+    *,
+    default_if_missing: bool,
+    self_ref: str = "self",
+) -> str | None:
     base = '{"Accept": "application/json, text/plain, */*"}'
     if not headers_spec or headers_spec.get("headers") is None:
         return base if default_if_missing else None
-    return render_headers_expr(headers_spec.get("headers"))
+    return render_headers_expr(headers_spec.get("headers"), self_ref=self_ref)
 
 
 def wait_source_expr(source: Any) -> str:
@@ -175,29 +180,29 @@ def render_text_expr(expr: dict[str, Any] | None, self_ref: str = "self._parent"
     return render_expr(expr, self_ref=self_ref)
 
 
-def render_headers_expr(expr: dict[str, Any] | None) -> str:
+def render_headers_expr(expr: dict[str, Any] | None, *, self_ref: str = "self") -> str:
     if expr is None:
         return "None"
     if not isinstance(expr, dict):
         return render_simple_value(expr)
     kind = expr.get("kind")
     if kind == "merge":
-        return " | ".join(render_headers_expr(part) for part in expr.get("parts", []))
+        return " | ".join(render_headers_expr(part, self_ref=self_ref) for part in expr.get("parts", []))
     if kind == "inline_table":
         return "{" + ", ".join(
-            f"{render_simple_value(item['key'])}: {render_headers_value(item['value'])}"
+            f"{render_simple_value(item['key'])}: {render_headers_value(item['value'], self_ref=self_ref)}"
             for item in expr.get("items", [])
         ) + "}"
     if kind == "ref":
         parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
         if parts and parts[0] == "UNSTANDARD_HEADERS":
             if len(parts) >= 3 and parts[1] == "REQUEST":
-                return f"self.unstandard_headers.get({render_simple_value(parts[2])})"
-            return "self.unstandard_headers"
-    return render_headers_value(expr)
+                return f"{self_ref}.unstandard_headers.get({render_simple_value(parts[2])})"
+            return f"{self_ref}.unstandard_headers"
+    return render_headers_value(expr, self_ref=self_ref)
 
 
-def render_headers_value(expr: dict[str, Any] | None) -> str:
+def render_headers_value(expr: dict[str, Any] | None, *, self_ref: str = "self") -> str:
     if expr is None:
         return "None"
     if not isinstance(expr, dict):
@@ -207,12 +212,12 @@ def render_headers_value(expr: dict[str, Any] | None) -> str:
         parts = [part["value"] for part in expr.get("parts", []) if part.get("kind") == "name"]
         if parts and parts[0] == "UNSTANDARD_HEADERS":
             if len(parts) >= 3 and parts[1] == "REQUEST":
-                return f"str(self.unstandard_headers.get({render_simple_value(parts[2])}))"
-            return "str(self.unstandard_headers)"
-        return render_text_expr(expr, self_ref="self")
+                return f"str({self_ref}.unstandard_headers.get({render_simple_value(parts[2])}))"
+            return f"str({self_ref}.unstandard_headers)"
+        return render_text_expr(expr, self_ref=self_ref)
     if kind in {"string", "number", "bool", "null"}:
-        return render_text_expr(expr, self_ref="self")
-    return render_text_expr(expr, self_ref="self")
+        return render_text_expr(expr, self_ref=self_ref)
+    return render_text_expr(expr, self_ref=self_ref)
 
 
 def get_plain_value(expr: dict[str, Any] | None) -> Any:

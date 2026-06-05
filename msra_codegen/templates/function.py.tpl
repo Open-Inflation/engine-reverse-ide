@@ -172,7 +172,12 @@
 {% for param in query_params %}
 {% if param.kind == "from" and param.has_value_map %}
 {% if param.is_list %}
+{% if param.temp_list_annotation %}
+        {{ param.temp_name }} = {{ param.source_expr }}
+        {{ param.temp_list_name }}: {{ param.temp_list_annotation }} = [str(__item) for __item in {{ param.temp_name }}] if {{ param.temp_name }} is not None else None
+{% else %}
         {{ param.temp_list_name }} = {{ param.source_expr }}
+{% endif %}
         if {{ param.temp_list_name }} in (None, []):
             {{ param.temp_list_name }} = {{ param.default_values_expr if param.default_values_expr is not none else "[]" }}
         elif not isinstance({{ param.temp_list_name }}, list):
@@ -181,7 +186,7 @@
             for __item in {{ param.temp_list_name }}:
                 if __item not in {{ param.selectable_values_expr }}:
                     raise ValueError("`{{ param.source_name }}` must be one of {{ param.selectable_values_expr }}")
-            {{ param.temp_list_name }} = [{{ param.value_map_expr }}[__item] for __item in {{ param.temp_list_name }}]
+            {{ param.temp_list_name }} = [str({{ param.value_map_expr }}[__item]) for __item in {{ param.temp_list_name }}]
             if {{ param.temp_list_name }}:
 {% if param.list_style_style == "repeat" %}
                 query_params.append(({{ param.name_expr }}, {{ param.temp_list_name }}))

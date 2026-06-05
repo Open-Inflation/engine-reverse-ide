@@ -4,4 +4,5 @@ include msra_codegen/README.md
 include msra_codegen/requirements.txt
 include msra_codegen/config.toml
 include msra_codegen/node_export.js
+recursive-include vscode-extension/lsp *.js
 recursive-include msra_codegen/templates *.tpl

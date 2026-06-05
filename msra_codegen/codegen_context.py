@@ -1106,10 +1106,10 @@ def build_function_context(
         "overload_specialization_code": overload_specialization_code,
         "overload_validation_code": overload_validation_code,
         "request": {
-            "referrer_expr": render_request_referrer(headers_spec),
+            "referrer_expr": render_request_referrer(headers_spec, self_ref="self._parent"),
             "cors_mode_expr": render_request_cors_mode(headers_spec, default_if_missing=False),
             "credentials_expr": render_request_credentials(headers_spec, default_if_missing=False),
-            "headers_expr": render_request_headers(headers_spec, default_if_missing=False),
+            "headers_expr": render_request_headers(headers_spec, default_if_missing=False, self_ref="self._parent"),
         },
         "body_expr": render_expr(body.get("from"), self_ref="self._parent") if body else None,
         "body_type": body.get("type") if body else None,
@@ -1206,6 +1206,7 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
             "list_style_indexed": bool(list_style.get("indexed", False)),
             "temp_name": f"_{normalize_name(param_name)}_value",
             "temp_list_name": f"_{normalize_name(param_name)}_values",
+            "temp_list_annotation": None,
         }
         if const_expr is not None:
             item["kind"] = "literal"
@@ -1222,6 +1223,8 @@ def build_query_param_context(func: dict[str, Any]) -> list[dict[str, Any]]:
                 default_entries = [entry for entry in values if entry.get("default")]
                 if selectable_entries:
                     item["has_value_map"] = True
+                    if item["is_list"]:
+                        item["temp_list_annotation"] = "list[str] | None"
                     item["selectable_values_expr"] = render_simple_value([entry["value"] for entry in selectable_entries])
                     item["value_map_expr"] = render_simple_value(
                         {entry["value"]: entry["value_in_url"] for entry in selectable_entries}
@@ -1410,10 +1413,10 @@ def build_manager_context(
             "script_function": warmup_script.get("function") if warmup_script else None,
         },
         "request": {
-            "referrer_expr": render_request_referrer(headers_spec),
+            "referrer_expr": render_request_referrer(headers_spec, self_ref="self"),
             "cors_mode_expr": render_request_cors_mode(headers_spec, default_if_missing=True),
             "credentials_expr": render_request_credentials(headers_spec, default_if_missing=True),
-            "headers_expr": render_request_headers(headers_spec, default_if_missing=True),
+            "headers_expr": render_request_headers(headers_spec, default_if_missing=True, self_ref="self"),
         },
     }
 
@@ -1669,9 +1672,7 @@ def render_input_annotation(input_spec: dict[str, Any]) -> str:
     values = selectable_values_from_plain_values(values)
     if input_spec.get("match") is None and values:
         literal_values = ", ".join(render_simple_value(item) for item in values)
-        if base.startswith("list[") and base.endswith("]"):
-            base = f"list[Literal[{literal_values}]]"
-        else:
+        if not (base.startswith("list[") and base.endswith("]")):
             base = f"Literal[{literal_values}]"
     default_expr = input_spec.get("default")
     has_explicit_default = default_expr is not None and get_plain_value(default_expr) is not None

@@ -95,6 +95,7 @@ def build_tests_project_context(project: dict[str, Any], package_name: str) -> d
             "imports": build_test_import_map(autotest_cases),
             "hooks": [case for case in autotest_cases if case["hook_code"]],
             "providers": autotest_cases,
+            "has_provider_dependencies": any(case["dependencies"] for case in autotest_cases),
             "data_cases": data_cases,
             "manual_tests": manual_cases,
         },
@@ -290,6 +291,7 @@ def build_autotest_cases(
                 "class_name": class_name_for_group(group_path_for_function(func)),
                 "hook_code": hook_code,
                 "provider_code": provider_code,
+                "dependencies": dependency_targets,
             }
         )
     return cases

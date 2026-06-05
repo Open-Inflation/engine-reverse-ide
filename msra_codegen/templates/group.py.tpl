@@ -30,7 +30,9 @@ from human_requests.abstraction import HttpMethod
 from human_requests.abstraction import MethodPipelineError
 {% endif %}
 
+{% if functions %}
 from {{ root_import_prefix }} import abstraction
+{% endif %}
 {% for child in child_imports %}
 from .{{ child.package_name }} import {{ child.class_name }}
 {% endfor %}

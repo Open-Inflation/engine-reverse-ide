@@ -7,8 +7,14 @@ from typing import TYPE_CHECKING
 {% if providers %}
 import pytest
 {% endif %}
-{% if hooks or providers %}
-from human_requests import autotest_depends_on, autotest_hook, autotest_params
+{% if hooks %}
+from human_requests import autotest_hook
+{% endif %}
+{% if providers %}
+from human_requests import autotest_params
+{% endif %}
+{% if has_provider_dependencies %}
+from human_requests import autotest_depends_on
 {% endif %}
 {% if data_cases %}
 from human_requests import autotest_data
