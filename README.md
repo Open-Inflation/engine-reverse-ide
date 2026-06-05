@@ -150,11 +150,11 @@ The workflow reads the package versions from the package metadata already in the
 
 It expects these credentials/configs:
 
-- `NPM_TOKEN` for the npm publish step
+- A npm Trusted Publisher configured for `Open-Inflation/engine-reverse-ide`, workflow `publish.yml`, and the `npm` environment
 - `VSCE_PAT` for the VS Code Marketplace publish step
-- A PyPI Trusted Publisher configured for this repository workflow and the `pypi` environment
+- A PyPI Trusted Publisher configured for `Open-Inflation/engine-reverse-ide`, workflow `publish.yml`, and the `pypi` environment
 
-The PyPI job uses GitHub OIDC through the official `pypa/gh-action-pypi-publish` action, so it does not need an API token secret.
+The npm and PyPI jobs use GitHub OIDC, so they do not need API token secrets.
 
 ## Language overview
 
