@@ -18,9 +18,9 @@ const {
   RefSegment,
   SequenceExpr,
   StringExpr,
-} = require(path.resolve(__dirname, "vscode-extension", "lsp", "model"));
-const { analyzeDocument } = require(path.resolve(__dirname, "vscode-extension", "lsp", "analysis"));
-const { loadProject } = require(path.resolve(__dirname, "vscode-extension", "lsp", "project-loader"));
+} = require(path.resolve(__dirname, "..", "vscode-extension", "lsp", "model"));
+const { analyzeDocument } = require(path.resolve(__dirname, "..", "vscode-extension", "lsp", "analysis"));
+const { loadProject } = require(path.resolve(__dirname, "..", "vscode-extension", "lsp", "project-loader"));
 
 function serializePosition(position) {
   if (!position) {

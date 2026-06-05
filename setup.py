@@ -29,7 +29,7 @@ class build_py(_build_py):
         if not source_root.exists():
             raise FileNotFoundError(source_root)
 
-        target_root = Path(self.build_lib) / "msra_codegen" / "vscode-extension" / "lsp"
+        target_root = Path(self.build_lib) / "vscode-extension" / "lsp"
         self.mkpath(str(target_root))
         for source_file in source_root.glob("*.js"):
             target_file = target_root / source_file.name

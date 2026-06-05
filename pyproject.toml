@@ -41,7 +41,6 @@ dependencies = { file = ["msra_codegen/requirements.txt"] }
 msra_codegen = [
   "config.toml",
   "node_export.js",
-  "vscode-extension/lsp/*.js",
   "templates/*.tpl",
   "templates/*/*.tpl",
   "templates/*/*/*.tpl",
